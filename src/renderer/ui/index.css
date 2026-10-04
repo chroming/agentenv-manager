@@ -15,6 +15,7 @@
 @import "./pages/targets-details.css" layer(pages);
 @import "./pages/targets-remote.css" layer(pages);
 @import "./pages/projects.css" layer(pages);
+@import "./pages/worktrees.css" layer(pages);
 @import "./pages/settings.css" layer(pages);
 @import "./pages/settings-updates.css" layer(pages);
 @import "./pages/telemetry-consent.css" layer(pages);

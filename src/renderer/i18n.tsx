@@ -5505,6 +5505,9 @@ Object.assign(zhTW, {
 
 Object.assign(zhCN, {
   "Worktrees": "工作树", "Worktree recovery": "工作树恢复", "Working directories found in your local scan locations": "本机扫描位置中发现的工作目录",
+  "Search Worktrees": "搜索工作树",
+  "Only these locations are scanned. Add a folder if a repository is missing.": "仅扫描下列位置。若缺少仓库，可添加所在文件夹。",
+  "Removing Worktrees...": "正在移除工作树…",
   "Local Git working directories": "本机 Git 工作目录", "Worktree filter": "工作树筛选",
   "Added location": "手动添加的位置", "Common location": "常用位置",
   "A saved Workspace points to a selected Worktree. Its shortcut will remain, but the folder will be unavailable after removal.": "已保存的工作区指向选中的工作树。移除后快捷入口仍在，但目录将不可用。",
@@ -5537,6 +5540,9 @@ Object.assign(zhCN, {
 });
 Object.assign(zhTW, {
   "Worktrees": "工作樹", "Worktree recovery": "工作樹復原", "Working directories found in your local scan locations": "本機掃描位置中找到的工作目錄",
+  "Search Worktrees": "搜尋工作樹",
+  "Only these locations are scanned. Add a folder if a repository is missing.": "僅掃描下列位置。若缺少儲存庫，可新增所在資料夾。",
+  "Removing Worktrees...": "正在移除工作樹…",
   "Local Git working directories": "本機 Git 工作目錄", "Worktree filter": "工作樹篩選",
   "Added location": "手動新增的位置", "Common location": "常用位置",
   "A saved Workspace points to a selected Worktree. Its shortcut will remain, but the folder will be unavailable after removal.": "已儲存的工作區指向所選工作樹。移除後捷徑仍在，但目錄將無法使用。",

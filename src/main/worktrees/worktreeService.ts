@@ -15,6 +15,7 @@ import { isMissingFileError, writeAtomic } from "../fileUtils";
 import type { ProjectStore } from "../projects/projectStore";
 import type { GitCommandRunner } from "../skillSources/gitCommandRunner";
 import { copyWorktreeVerified, hashWorktreeTree, measureWorktreeTree } from "./worktreeSnapshot";
+import { worktreeDiscoveryCandidates } from "./worktreeDiscovery";
 
 const SettingsSchema = z.object({
   formatVersion: z.literal(1),
@@ -137,12 +138,7 @@ export const createWorktreeService = ({
   }>();
   const discovered = new Set<string>();
   const discoveredKey = (commonDir: string, path: string) => `${commonDir}\0${path}`;
-  const builtinCandidates = [
-    join(homeDir, ".config", "superpowers", "worktrees"),
-    join(homeDir, "_worktrees"),
-    join(homeDir, "worktrees"),
-    join(homeDir, "Worktrees")
-  ];
+  const builtinCandidates = worktreeDiscoveryCandidates(homeDir);
 
   const readSettings = async () => {
     try {
@@ -205,7 +201,7 @@ export const createWorktreeService = ({
       try {
         const status = await runner.run(
           ["status", "--porcelain=v1", "-z", "--ignored=matching", "--untracked-files=all"],
-          { cwd: path, timeoutMs: 12_000, maxOutputBytes: 4_000_000, signal }
+          { cwd: path, env: { GIT_OPTIONAL_LOCKS: "0" }, timeoutMs: 12_000, maxOutputBytes: 4_000_000, signal }
         );
         for (const record of status.stdout.split("\0").filter(Boolean)) {
           if (record.startsWith("!! ")) ignored.push(record.slice(3));
@@ -290,7 +286,9 @@ export const createWorktreeService = ({
     },
     removeScanRoot: async (path) => {
       const current = await readSettings();
-      await saveSettings({ ...current, scanRoots: current.scanRoots.filter((root) => root !== path) });
+      const target = await realpath(path).catch(() => resolve(path));
+      const canonical = await Promise.all(current.scanRoots.map((root) => realpath(root).catch(() => resolve(root))));
+      await saveSettings({ ...current, scanRoots: current.scanRoots.filter((root, index) => root !== path && canonical[index] !== target) });
     },
     setKeep: async (commonDir, path, reason) => {
       if (!discovered.has(discoveredKey(commonDir, path))) throw new Error("Refresh Worktrees before changing a keep decision");
@@ -315,19 +313,33 @@ export const createWorktreeService = ({
         controller.signal.throwIfAborted();
         const issues: string[] = [];
         const builtinRoots: string[] = [];
+        const canonicalHome = await realpath(homeDir).catch(() => resolve(homeDir));
         for (const candidate of builtinCandidates) {
           controller.signal.throwIfAborted();
           try {
-            if ((await stat(candidate)).isDirectory()) builtinRoots.push(await realpath(candidate));
+            if ((await stat(candidate)).isDirectory()) {
+              const canonical = await realpath(candidate);
+              if (isWithin(canonical, canonicalHome)) {
+                issues.push(`${candidate}: This automatic location resolves to Home or its parent. Add a narrower location.`);
+              } else builtinRoots.push(canonical);
+            }
           } catch (error) {
             if (!isMissingFileError(error)) issues.push(`${candidate}: ${error instanceof Error ? error.message : String(error)}`);
           }
         }
-        const scanRoots = [...new Set([
-          ...settings.scanRoots,
-          ...builtinRoots,
-          ...projects
-        ])];
+        const canonicalRoots = async (roots: string[]) => [...new Set(await Promise.all(
+          roots.map((root) => realpath(root).catch((error) => {
+            if (!isMissingFileError(error)) issues.push(`${root}: ${error instanceof Error ? error.message : String(error)}`);
+            return resolve(root);
+          }))
+        ))];
+        const configuredRoots = await canonicalRoots(settings.scanRoots);
+        const scanRoots = await canonicalRoots([...configuredRoots, ...builtinRoots, ...projects]);
+        const canonicalDataRoot = await realpath(appDataRoot).catch((error) => {
+          if (isMissingFileError(error)) return resolve(appDataRoot);
+          throw error;
+        });
+        controller.signal.throwIfAborted();
         const entries: WorktreeEntry[] = [];
         const found = new Set<string>();
         const visited = new Set<string>();
@@ -335,67 +347,81 @@ export const createWorktreeService = ({
         let count = 0;
         const runner = await git();
         controller.signal.throwIfAborted();
-        for (const root of scanRoots) {
-          const queue = [{ path: root, depth: 0 }];
+        const queues = scanRoots.map((path) => [{ path, depth: 0 }]);
+        for (const [index, root] of scanRoots.entries()) {
+          controller.signal.throwIfAborted();
           try {
             const repository = await runner.run(["rev-parse", "--show-toplevel"], {
               cwd: root, timeoutMs: 5_000, maxOutputBytes: 32_000, signal: controller.signal
             });
             const rootPath = repository.stdout.trim();
             if (rootPath && resolve(rootPath) !== resolve(root)) {
-              queue.unshift({ path: rootPath, depth: 0 });
+              const canonical = await realpath(rootPath);
+              if (isWithin(canonical, canonicalHome) && !scanRoots.includes(canonical)) {
+                issues.push(`${root}: The repository root is Home or its parent. Add the repository explicitly to include it.`);
+              } else queues[index].push({ path: canonical, depth: 0 });
             }
           } catch {
+            controller.signal.throwIfAborted();
             // A scan location can contain repositories without being one itself.
           }
-          while (queue.length) {
-            controller.signal.throwIfAborted();
+        }
+        let cursor = 0;
+        let depthLimited = false;
+        // Advance each location in turn, preserving breadth-first order within it.
+        while (queues.some((queue) => queue.length)) {
+          controller.signal.throwIfAborted();
+          const queue = queues[cursor++ % queues.length];
+          if (!queue.length) continue;
+          const current = queue.shift()!;
+          try {
+            const canonical = await realpath(current.path);
+            if (isWithin(canonicalDataRoot, canonical) || visited.has(canonical)) continue;
             if (++count > MAX_DIRECTORIES) {
               issues.push("Scan reached the directory limit. Add a narrower location to see more worktrees.");
               break;
             }
-            const current = queue.shift()!;
-            let canonical: string;
-            try {
-              canonical = await realpath(current.path);
-              if (isWithin(resolve(appDataRoot), canonical)) continue;
-              if (visited.has(canonical)) continue;
-              visited.add(canonical);
-              const directory = await readdir(canonical, { withFileTypes: true });
-              if (directory.some((entry) => entry.name === ".git")) {
-                const result = await runner.run(["rev-parse", "--git-common-dir"], {
-                  cwd: canonical, timeoutMs: 8_000, maxOutputBytes: 32_000, signal: controller.signal
-                });
-                const commonDir = resolve(canonical, result.stdout.trim());
-                if (!repositories.has(commonDir)) {
-                  repositories.add(commonDir);
-                  const registered = await readRegistration(runner, commonDir, controller.signal);
-                  for (const registration of registered) {
-                    controller.signal.throwIfAborted();
-                    const entry = await inspect(runner, commonDir, registration, registered[0].path,
-                      settings.kept[keepKey(commonDir, resolve(registration.path))], controller.signal);
-                    entries.push(entry);
-                    found.add(discoveredKey(commonDir, entry.path));
-                  }
+            visited.add(canonical);
+            const directory = await readdir(canonical, { withFileTypes: true });
+            if (directory.some((entry) => entry.name === ".git")) {
+              const result = await runner.run(["rev-parse", "--git-common-dir"], {
+                cwd: canonical, timeoutMs: 8_000, maxOutputBytes: 32_000, signal: controller.signal
+              });
+              const commonDir = await realpath(resolve(canonical, result.stdout.trim()));
+              if (!repositories.has(commonDir)) {
+                repositories.add(commonDir);
+                const registered = await readRegistration(runner, commonDir, controller.signal);
+                for (const registration of registered) {
+                  controller.signal.throwIfAborted();
+                  const entry = await inspect(runner, commonDir, registration, registered[0].path,
+                    settings.kept[keepKey(commonDir, resolve(registration.path))], controller.signal);
+                  entries.push(entry);
+                  found.add(discoveredKey(commonDir, entry.path));
                 }
               }
-              if (current.depth >= MAX_DEPTH) continue;
-              for (const child of directory) {
-                if (child.isDirectory() && !SKIP_DIRECTORIES.has(child.name)) {
-                  queue.push({ path: join(canonical, child.name), depth: current.depth + 1 });
-                }
-              }
-            } catch (error) {
-              controller.signal.throwIfAborted();
-              issues.push(`${current.path}: ${error instanceof Error ? error.message : String(error)}`);
             }
+            if (current.depth >= MAX_DEPTH) {
+              if (!depthLimited && directory.some((child) => child.isDirectory() && !SKIP_DIRECTORIES.has(child.name))) {
+                issues.push("Scan reached the depth limit. Add the specific repository folder to see more worktrees.");
+                depthLimited = true;
+              }
+              continue;
+            }
+            for (const child of directory) {
+              if (child.isDirectory() && !SKIP_DIRECTORIES.has(child.name)) {
+                queue.push({ path: join(canonical, child.name), depth: current.depth + 1 });
+              }
+            }
+          } catch (error) {
+            controller.signal.throwIfAborted();
+            issues.push(`${current.path}: ${error instanceof Error ? error.message : String(error)}`);
           }
         }
         controller.signal.throwIfAborted();
         discovered.clear();
         for (const key of found) discovered.add(key);
         return {
-          scanRoots, configuredRoots: settings.scanRoots, builtinRoots, entries, issues,
+          scanRoots, configuredRoots, builtinRoots: [...new Set(builtinRoots)], entries, issues,
           incomplete: issues.length > 0,
           scannedAt: new Date().toISOString()
         };

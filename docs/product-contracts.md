@@ -271,10 +271,25 @@ AgentEnv-owned copy of the folder and does not require Git.
 
 Worktrees is a separate local inventory beside Workspaces. Its saved scan locations
 and keep decisions are device-local and do not create Workspace references. The
-inventory includes existing common worktree locations (including Superpowers) and
+inventory includes existing common worktree locations (Superpowers, Codex, Claude,
+Cursor and Orca), conventional repository containers and
 saved local Workspace roots, but it never scans the whole home directory by default.
 The visible scan scope must distinguish built-in, saved-Workspace, and manually added
 locations. A missing result only means no worktree was found within that scope.
+Paths and Git common directories are canonicalized before deduplication. Traversal
+advances roots in round-robin order, breadth-first within each root under a shared
+directory budget; large earlier locations cannot starve later locations. Directory
+and depth limits are reported as incomplete, never as a full scan. Manual locations and
+nested repositories retain recursive discovery. Linked worktrees outside the scan
+roots are included when Git registers them in a discovered repository.
+Automatic aliases resolving to Home or its parent are excluded and reported.
+Descendant directory links are not recursively followed; explicitly added locations
+and Git-registered worktree paths can resolve links without unbounded traversal.
+Passive status checks disable optional Git locks so discovery does not refresh
+worktree index files.
+The toolbar owns scanning feedback without moving an existing list. Scope, review,
+confirmation and recovery use shared modal shells; branch, state and action lanes
+are aligned across all inventory rows. Scan-location editing never deletes folders.
 Git's worktree registration is the source of truth for linked and main worktrees;
 directory names alone are never proof. The inventory reports its scan scope and failures.
 Stopping a scan, leaving Worktrees, or superseding a scan is a normal cancellation,

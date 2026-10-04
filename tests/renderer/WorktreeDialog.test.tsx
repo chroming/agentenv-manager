@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { StrictMode } from "react";
-import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { WorktreeDialog, WorktreeWorkspace } from "../../src/renderer/components/WorktreeDialog";
 import type { AgentEnvApi } from "../../src/shared/types";
@@ -34,6 +34,8 @@ const installApi = () => {
       savedWorkspace: false
     }),
     listWorktreeRecovery: vi.fn().mockResolvedValue({ records: [], issues: [] }),
+    removeWorktree: vi.fn().mockResolvedValue(undefined),
+    readDiagnosticIssue: vi.fn().mockResolvedValue(undefined),
     copyText: vi.fn().mockResolvedValue(undefined)
   };
   Object.defineProperty(window, "agentEnv", { configurable: true, value: api as unknown as AgentEnvApi });
@@ -74,6 +76,8 @@ describe("WorktreeDialog", () => {
     api.inventoryWorktrees.mockImplementationOnce(() => new Promise((resolve) => { finishScan = resolve; }));
     api.cancelWorktreeScan.mockImplementationOnce(async () => finishScan({ cancelled: true }));
     fireEvent.click(screen.getByRole("button", { name: "Refresh Worktrees" }));
+    expect(screen.getByRole("button", { name: "Refresh Worktrees" })).toHaveAttribute("aria-busy", "true");
+    expect(screen.queryByText("Scanning Worktrees...")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Stop scanning" }));
     await screen.findByRole("button", { name: "Refresh Worktrees" });
     expect(screen.getByText("/projects/_worktrees/clean")).toBeInTheDocument();
@@ -120,10 +124,59 @@ describe("WorktreeDialog", () => {
     });
     render(<WorktreeWorkspace />);
     await screen.findByText("/projects/_worktrees/clean");
-    fireEvent.click(screen.getByText("Scan locations · 2"));
+    fireEvent.click(screen.getByRole("button", { name: "Scan locations" }));
     expect(screen.getByText("/home/user/.config/superpowers/worktrees")).toBeInTheDocument();
     expect(screen.getByText("Common location")).toBeInTheDocument();
     expect(screen.getAllByRole("button", { name: "Remove scan location" })).toHaveLength(1);
+  });
+
+  it("keeps the list in place while details use the shared modal, including Escape and maximize", async () => {
+    installApi();
+    render(<WorktreeWorkspace />);
+    const name = await screen.findByRole("button", { name: /^clean$/ });
+    name.focus();
+    fireEvent.click(name);
+    const modal = screen.getByRole("dialog", { name: "clean" });
+    expect(within(modal).getByText("/projects/app")).toBeInTheDocument();
+    expect(screen.getByRole("searchbox", { name: "Search Worktrees" })).toBeInTheDocument();
+    fireEvent.click(within(modal).getByRole("button", { name: "Maximize window" }));
+    expect(modal).toHaveClass("ui-modal--maximized");
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(name).toHaveFocus();
+  });
+
+  it("filters by branch, repository and path without losing the full inventory", async () => {
+    installApi();
+    render(<WorktreeWorkspace />);
+    await screen.findByText("/projects/_worktrees/dirty");
+    const search = screen.getByRole("searchbox", { name: "Search Worktrees" });
+    fireEvent.change(search, { target: { value: "dirty" } });
+    expect(screen.queryByText("/projects/_worktrees/clean")).not.toBeInTheDocument();
+    fireEvent.change(search, { target: { value: "/projects/app" } });
+    expect(screen.getByText("/projects/_worktrees/clean")).toBeInTheDocument();
+    fireEvent.change(search, { target: { value: "no-match" } });
+    expect(screen.getByText("No Worktrees found")).toBeInTheDocument();
+    fireEvent.change(search, { target: { value: "" } });
+    expect(screen.getByText("/projects/_worktrees/dirty")).toBeInTheDocument();
+  });
+
+  it("does not turn repositories with only a main tree into worktree cleanup rows", async () => {
+    const api = installApi();
+    api.inventoryWorktrees.mockResolvedValue({ ...inventory, entries: [{ ...clean, main: true, cleanupReviewAvailable: false }] });
+    render(<WorktreeWorkspace />);
+    await screen.findByText("No Worktrees found");
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
+  });
+
+  it("keeps scan issues inspectable inside the scope dialog rather than in a moving banner", async () => {
+    const api = installApi();
+    api.inventoryWorktrees.mockResolvedValue({ ...inventory, incomplete: true, issues: ["/projects/restricted: Permission denied"] });
+    render(<WorktreeWorkspace />);
+    await screen.findByText("/projects/_worktrees/clean");
+    expect(screen.queryByText("/projects/restricted: Permission denied")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Scan locations" }));
+    expect(within(screen.getByRole("dialog")).getByText("/projects/restricted: Permission denied")).toBeInTheDocument();
   });
   it("keeps batch cleanup limited to clean trees and requires explicit review for dirty trees", async () => {
     const api = installApi();
@@ -174,5 +227,33 @@ describe("WorktreeDialog", () => {
     await screen.findByText("Cleanup interrupted");
     expect(screen.queryByRole("button", { name: "Restore" })).not.toBeInTheDocument();
     expect(screen.getByText(/original folder and Git registration/)).toBeInTheDocument();
+  });
+
+  it("shows cleanup failures in the active result dialog with a copyable diagnostic instead of a success", async () => {
+    const api = installApi();
+    api.removeWorktree.mockRejectedValueOnce(new Error("Worktree changed after review. Diagnostic reference: AEM-20261004-ABC123"));
+    render(<WorktreeWorkspace />);
+    fireEvent.click(await screen.findByRole("button", { name: /^clean$/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Review cleanup" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Remove Worktree" }));
+    const modal = await screen.findByRole("dialog", { name: "Cleanup results" });
+    expect(await within(modal).findByText("Skipped")).toBeInTheDocument();
+    expect(within(modal).queryByText("Removed")).not.toBeInTheDocument();
+    fireEvent.click(within(modal).getByRole("button", { name: "Copy details" }));
+    await waitFor(() => expect(api.copyText).toHaveBeenCalledWith(expect.stringContaining("AEM-20261004-ABC123")));
+    expect(screen.getByText("/projects/_worktrees/dirty")).toBeInTheDocument();
+  });
+
+  it("shows recovery loading on its own command before opening the dialog", async () => {
+    const api = installApi();
+    let finish!: (value: { records: []; issues: [] }) => void;
+    api.listWorktreeRecovery.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    render(<WorktreeWorkspace />);
+    await screen.findByText("/projects/_worktrees/clean");
+    fireEvent.click(screen.getByRole("button", { name: "Worktree recovery" }));
+    expect(screen.getByRole("button", { name: "Worktree recovery" })).toHaveAttribute("aria-busy", "true");
+    expect(screen.getByRole("button", { name: "Refresh Worktrees" })).toHaveAttribute("aria-busy", "false");
+    await act(async () => finish({ records: [], issues: [] }));
+    expect(screen.getByRole("dialog", { name: "Worktree recovery" })).toBeInTheDocument();
   });
 });

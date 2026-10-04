@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { lstat, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, readFile, realpath, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
@@ -104,6 +104,192 @@ describe("worktree inventory and cleanup", () => {
     await expect(service.remove(preview)).rejects.toThrow("changed after review");
     expect(await readFile(join(linked, "important.txt"), "utf8")).toBe("keep this\n");
     await expect(service.preview(entry.commonDir, linked)).rejects.toThrow("Review this worktree");
+  });
+
+  it.each([
+    [".codex", "worktrees"], [".claude", "worktrees"], [".cursor", "worktrees"],
+    ["orca", "workspaces"], ["Documents", "Git"], ["Projects"]
+  ])("automatically discovers existing %s/%s locations without saving a Workspace", async (...parts) => {
+    const { root, repo, linked, runner } = await fixture();
+    const homeDir = join(root, "home");
+    const container = join(homeDir, ...parts.filter(Boolean));
+    const worktree = join(container, "project", "review");
+    await run("git", ["-C", repo, "worktree", "add", "-b", "automatic-location", worktree]);
+    const service = createWorktreeService({
+      appDataRoot: join(root, "automatic-data"), homeDir,
+      projectStore: { listLocalRootPaths: async () => [] } as unknown as ProjectStore,
+      resolveRunner: async () => runner
+    });
+    const inventory = await service.inventory();
+    expect(inventory.builtinRoots).toContain(container);
+    expect(inventory.configuredRoots).toEqual([]);
+    expect(inventory.scanRoots).not.toContain(homeDir);
+    expect(inventory.entries.map((entry) => entry.path)).toContain(worktree);
+    expect(inventory.entries.map((entry) => entry.path)).toContain(linked);
+    expect(inventory.incomplete).toBe(false);
+    await expect(lstat(join(root, "automatic-data", "worktree-locations.json"))).rejects.toThrow();
+  });
+
+  it("finds repositories in conventional containers and includes registered trees outside the scope", async () => {
+    const { root, repo, runner } = await fixture();
+    const homeDir = join(root, "home");
+    const container = join(homeDir, "Github");
+    const clone = join(container, "team", "app");
+    await mkdir(join(container, "team"), { recursive: true });
+    await run("git", ["clone", "--local", repo, clone]);
+    const outside = join(root, "elsewhere", "review");
+    await run("git", ["-C", clone, "worktree", "add", "-b", "review", outside]);
+    const service = createWorktreeService({
+      appDataRoot: join(root, "automatic-data"), homeDir,
+      projectStore: { listLocalRootPaths: async () => [clone] } as unknown as ProjectStore,
+      resolveRunner: async () => runner
+    });
+    const inventory = await service.inventory();
+    expect(inventory.entries.map((entry) => entry.path)).toEqual(expect.arrayContaining([clone, outside]));
+    expect(inventory.entries).toHaveLength(2);
+    expect(inventory.builtinRoots.filter((path) => path === container)).toHaveLength(1);
+    expect(inventory.scanRoots).not.toContain(outside);
+  });
+
+  it("canonicalizes aliased manual and Workspace locations before probing", async () => {
+    const { root, repo, linked, runner } = await fixture();
+    const alias = join(root, "repo-alias");
+    await symlink(repo, alias, "dir");
+    const runGit = vi.spyOn(runner, "run");
+    const service = createWorktreeService({
+      appDataRoot: join(root, "alias-data"), homeDir: join(root, "home"),
+      projectStore: { listLocalRootPaths: async () => [repo, alias] } as unknown as ProjectStore,
+      resolveRunner: async () => runner
+    });
+    await service.addScanRoot(alias);
+    const inventory = await service.inventory();
+    expect(inventory.scanRoots).toEqual([repo]);
+    expect(inventory.configuredRoots).toEqual([repo]);
+    expect(inventory.entries.map((entry) => entry.path)).toEqual([repo, linked]);
+    expect(runGit.mock.calls.filter(([args]) => args[0] === "worktree")).toHaveLength(1);
+  });
+
+  it("visits later roots before an earlier container can consume the directory budget", async () => {
+    const { root, repo, runner } = await fixture();
+    const broad = join(root, "many-folders");
+    await mkdir(broad);
+    for (let offset = 0; offset < 5001; offset += 250) {
+      await Promise.all(Array.from({ length: Math.min(250, 5001 - offset) }, (_, index) => mkdir(join(broad, String(offset + index)))));
+    }
+    const later = join(root, "later-container");
+    const clone = join(later, "team", "project");
+    await mkdir(join(later, "team"), { recursive: true });
+    await run("git", ["clone", "--local", repo, clone]);
+    const linked = join(root, "later-linked");
+    await run("git", ["-C", clone, "worktree", "add", "-b", "later", linked]);
+    const service = createWorktreeService({
+      appDataRoot: join(root, "bounded-data"), homeDir: join(root, "home"),
+      projectStore: { listLocalRootPaths: async () => [later] } as unknown as ProjectStore,
+      resolveRunner: async () => runner
+    });
+    await service.addScanRoot(broad);
+    const inventory = await service.inventory();
+    expect(inventory.entries.map((entry) => entry.path)).toContain(linked);
+    expect(inventory.incomplete).toBe(true);
+    expect(inventory.issues).toEqual([expect.stringContaining("directory limit")]);
+  }, 20_000);
+
+  it("removes legacy aliased scan locations without touching their folders", async () => {
+    const { root, repo, runner } = await fixture();
+    const alias = join(root, "legacy-alias");
+    await symlink(repo, alias, "dir");
+    const appDataRoot = join(root, "legacy-data");
+    await mkdir(appDataRoot);
+    await writeFile(join(appDataRoot, "worktree-locations.json"), JSON.stringify({ formatVersion: 1, scanRoots: [alias], kept: {} }));
+    const service = createWorktreeService({
+      appDataRoot, homeDir: join(root, "home"),
+      projectStore: { listLocalRootPaths: async () => [] } as unknown as ProjectStore,
+      resolveRunner: async () => runner
+    });
+    expect((await service.inventory()).configuredRoots).toEqual([repo]);
+    await service.removeScanRoot(repo);
+    expect((await service.inventory()).scanRoots).toEqual([]);
+    expect((await lstat(alias)).isSymbolicLink()).toBe(true);
+    expect(await readFile(join(repo, "README.md"), "utf8")).toBe("base\n");
+  });
+
+  it("does not turn an automatic location linked to Home into a whole-Home scan", async () => {
+    const { root, runner } = await fixture();
+    const homeDir = join(root, "home");
+    await mkdir(homeDir);
+    await symlink(homeDir, join(homeDir, "worktrees"), "dir");
+    const service = createWorktreeService({
+      appDataRoot: join(root, "safe-data"), homeDir,
+      projectStore: { listLocalRootPaths: async () => [] } as unknown as ProjectStore,
+      resolveRunner: async () => runner
+    });
+    const inventory = await service.inventory();
+    expect(inventory.scanRoots).toEqual([]);
+    expect(inventory.incomplete).toBe(true);
+    expect(inventory.issues[0]).toContain("resolves to Home");
+  });
+
+  it("continues discovering nested repositories, not only the first repository in a location", async () => {
+    const { root, repo, service } = await fixture();
+    const nested = join(repo, "tools", "nested-project");
+    await mkdir(join(repo, "tools"));
+    await run("git", ["clone", "--local", repo, nested]);
+    const nestedTree = join(root, "nested-worktree");
+    await run("git", ["-C", nested, "worktree", "add", "-b", "nested", nestedTree]);
+    const inventory = await service.inventory();
+    expect(inventory.entries).toHaveLength(4);
+    expect(inventory.entries.find((entry) => entry.path === nestedTree)?.repositoryPath).toBe(nested);
+    expect(inventory.incomplete).toBe(false);
+  });
+
+  it("reports a depth-limited discovery instead of presenting it as a full scan", async () => {
+    const { root, repo, runner } = await fixture();
+    const location = join(root, "deep-container");
+    const nested = join(location, ...Array.from({ length: 8 }, (_, index) => `level-${index}`));
+    await mkdir(join(nested, ".."), { recursive: true });
+    await run("git", ["clone", "--local", repo, nested]);
+    const service = createWorktreeService({
+      appDataRoot: join(root, "depth-data"), homeDir: join(root, "home"),
+      projectStore: { listLocalRootPaths: async () => [] } as unknown as ProjectStore,
+      resolveRunner: async () => runner
+    });
+    await service.addScanRoot(location);
+    const inventory = await service.inventory();
+    expect(inventory.entries).toEqual([]);
+    expect(inventory.incomplete).toBe(true);
+    expect(inventory.issues).toEqual([expect.stringContaining("depth limit")]);
+  });
+
+  it("does not expand an automatic container to a Home-level Git repository", async () => {
+    const { root, runner } = await fixture();
+    const homeDir = join(root, "home");
+    await run("git", ["init", homeDir]);
+    const container = join(homeDir, "Github");
+    await mkdir(container);
+    const service = createWorktreeService({
+      appDataRoot: join(root, "home-repo-data"), homeDir,
+      projectStore: { listLocalRootPaths: async () => [] } as unknown as ProjectStore,
+      resolveRunner: async () => runner
+    });
+    const inventory = await service.inventory();
+    expect(inventory.scanRoots).toEqual([container]);
+    expect(inventory.entries).toEqual([]);
+    expect(inventory.incomplete).toBe(true);
+    expect(inventory.issues[0]).toContain("repository root is Home");
+  });
+
+  it("does not refresh the Git index while passively inspecting a worktree", async () => {
+    const { linked, service, runner } = await fixture();
+    const index = (await runner.run(["rev-parse", "--git-path", "index"], { cwd: linked })).stdout.trim();
+    const original = await readFile(index);
+    const timestamp = (await lstat(index)).mtimeMs;
+    const later = new Date(Date.now() + 2000);
+    await utimes(join(linked, "README.md"), later, later);
+    const runGit = vi.spyOn(runner, "run");
+    await service.inventory();
+    expect(await readFile(index)).toEqual(original);
+    expect((await lstat(index)).mtimeMs).toBe(timestamp);
+    expect(runGit.mock.calls.find(([args]) => args[0] === "status")?.[1]?.env).toEqual({ GIT_OPTIONAL_LOCKS: "0" });
   });
 
   it("never treats a user-kept tree as a cleanup candidate", async () => {
