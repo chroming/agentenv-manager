@@ -32,6 +32,8 @@ import {
   ResourceSection,
   ResourceRow,
   SearchField,
+  SectionLabel,
+  PathListPreview,
   SelectControl,
   SelectField,
   SelectableListRow,
@@ -43,6 +45,19 @@ import { alignedResourceRowFixtures } from "../fixtures/alignedResourceRows";
 import { OverflowTooltip } from "../../src/renderer/components/OverflowTooltip";
 import { InfoTip } from "../../src/renderer/components/InfoTip";
 import { useModalDialog } from "../../src/renderer/hooks/useModalDialog";
+
+it("keeps compact headings semantic and renders path previews as selectable plain text", () => {
+  const { container } = render(<>
+    <SectionLabel as="h4" count={0} icon={<RefreshCw />} title="Full repository path">Changed paths</SectionLabel>
+    <PathListPreview paths={["?? notes.txt", "M folder/long file.txt", "<script>not executable</script>"]} />
+  </>);
+  const heading = screen.getByRole("heading", { level: 4, name: "Changed paths 0" });
+  expect(heading).toHaveAttribute("title", "Full repository path");
+  expect(container.querySelector(".ui-section-label__count")).toHaveTextContent("0");
+  expect(container.querySelector("pre")?.textContent).toBe("?? notes.txt\nM folder/long file.txt\n<script>not executable</script>");
+  expect(container.querySelector("script")).toBeNull();
+  expect(container.querySelector("pre")).toHaveClass("selectable");
+});
 
 it("separates active filter state from an open menu without changing button variants", () => {
   const { rerender } = render(<IconButton label="Sort" variant="ghost" aria-expanded active><RefreshCw /></IconButton>);

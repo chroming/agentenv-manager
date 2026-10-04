@@ -55,23 +55,7 @@
 }
 
 .worktree-dialog__group-title {
-  align-items: center;
-  color: var(--text-secondary);
-  display: flex;
-  gap: var(--space-2);
-  min-width: 0;
   padding: var(--space-2) var(--space-3);
-}
-
-.worktree-dialog__group-title > span:nth-child(2) {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.worktree-dialog__group-title > span:last-child {
-  margin-left: auto;
 }
 
 .worktree-dialog__detail {
@@ -80,17 +64,13 @@
   min-width: 0;
 }
 
-.worktree-dialog__detail h3,
-.worktree-dialog__detail h4,
 .worktree-dialog__detail p {
   margin: 0;
 }
 
-.worktree-dialog__detail pre {
-  background: var(--surface-muted);
-  padding: var(--space-3);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
+.worktree-dialog__detail > section {
+  display: grid;
+  gap: var(--space-2);
 }
 
 .worktree-dialog__confirmation {

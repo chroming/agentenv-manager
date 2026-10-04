@@ -963,6 +963,55 @@ button.ui-interactive-status.is-interactive:hover:not(:disabled) {
 }
 
 /* Resource rows own identity, state, and action tracks; pages only choose density. */
+.ui-section-label {
+  align-items: center;
+  color: var(--text);
+  display: flex;
+  font-size: var(--font-size-body);
+  font-weight: var(--font-weight-medium);
+  gap: var(--space-2);
+  line-height: 18px;
+  margin: 0;
+  min-width: 0;
+}
+
+.ui-section-label--muted {
+  color: var(--text-secondary);
+}
+
+.ui-section-label__icon {
+  display: inline-flex;
+  flex: 0 0 auto;
+}
+
+.ui-section-label__text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ui-section-label__count {
+  color: var(--text-secondary);
+  flex: 0 0 auto;
+  font-size: var(--font-size-metadata);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--font-weight-regular);
+  margin-left: auto;
+}
+
+.ui-path-list-preview {
+  background: var(--surface-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-metadata);
+  line-height: var(--line-height-code);
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  padding: var(--space-3);
+  white-space: pre-wrap;
+}
+
 .ui-resource-row {
   align-items: center;
   background: var(--surface);

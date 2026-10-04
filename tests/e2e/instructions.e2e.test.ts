@@ -6,6 +6,8 @@ import { _electron as electron, type ElectronApplication, type Page } from "play
 import { afterEach, describe, expect, it } from "vitest";
 import { expectNoHorizontalOverflow } from "./layoutAssertions";
 import { requireCurrentElectronBuild } from "./currentBuild";
+// @ts-expect-error Shared capture evidence is implemented as an executable JavaScript module.
+import { readInterfaceTypography } from "../../scripts/interface-typography.mjs";
 
 let root = "";
 let app: ElectronApplication | undefined;
@@ -257,6 +259,12 @@ describe("Instruction Library desktop workflow", () => {
     await deleteDialog.getByText("This Instruction will be removed from 1 Profile", {
       exact: true
     }).waitFor();
+    expect((await readInterfaceTypography(page)).violations).toEqual([]);
+    expect(await deleteDialog.getByText("Agent files stay unchanged until those Profiles are applied again.", { exact: true })
+      .evaluate((element) => {
+        const style = getComputedStyle(element);
+        return { size: style.fontSize, weight: style.fontWeight };
+      })).toEqual({ size: "12px", weight: "400" });
     if (process.env.AGENTENV_CAPTURE_INSTRUCTIONS_DIR) {
       await page.screenshot({
         path: join(

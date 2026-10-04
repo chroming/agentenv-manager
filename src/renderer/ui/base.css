@@ -9,7 +9,9 @@
 }
 
 body {
+  font-size: var(--font-size-body);
   font-weight: var(--font-weight-regular);
+  line-height: var(--line-height-body);
 }
 
 strong,
@@ -18,10 +20,27 @@ b {
 }
 
 h1,
-h2,
+h2 {
+  font-weight: var(--font-weight-semibold);
+}
+
 h3,
 h4 {
-  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-section-title);
+  font-weight: var(--font-weight-medium);
+  line-height: var(--line-height-body);
+}
+
+pre,
+code,
+kbd,
+samp {
+  font-family: var(--font-mono);
+  font-size: inherit;
+}
+
+pre {
+  line-height: var(--line-height-code);
 }
 
 * {

@@ -39,6 +39,14 @@ const [
   read("tests/visual/critical-captures.json")
 ]);
 
+const baseTypography = await read("src/renderer/ui/base.css");
+const capture = await read("scripts/capture-profiles.mjs");
+const worktrees = await read("src/renderer/components/WorktreeDialog.tsx");
+requirePattern(baseTypography, /body\s*\{[^}]*font-size:\s*var\(--font-size-body\)[^}]*line-height:\s*var\(--line-height-body\)/, "Default interface prose");
+requireText(capture, "readInterfaceTypography(page)", "Capture typography evidence");
+requireText(worktrees, "<SectionLabel", "Worktree group and detail headings");
+requireText(worktrees, "<PathListPreview", "Worktree path preview typography");
+
 requireText(profileEditor, "<AlignedResourceList", "Profile Skills");
 requireText(workspace, "<AlignedResourceList", "Workspace resources");
 requireText(workspace, 'actionTrack="compact"', "Workspace resources");

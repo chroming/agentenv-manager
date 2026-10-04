@@ -20,6 +20,7 @@ import electronPath from "electron";
 import { _electron as electron } from "playwright-core";
 import { assertCurrentBuild } from "./build-fingerprint.mjs";
 import { captureReadmePages } from "./capture-readme-pages.mjs";
+import { readInterfaceTypography } from "./interface-typography.mjs";
 
 const projectRoot = resolve(import.meta.dirname, "..");
 const defaultOutputDir = join(
@@ -793,6 +794,11 @@ const capturePage = async (
   ));
   if (actionGroupDefects.length > 0) {
     throw new Error(`Control group contract failed before ${path}:\n${actionGroupDefects.join("\n")}`);
+  }
+  const typography = await readInterfaceTypography(page);
+  await writeJson(path.replace(/\.png$/, ".typography.json"), typography);
+  if (typography.violations.length) {
+    throw new Error(`Typography contract failed before ${path}:\n${typography.violations.join("\n")}`);
   }
   await page.bringToFront();
   const windowHandle = await app.browserWindow(page);

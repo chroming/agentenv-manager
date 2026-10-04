@@ -12,6 +12,8 @@ import {
   readResourceDisclosureHeaders
 } from "./layoutAssertions";
 import { requireCurrentElectronBuild } from "./currentBuild";
+// @ts-expect-error Shared capture evidence is implemented as an executable JavaScript module.
+import { readInterfaceTypography } from "../../scripts/interface-typography.mjs";
 
 let root = "";
 let app: ElectronApplication | undefined;
@@ -374,6 +376,9 @@ describe("Workspaces desktop workflow", () => {
       "xpath=ancestor::div[contains(@class, 'project-resource-entry')]"
     ).hover();
     await removeWorkspaceSkillButton.click();
+    expect((await readInterfaceTypography(page)).violations).toEqual([]);
+    expect(await page.getByRole("dialog").getByText("The Workspace-owned copy will be backed up before removal.", { exact: true })
+      .evaluate((element) => getComputedStyle(element).fontSize)).toBe("13px");
     await page.getByRole("button", { name: "Remove", exact: true }).click();
     await expect.poll(() => readFile(join(addedProjectSkill, "SKILL.md"), "utf8").then(
       () => true,
@@ -388,6 +393,7 @@ describe("Workspaces desktop workflow", () => {
 
     await page.getByRole("button", { name: "More Workspace actions" }).click();
     await page.getByRole("menuitem", { name: "Remove reference" }).click();
+    expect((await readInterfaceTypography(page)).violations).toEqual([]);
     await page.getByRole("button", { name: "Remove reference", exact: true }).click();
     await expect.poll(async () => JSON.parse(await readFile(join(dataRoot, "projects.json"), "utf8")).projects)
       .toEqual([]);

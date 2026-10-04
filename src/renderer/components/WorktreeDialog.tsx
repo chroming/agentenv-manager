@@ -13,7 +13,7 @@ import { useI18n } from "../i18n";
 import {
   AlignedResourceList, Badge, Button, ChoiceInput, ControlGroup, DetailList,
   DiagnosticMessage, DialogBody, DialogFooter, DialogHeader, EmptyState, IconButton,
-  InteractiveStatus, ModalFrame, Notice, OperationStatusBar, PageHeader, RefreshAction, ResourceRow,
+  InteractiveStatus, ModalFrame, Notice, OperationStatusBar, PageHeader, PathListPreview, RefreshAction, ResourceRow, SectionLabel,
   SearchField, TabBar, TextAction
 } from "./ui";
 
@@ -239,7 +239,7 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog" }: {
             title={filter === "all" ? t("No Worktrees found") : filter === "review" ? t("No Worktrees to review") : t("No kept Worktrees")}
             description={filter === "all" ? t("Add a scan location to look for local Git working directories.") : undefined} /> : null}
           {entriesByRepo.map(([commonDir, entries]) => <section className="worktree-dialog__group" key={commonDir}>
-            <div className="worktree-dialog__group-title"><GitBranch size={15} /><span className="selectable" title={entries[0].repositoryPath}>{nameFromPath(entries[0].repositoryPath)}</span><span>{entries.length}</span></div>
+            <SectionLabel className="worktree-dialog__group-title" tone="muted" icon={<GitBranch size={15} />} count={entries.length}><span className="selectable" title={entries[0].repositoryPath}>{nameFromPath(entries[0].repositoryPath)}</span></SectionLabel>
             <AlignedResourceList actionTrack="compact" className="worktree-dialog__entries">
             {entries.map((entry) => <ResourceRow
               key={entryKey(entry)} density="compact" appearance="plain" icon={entry.locked ? <LockKeyhole size={16} /> : <FolderGit2 size={16} />}
@@ -283,8 +283,8 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog" }: {
           ]} />
           {detail.manualReviewAvailable ? <p>{t("Review whether this work is complete. MR status and squash integration are not verified automatically.")}</p> : null}
           {detail.reasons.length ? <Notice tone="warning" icon={<AlertTriangle size={15} />}>{detail.reasons.join(" · ")}</Notice> : <Notice tone="info" icon={<Check size={15} />}>{t("No local file changes found. Review the purpose of this worktree before removing it.")}</Notice>}
-          {detail.changes.length ? <section><h4>{t("Changed and untracked paths")} ({detail.changes.length})</h4><pre className="selectable">{detail.changes.join("\n")}</pre></section> : null}
-          {detail.ignored.length ? <section><h4>{t("Ignored paths")} ({detail.ignored.length})</h4><pre className="selectable">{detail.ignored.join("\n")}</pre></section> : null}
+          {detail.changes.length ? <section><SectionLabel as="h4" count={detail.changes.length}>{t("Changed and untracked paths")}</SectionLabel><PathListPreview paths={detail.changes} /></section> : null}
+          {detail.ignored.length ? <section><SectionLabel as="h4" count={detail.ignored.length}>{t("Ignored paths")}</SectionLabel><PathListPreview paths={detail.ignored} /></section> : null}
           {detail.manualReviewAvailable && !detail.cleanupReviewAvailable && !detail.keptReason ? <label className="worktree-dialog__confirmation">
             <ChoiceInput type="checkbox" checked={manualConfirm} onChange={(event) => setManualConfirm(event.target.checked)} />
             <span>{t("I reviewed this worktree and want to remove its local contents after a verified recovery copy is saved.")}</span>

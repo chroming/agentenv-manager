@@ -8,6 +8,8 @@ import { _electron as electron, type ElectronApplication } from "playwright-core
 import { afterEach, describe, expect, it } from "vitest";
 import { requireCurrentElectronBuild } from "./currentBuild";
 import { translate } from "../../src/renderer/i18n";
+// @ts-expect-error Shared capture evidence is implemented as an executable JavaScript module.
+import { readInterfaceTypography } from "../../scripts/interface-typography.mjs";
 
 const run = promisify(execFile);
 let root = "";
@@ -126,6 +128,9 @@ describe("Worktrees desktop workflow", () => {
       expect(geometry.bodyFits).toBe(true);
       expect(geometry.aligned).toBe(true);
       expect(geometry.stateFits).toBe(true);
+      const typography = await readInterfaceTypography(page);
+      expect(typography.violations).toEqual([]);
+      expect(typography.headings.length).toBeGreaterThan(0);
       const captureDir = process.env.AGENTENV_CAPTURE_WORKTREES_DIR;
       if (captureDir) {
         await mkdir(captureDir, { recursive: true });
@@ -147,6 +152,18 @@ describe("Worktrees desktop workflow", () => {
     await page.keyboard.press("Escape");
     await workspace.getByRole("button", { name: "long-name-with-uncommitted-work", exact: true }).click();
     const dirtyDialog = page.getByRole("dialog");
+    const typography = await readInterfaceTypography(page);
+    expect(typography.violations).toEqual([]);
+    expect(typography.paths.length).toBeGreaterThan(0);
+    expect(typography.paragraphs.some((item: { size: string }) => item.size === "13px")).toBe(true);
+    expect(await dirtyDialog.locator(".ui-dialog-title").evaluate((element) => {
+      const style = getComputedStyle(element);
+      return { size: style.fontSize, weight: style.fontWeight };
+    })).toEqual({ size: "16px", weight: "600" });
+    expect(await dirtyDialog.locator(".worktree-dialog__confirmation").evaluate((element) => {
+      const style = getComputedStyle(element);
+      return { size: style.fontSize, weight: style.fontWeight };
+    })).toEqual({ size: "13px", weight: "400" });
     expect(await dirtyDialog.locator(".worktree-dialog__body").evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
     await dirtyDialog.getByRole("checkbox").scrollIntoViewIfNeeded();
     expect(await dirtyDialog.evaluate((element) => {
