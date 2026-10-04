@@ -62,7 +62,7 @@ describe("Worktrees desktop workflow", () => {
     const executable = join(bin, "opencode");
     await writeFile(executable, "#!/bin/sh\nexit 0\n");
     await chmod(executable, 0o755);
-    app = await electron.launch({
+    const launchOptions = {
       executablePath: electronPath as unknown as string,
       args: ["--disable-gpu", "--force-device-scale-factor=1", `--user-data-dir=${join(root, "electron")}`,
         join(process.cwd(), "out", "main", "main.js")],
@@ -73,7 +73,8 @@ describe("Worktrees desktop workflow", () => {
         AGENTENV_AUTOMATION_TARGET_PATH: `${bin}${delimiter}${process.env.PATH ?? ""}`,
         PATH: `${bin}${delimiter}${process.env.PATH ?? ""}`
       }
-    });
+    };
+    app = await electron.launch(launchOptions);
     const page = await app.firstWindow();
     const notNow = page.getByRole("button", { name: t("Not now"), exact: true });
     if (await notNow.isVisible().catch(() => false)) await notNow.click();
@@ -136,10 +137,37 @@ describe("Worktrees desktop workflow", () => {
         await mkdir(captureDir, { recursive: true });
         await page.screenshot({ path: join(captureDir, `worktrees-${locale}-${viewport.width}.png`) });
       }
+      const sortTrigger = workspace.getByRole("button", { name: `${t("Sort Worktrees")}: ${t("Name")}`, exact: true });
+      await sortTrigger.click();
+      const sortMenu = page.getByRole("menu", { name: t("Sort Worktrees"), exact: true });
+      expect(await sortMenu.getByRole("menuitemradio").count()).toBe(5);
+      expect(await sortMenu.evaluate((element) => {
+        const box = element.getBoundingClientRect();
+        return box.left >= 0 && box.right <= window.innerWidth && box.top >= 0 &&
+          box.bottom <= window.innerHeight && element.scrollWidth <= element.clientWidth + 1;
+      })).toBe(true);
+      if (captureDir) {
+        await page.screenshot({ path: join(captureDir, `worktrees-sort-${locale}-${viewport.width}.png`) });
+      }
+      await page.keyboard.press("Escape");
+      expect(await sortMenu.count()).toBe(0);
+      expect(await sortTrigger.evaluate((element) => element === document.activeElement)).toBe(true);
     }
     await page.setViewportSize({ width: 920, height: 620 });
     expect(await workspace.locator(".worktree-workspace__body").evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
     await workspace.getByRole("checkbox", { name: t("Select Worktree for review") }).first().check();
+    const selectedPath = await workspace.locator(".ui-resource-row").filter({
+      has: page.getByRole("checkbox", { name: t("Select Worktree for review"), checked: true })
+    }).locator(".ui-resource-row__identity > span").textContent();
+    await workspace.getByRole("button", { name: `${t("Sort Worktrees")}: ${t("Name")}`, exact: true }).click();
+    await page.getByRole("menuitemradio", { name: t("Largest size"), exact: true }).click();
+    await expect.poll(async () => JSON.parse(await readFile(join(data, "ui-state.json"), "utf8")).worktreeSort).toBe("size-desc");
+    const sortedPaths = await workspace.locator(".worktree-dialog__entries .ui-resource-row__identity > span").allTextContents();
+    expect(sortedPaths[0]).toBe(repo);
+    expect(sortedPaths[1]).toBe(dirty);
+    expect(await workspace.locator(".ui-resource-row").filter({
+      has: page.getByRole("checkbox", { name: t("Select Worktree for review"), checked: true })
+    }).locator(".ui-resource-row__identity > span").textContent()).toBe(selectedPath);
     expect(await workspace.locator(".ui-page-header").evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
     await workspace.getByRole("checkbox", { name: t("Select Worktree for review") }).first().uncheck();
     await workspace.getByRole("button", { name: t("Scan locations") }).click();
@@ -204,5 +232,15 @@ describe("Worktrees desktop workflow", () => {
     await dialog.getByRole("button", { name: t("Restore"), exact: true }).click();
     await expect.poll(() => readFile(join(linked, "README.md"), "utf8")).toBe("base\n");
     expect(await readFile(join(dirty, "notes.txt"), "utf8")).toBe("unsaved work\n");
+
+    // Reopen the actual desktop process to prove the preference is device-local and durable.
+    await app.close();
+    app = await electron.launch(launchOptions);
+    const reopened = await app.firstWindow();
+    await reopened.getByRole("button", { name: t("Worktrees"), exact: true }).click();
+    await reopened.locator(".worktree-workspace").getByRole("button", {
+      name: `${t("Sort Worktrees")}: ${t("Largest size")}`, exact: true
+    }).waitFor();
+    await reopened.locator(".worktree-workspace").getByText(dirty, { exact: true }).waitFor();
   }, 90_000);
 });

@@ -47,24 +47,6 @@
   grid-template-columns: minmax(0, 1fr) repeat(3, var(--control-height-default));
 }
 
-.conversation-sort-button {
-  height: var(--control-height-default);
-  min-height: var(--control-height-default);
-  width: var(--control-height-default);
-}
-
-.conversation-sort-menu {
-  position: fixed;
-}
-
-.conversation-sort-menu .ui-action-menu__item {
-  justify-content: space-between;
-}
-
-.conversation-sort-menu__check--hidden {
-  visibility: hidden;
-}
-
 .conversation-search input {
   color: var(--text);
   font-size: var(--font-size-body);

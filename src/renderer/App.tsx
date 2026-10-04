@@ -4433,7 +4433,7 @@ const AppContent = ({
             onConfigureRemoteDevices={() => selectWorkspace("targets")}
             onOpenWorktrees={() => selectWorkspace("worktrees")}
           />
-        ) : activeWorkspace === "worktrees" ? <WorktreeWorkspace /> : activeWorkspace === "conversations" ? (
+        ) : activeWorkspace === "worktrees" ? <WorktreeWorkspace uiState={uiState} onUpdateUiState={persistUiState} /> : activeWorkspace === "conversations" ? (
           <ConversationWorkspace
             targets={targets}
             initialViewState={conversationViewState}

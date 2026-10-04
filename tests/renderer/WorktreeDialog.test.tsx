@@ -161,6 +161,49 @@ describe("WorktreeDialog", () => {
     expect(screen.getByText("/projects/_worktrees/dirty")).toBeInTheDocument();
   });
 
+  it("sorts locally, persists the preference and preserves selected paths across refresh", async () => {
+    const api = installApi();
+    const onUpdateUiState = vi.fn();
+    api.inventoryWorktrees.mockResolvedValue({ ...inventory, entries: [
+      { ...clean, sizeBytes: 1 }, { ...dirty, sizeBytes: 100 }
+    ] });
+    render(<WorktreeWorkspace onUpdateUiState={onUpdateUiState} />);
+    await screen.findByText(clean.path);
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select Worktree for review" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sort Worktrees: Name" }));
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "Largest size" }));
+    expect(onUpdateUiState).toHaveBeenCalledWith({ worktreeSort: "size-desc" });
+    expect(screen.getByRole("checkbox", { name: "Select Worktree for review" })).toBeChecked();
+    expect(api.inventoryWorktrees).toHaveBeenCalledTimes(1);
+    expect(api.previewWorktreeCleanup).not.toHaveBeenCalled();
+    const paths = () => [...document.querySelectorAll(".worktree-dialog__entries .ui-resource-row__identity > span")]
+      .map((element) => element.textContent);
+    expect(paths()).toEqual([dirty.path, clean.path]);
+    fireEvent.click(screen.getByRole("button", { name: "Refresh Worktrees" }));
+    await waitFor(() => expect(api.inventoryWorktrees).toHaveBeenCalledTimes(2));
+    expect(paths()).toEqual([dirty.path, clean.path]);
+    fireEvent.click(screen.getByRole("tab", { name: "Kept" }));
+    expect(screen.getByText("No kept Worktrees")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("tab", { name: "All" }));
+    expect(paths()).toEqual([dirty.path, clean.path]);
+  });
+
+  it("restores the supplied preference and closes only the sorting menu on Escape inside a dialog", async () => {
+    installApi();
+    const onClose = vi.fn();
+    const { rerender } = render(<WorktreeDialog open onClose={onClose} uiState={{ worktreeSort: "status" }} />);
+    await screen.findByText(clean.path);
+    const trigger = screen.getByRole("button", { name: "Sort Worktrees: Cleanup status" });
+    fireEvent.click(trigger);
+    expect(screen.getByRole("menuitemradio", { name: "Cleanup status" })).toHaveAttribute("aria-checked", "true");
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    expect(trigger).toHaveFocus();
+    expect(onClose).not.toHaveBeenCalled();
+    rerender(<WorktreeDialog open onClose={onClose} uiState={{ worktreeSort: "modified-desc" }} />);
+    expect(screen.getByRole("button", { name: "Sort Worktrees: Newest modified" })).toBeInTheDocument();
+  });
+
   it("does not turn repositories with only a main tree into worktree cleanup rows", async () => {
     const api = installApi();
     api.inventoryWorktrees.mockResolvedValue({ ...inventory, entries: [{ ...clean, main: true, cleanupReviewAvailable: false }] });

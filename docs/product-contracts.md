@@ -302,6 +302,18 @@ worktree index files.
 The toolbar owns scanning feedback without moving an existing list. Scope, review,
 confirmation and recovery use shared modal shells; branch, state and action lanes
 are aligned across all inventory rows. Scan-location editing never deletes folders.
+Worktree sorting is a device-local UI preference, defaults to name, and uses the shared
+icon-only sort menu also used by Conversations. It never triggers scanning or changes
+cleanup eligibility, keep decisions or selected paths. Repositories stay grouped and
+their main tree stays first. Name ordering uses folder names with full-path tie breaks;
+modification ordering uses measured file modification times, never conversation activity
+or proof of task completion. Size ordering uses linked-tree totals per repository,
+modification ordering uses the newest/oldest linked-tree time, and status ordering uses
+the group's earliest review priority (cleanup review eligible, needs review, kept,
+unavailable). Main trees are excluded from group metrics. Missing or partial group
+measurements and unknown row measurements sort last; metric ties use name ordering.
+Group metrics use the currently filtered inventory. Sorting changes only local `ui-state.json`,
+not worktrees, Git metadata, Workspace references or sync data.
 Git's worktree registration is the source of truth for linked and main worktrees;
 directory names alone are never proof. The inventory reports its scan scope and failures.
 Stopping a scan, leaving Worktrees, or superseding a scan is a normal cancellation,

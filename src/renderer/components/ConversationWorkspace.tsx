@@ -1,6 +1,5 @@
 import { DiagnosticMessage } from "./ui/DiagnosticCopyButton";
 import {
-  ArrowUpDown,
   ArrowRight,
   Check,
   ChevronDown,
@@ -68,6 +67,7 @@ import {
   FilterPopover,
   focusInitialActionMenuItem,
   IconButton,
+  SortMenu,
   EmptyState,
   ModalFrame,
   MasterDetailLayout,
@@ -195,126 +195,14 @@ const ConversationSortMenu = ({
   onChange(sort: ConversationSortOrder): void;
 }) => {
   const { t } = useI18n();
-  const buttonRef = useRef<HTMLButtonElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-  const [open, setOpen] = useState(false);
-  const [style, setStyle] = useState<CSSProperties>();
   const currentOption = conversationSortOptions.find((option) => option.value === sort) ??
     conversationSortOptions[0];
-  const currentLabel = sort === "recent" && queryActive
-    ? t("Best match")
-    : t(currentOption.label);
-  const triggerLabel = `${t("Sort conversations")}: ${currentLabel}`;
-
-  const show = () => {
-    const bounds = buttonRef.current?.getBoundingClientRect();
-    if (bounds) {
-      const width = 190;
-      const estimatedHeight = 116;
-      const fitsBelow = bounds.bottom + 6 + estimatedHeight <= window.innerHeight - 12;
-      setStyle({
-        width,
-        left: Math.max(12, Math.min(bounds.right - width, window.innerWidth - width - 12)),
-        top: fitsBelow
-          ? bounds.bottom + 6
-          : Math.max(12, bounds.top - estimatedHeight - 6)
-      });
-    }
-    setOpen(true);
-    window.setTimeout(() => {
-      const selected = menuRef.current?.querySelector<HTMLElement>(
-        '[role="menuitemradio"][aria-checked="true"]'
-      );
-      (selected ?? menuRef.current?.querySelector<HTMLElement>('[role="menuitemradio"]'))
-        ?.focus();
-    });
-  };
-
-  useEffect(() => {
-    if (!open) return undefined;
-    const dismiss = (event: MouseEvent) => {
-      if (
-        event.target instanceof Node &&
-        !buttonRef.current?.contains(event.target) &&
-        !menuRef.current?.contains(event.target)
-      ) {
-        setOpen(false);
-      }
-    };
-    const escape = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      setOpen(false);
-      buttonRef.current?.focus();
-    };
-    const dismissForViewportChange = () => setOpen(false);
-    document.addEventListener("mousedown", dismiss);
-    document.addEventListener("keydown", escape);
-    window.addEventListener("resize", dismissForViewportChange);
-    window.addEventListener("scroll", dismissForViewportChange, true);
-    return () => {
-      document.removeEventListener("mousedown", dismiss);
-      document.removeEventListener("keydown", escape);
-      window.removeEventListener("resize", dismissForViewportChange);
-      window.removeEventListener("scroll", dismissForViewportChange, true);
-    };
-  }, [open]);
-
-  const select = (value: ConversationSortOrder) => {
-    onChange(value);
-    setOpen(false);
-    buttonRef.current?.focus();
-  };
-
-  return (
-    <>
-      <IconButton
-        ref={buttonRef}
-        className="conversation-sort-button"
-        active={sort !== "recent"}
-        variant="ghost"
-        label={triggerLabel}
-        title={triggerLabel}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        aria-pressed={sort !== "recent"}
-        onClick={() => open ? setOpen(false) : show()}
-      >
-        <ArrowUpDown size={15} aria-hidden="true" />
-      </IconButton>
-      {open ? createPortal(
-        <ActionMenu
-          ariaLabel={t("Sort conversations")}
-          className="conversation-sort-menu"
-          menuRef={menuRef}
-          style={style}
-        >
-          {conversationSortOptions.filter((option) => queryActive || !option.searchOnly).map((option) => {
-            const checked = option.value === sort;
-            const label = option.value === "recent" && queryActive
-              ? t("Best match")
-              : t(option.label);
-            return (
-              <ActionMenuItem
-                key={option.value}
-                role="menuitemradio"
-                aria-checked={checked}
-                onClick={() => select(option.value)}
-              >
-                <span>{label}</span>
-                <Check
-                  className={checked ? undefined : "conversation-sort-menu__check--hidden"}
-                  size={14}
-                  aria-hidden="true"
-                />
-              </ActionMenuItem>
-            );
-          })}
-        </ActionMenu>,
-        document.body
-      ) : null}
-    </>
-  );
+  return <SortMenu label={t("Sort conversations")} value={currentOption.value}
+    active={sort !== "recent"} onChange={onChange}
+    options={conversationSortOptions.filter((option) => queryActive || !option.searchOnly)
+      .map((option) => ({ value: option.value,
+        label: option.value === "recent" && queryActive ? t("Best match") : t(option.label)
+      }))} />;
 };
 
 const TargetMenu = ({

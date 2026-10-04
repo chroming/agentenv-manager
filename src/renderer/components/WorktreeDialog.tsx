@@ -7,6 +7,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   WorktreeCleanupPreview, WorktreeEntry, WorktreeInventory, WorktreeRecoveryRecord
 } from "../../shared/worktrees";
+import type { UiState, UiStateUpdate, WorktreeSort } from "../../shared/uiState";
+import { sortWorktreeGroups, worktreeName } from "../worktreeSort";
 import { formatBytes } from "../formatBytes";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { useI18n } from "../i18n";
@@ -14,15 +16,20 @@ import {
   AlignedResourceList, Badge, Button, ChoiceInput, ControlGroup, DetailList,
   DiagnosticMessage, DialogBody, DialogFooter, DialogHeader, EmptyState, IconButton,
   InteractiveStatus, ModalFrame, Notice, OperationStatusBar, PageHeader, PathListPreview, RefreshAction, ResourceRow, SectionLabel,
-  SearchField, TabBar, TextAction
+  SearchField, SortMenu, TabBar, TextAction
 } from "./ui";
 
 const entryKey = (entry: WorktreeEntry) => `${entry.commonDir}\0${entry.path}`;
-const nameFromPath = (path: string) => path.replace(/[\\/]$/, "").split(/[\\/]/).at(-1) ?? path;
+const nameFromPath = worktreeName;
 
-export const WorktreeDialog = ({ open, onClose, presentation = "dialog" }: {
+interface WorktreeSortPreference {
+  uiState?: Pick<UiState, "worktreeSort">;
+  onUpdateUiState?(update: UiStateUpdate): void;
+}
+
+export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState, onUpdateUiState }: {
   open: boolean; onClose(): void; presentation?: "dialog" | "page";
-}) => {
+} & WorktreeSortPreference) => {
   const { t, formatDate } = useI18n();
   const dialogRef = useRef<HTMLElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -41,6 +48,8 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog" }: {
   const [maximized, setMaximized] = useState(false);
   const [filter, setFilter] = useState<"all" | "review" | "kept">("all");
   const [query, setQuery] = useState("");
+  const [sort, setSort] = useState<WorktreeSort>(uiState?.worktreeSort ?? "name");
+  useEffect(() => setSort(uiState?.worktreeSort ?? "name"), [uiState?.worktreeSort]);
   const dismissReview = () => { setView("list"); setError(""); setMaximized(false); };
   const dismiss = presentation === "dialog" ? onClose : dismissReview;
 
@@ -83,9 +92,10 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog" }: {
       rows.push(entry);
       groups.set(entry.commonDir, rows);
     }
-    return [...groups].filter(([, rows]) => rows.some((entry) => !entry.main))
-      .sort((a, b) => a[1][0].repositoryPath.localeCompare(b[1][0].repositoryPath));
-  }, [inventory, filter, query]);
+    return sortWorktreeGroups(
+      [...groups].filter(([, rows]) => rows.some((entry) => !entry.main)), sort
+    );
+  }, [inventory, filter, query, sort]);
 
   const addLocation = async () => {
     setError("");
@@ -222,6 +232,14 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog" }: {
           <SearchField label={t("Search Worktrees")} placeholder={t("Search")} icon={<Search size={14} />} value={query} onChange={(event) => { setQuery(event.target.value); setSelected([]); }} />
         </ControlGroup>}
         actions={<ControlGroup>
+          <SortMenu<WorktreeSort> label={t("Sort Worktrees")} value={sort} active={sort !== "name"}
+            options={[
+              { value: "name", label: t("Name") },
+              { value: "modified-desc", label: t("Newest modified") },
+              { value: "modified-asc", label: t("Oldest modified") },
+              { value: "size-desc", label: t("Largest size") },
+              { value: "status", label: t("Cleanup status") }
+            ]} onChange={(value) => { setSort(value); onUpdateUiState?.({ worktreeSort: value }); }} />
           {selected.length ? <Button size="compact" icon={<Trash2 size={15} />} title={t("Review selected")} aria-label={`${t("Review selected")} (${selected.length})`} busy={busy === "preview"} disabled={Boolean(busy)} onClick={() => void prepare((inventory?.entries ?? []).filter((entry) => selected.includes(entryKey(entry))))}>{selected.length}</Button> : null}
           <IconButton label={t("Scan locations")} variant="ghost" disabled={Boolean(busy)} onClick={() => { setError(""); setView("locations"); }} title={inventory?.incomplete ? [t("Some locations could not be fully scanned"), ...inventory.issues].join("\n") : t("Scan locations")}>
             {inventory?.incomplete ? <AlertTriangle size={16} /> : <FolderSearch size={16} />}
@@ -368,6 +386,6 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog" }: {
   return modal;
 };
 
-export const WorktreeWorkspace = () => (
-  <WorktreeDialog open onClose={() => undefined} presentation="page" />
+export const WorktreeWorkspace = (props: WorktreeSortPreference) => (
+  <WorktreeDialog {...props} open onClose={() => undefined} presentation="page" />
 );

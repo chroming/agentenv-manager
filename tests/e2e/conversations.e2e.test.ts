@@ -435,6 +435,25 @@ describe("Conversations desktop workflow", () => {
     expect(sortedConversationTitles.largest).toBeTruthy();
     expect(sortedConversationTitles.recent).toBeTruthy();
     const conversationSort = page.getByRole("button", { name: /Sort conversations:/ });
+    const originalViewport = page.viewportSize();
+    for (const viewport of [{ width: 920, height: 620 }, { width: 1180, height: 728 }, { width: 1440, height: 900 }]) {
+      await page.setViewportSize(viewport);
+      await conversationSort.click();
+      const sortMenu = page.getByRole("menu", { name: "Sort conversations", exact: true });
+      await expectInViewport(page, sortMenu);
+      await expectTopmost(sortMenu);
+      await expectNoHorizontalOverflow(page, [".ui-sort-menu"]);
+      expect(await sortMenu.getByRole("menuitemradio", { name: "Recent", exact: true }).getAttribute("aria-checked"))
+        .toBe("true");
+      if (process.env.AGENTENV_CAPTURE_SORT_DIR) {
+        await mkdir(process.env.AGENTENV_CAPTURE_SORT_DIR, { recursive: true });
+        await page.screenshot({ path: join(process.env.AGENTENV_CAPTURE_SORT_DIR, `conversations-sort-en-${viewport.width}.png`) });
+      }
+      await page.keyboard.press("Escape");
+      expect(await sortMenu.count()).toBe(0);
+      expect(await conversationSort.evaluate((element) => element === document.activeElement)).toBe(true);
+    }
+    if (originalViewport) await page.setViewportSize(originalViewport);
     const chooseConversationSort = async (label: "Recent" | "Last activity" | "Largest") => {
       await conversationSort.click();
       await page.getByRole("menuitemradio", { name: label }).click();

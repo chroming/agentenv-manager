@@ -67,4 +67,28 @@ describe("uiStateStore", () => {
     await writeFile(paths.uiStatePath, "{not-json", "utf8");
     await expect(store.read()).resolves.toMatchObject({ version: 1, profileOrder: [] });
   });
+
+  it("persists sorting across reloads without losing other device preferences", async () => {
+    const { paths, store } = await createStore();
+    await store.update({ selectedProfileId: "daily", workspaceOrder: ["workspace-a"],
+      profileOrder: ["daily"], agentOrder: ["codex"], workspaceAgentSelections: { "workspace-a": "codex" }
+    });
+    await store.update({ worktreeSort: "modified-asc" });
+    await expect(createUiStateStore(paths).read()).resolves.toMatchObject({
+      selectedProfileId: "daily", workspaceOrder: ["workspace-a"], worktreeSort: "modified-asc",
+      profileOrder: ["daily"], agentOrder: ["codex"], workspaceAgentSelections: { "workspace-a": "codex" }
+    });
+    expect(() => store.update({ worktreeSort: "invalid" } as never)).toThrow();
+    await expect(store.read()).resolves.toMatchObject({ worktreeSort: "modified-asc" });
+  });
+
+  it("treats an empty patch as unchanged while allowing explicit order resets", async () => {
+    const { store } = await createStore();
+    await store.update({ profileOrder: ["daily"], agentOrder: ["codex"], workspaceOrder: ["workspace-a"] });
+    const before = await store.read();
+    await expect(store.update({})).resolves.toEqual(before);
+    await expect(store.update({ workspaceOrder: [] })).resolves.toMatchObject({
+      profileOrder: ["daily"], agentOrder: ["codex"], workspaceOrder: []
+    });
+  });
 });

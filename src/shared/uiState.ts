@@ -3,6 +3,11 @@ import { SafeIdSchema } from "./schemas";
 
 const uniqueIds = (ids: string[]) => [...new Set(ids)];
 
+export const WorktreeSortSchema = z.enum([
+  "name", "modified-desc", "modified-asc", "size-desc", "status"
+]);
+export type WorktreeSort = z.infer<typeof WorktreeSortSchema>;
+
 export const UiStateSchema = z.object({
   version: z.literal(1),
   selectedProfileId: SafeIdSchema.optional(),
@@ -10,10 +15,17 @@ export const UiStateSchema = z.object({
   profileOrder: z.array(SafeIdSchema).default([]),
   agentOrder: z.array(SafeIdSchema).default([]),
   workspaceOrder: z.array(SafeIdSchema).default([]),
+  worktreeSort: WorktreeSortSchema.optional(),
   workspaceAgentSelections: z.record(SafeIdSchema, SafeIdSchema).default({})
 }).strict();
 
-export const UiStateUpdateSchema = UiStateSchema.omit({ version: true }).partial().strict();
+// Partial updates must not apply persisted-state defaults to omitted fields.
+export const UiStateUpdateSchema = UiStateSchema.omit({ version: true }).partial().extend({
+  profileOrder: z.array(SafeIdSchema).optional(),
+  agentOrder: z.array(SafeIdSchema).optional(),
+  workspaceOrder: z.array(SafeIdSchema).optional(),
+  workspaceAgentSelections: z.record(SafeIdSchema, SafeIdSchema).optional()
+}).strict();
 
 export type UiState = z.infer<typeof UiStateSchema>;
 export type UiStateUpdate = z.infer<typeof UiStateUpdateSchema>;

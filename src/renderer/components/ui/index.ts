@@ -46,6 +46,7 @@ export {
   type ResourcePanelToolbarProps
 } from "./ResourcePanelToolbar";
 export { Switch } from "./Switch";
+export { SortMenu } from "./SortMenu";
 export { TextAction } from "./TextAction";
 export { PathListPreview, SectionLabel } from "./TextSections";
 export { TagChip } from "./TagChip";
