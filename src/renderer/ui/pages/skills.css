@@ -21,22 +21,6 @@
   flex: 0 0 auto;
 }
 
-.skill-library-panel .library-toolbar {
-  display: grid;
-  gap: 8px;
-  grid-template-columns: minmax(0, 1fr) auto;
-}
-
-.skill-library-panel .library-toolbar-actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  flex-wrap: nowrap;
-}
-
-.skill-library-panel .library-toolbar .library-catalog-search {
-  min-width: 0;
-}
 
 
 
@@ -418,10 +402,6 @@
   .skill-library-panel .library-actions-cell {
     grid-column: var(--skill-action-column);
     grid-row: 1;
-  }
-
-  .skill-library-panel .library-toolbar {
-    grid-template-columns: minmax(0, 1fr) auto;
   }
 
 }

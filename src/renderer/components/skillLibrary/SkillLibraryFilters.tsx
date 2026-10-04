@@ -1,8 +1,7 @@
-import { RotateCcw } from "lucide-react";
 import { skillTagKey } from "../../../shared/skillTags";
 import { useI18n } from "../../i18n";
 import type { SkillLibraryViewState } from "../../libraryViewState";
-import { Button, SelectControl } from "../ui";
+import { FilterReset, SelectControl } from "../ui";
 
 interface SkillLibraryFiltersProps {
   availableTags: readonly string[];
@@ -103,14 +102,7 @@ export function SkillLibraryFilters({
           <option value="not-installed">{t("Not installed")}</option>
         </SelectControl>
       </label>
-      <Button
-        className="library-filter-reset"
-        icon={<RotateCcw size={15} strokeWidth={2.2} />}
-        disabled={activeCount === 0}
-        onClick={onReset}
-      >
-        {t("Reset")}
-      </Button>
+      <FilterReset disabled={activeCount === 0} onReset={onReset} />
     </div>
   );
 }

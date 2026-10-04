@@ -37,11 +37,6 @@
   visibility: hidden;
 }
 
-.skill-source-toolbar {
-  display: grid;
-  gap: 8px;
-  grid-template-columns: minmax(0, 1fr) auto;
-}
 
 
 

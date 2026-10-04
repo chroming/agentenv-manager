@@ -9,6 +9,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { FilterTrigger } from "./FilterTrigger";
+import { ControlDensityProvider } from "./controlDensity";
 
 interface FilterPopoverProps {
   activeCount?: number;
@@ -16,6 +17,7 @@ interface FilterPopoverProps {
   className?: string;
   icon: ReactNode;
   label: string;
+  summary?: string;
 }
 
 export const FilterPopover = ({
@@ -23,7 +25,8 @@ export const FilterPopover = ({
   children,
   className = "",
   icon,
-  label
+  label,
+  summary
 }: FilterPopoverProps) => {
   const [open, setOpen] = useState(false);
   const [style, setStyle] = useState<CSSProperties>();
@@ -106,6 +109,7 @@ export const FilterPopover = ({
         aria-expanded={open}
         aria-haspopup="dialog"
         label={label}
+        title={summary ? `${label}: ${summary}` : undefined}
         onClick={() => open ? close() : show()}
       >
         {icon}
@@ -119,7 +123,9 @@ export const FilterPopover = ({
           role="dialog"
           style={style}
         >
-          {children}
+          <ControlDensityProvider density="default">
+            <div className="ui-filter-popover__fields">{children}</div>
+          </ControlDensityProvider>
         </div>,
         document.body
       ) : null}

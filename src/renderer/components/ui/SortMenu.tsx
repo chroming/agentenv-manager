@@ -65,8 +65,8 @@ export const SortMenu = <T extends string>({
   }, [open]);
 
   return <>
-    <IconButton ref={triggerRef} variant="ghost" active={active} label={triggerLabel}
-      title={triggerLabel} aria-haspopup="menu" aria-expanded={open} aria-pressed={active}
+    <IconButton ref={triggerRef} variant="ghost" className="ui-sort-trigger" label={triggerLabel}
+      title={triggerLabel} aria-haspopup="menu" aria-expanded={open} data-custom-sort={active}
       onClick={() => setOpen((current) => !current)}>
       <ArrowUpDown size={15} aria-hidden="true" />
     </IconButton>

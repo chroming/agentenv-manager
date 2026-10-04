@@ -17,6 +17,7 @@ import {
   type ElectronApplication
 } from "playwright-core";
 import { afterEach, describe, expect, it } from "vitest";
+import { expectCatalogToolbar } from "./catalogToolbarAssertions";
 import { createConversationIndexStore } from "../../src/main/conversations/conversationIndexStore";
 import {
   expectInViewport,
@@ -421,7 +422,7 @@ describe("Conversations desktop workflow", () => {
     expect(new Set(titleLayout.heights).size).toBe(1);
     expect(titleLayout.whiteSpaces).toEqual(["nowrap"]);
     await expect.poll(() => page.getByText("Could not complete this step").count()).toBe(0);
-    await expect.poll(() => page.locator(".conversation-list-meta").textContent()).toContain("200 of 201 conversations");
+    await expect.poll(() => page.locator(".conversation-list-pane .ui-catalog-toolbar__context").textContent()).toContain("200/201");
     const sortedConversationTitles = await page.evaluate(async () => {
       const [largest, recent, longest] = await Promise.all([
         window.agentEnv.listConversations({ sort: "size-desc", limit: 1 }),
@@ -440,6 +441,7 @@ describe("Conversations desktop workflow", () => {
     const originalViewport = page.viewportSize();
     for (const viewport of [{ width: 920, height: 620 }, { width: 1180, height: 728 }, { width: 1440, height: 900 }]) {
       await page.setViewportSize(viewport);
+      await expectCatalogToolbar(page.locator(".conversation-list-pane .ui-catalog-toolbar"), "pane");
       await conversationSort.click();
       const sortMenu = page.getByRole("menu", { name: "Sort conversations", exact: true });
       await expectInViewport(page, sortMenu);
@@ -522,7 +524,7 @@ describe("Conversations desktop workflow", () => {
     await page.keyboard.press("Escape");
 
     await historySearch.fill("");
-    await expect.poll(() => page.locator(".conversation-list-meta").textContent()).toContain("200 of 201 conversations");
+    await expect.poll(() => page.locator(".conversation-list-pane .ui-catalog-toolbar__context").textContent()).toContain("200/201");
     await expect.poll(() => page.getByRole("button", { name: "Load 1 more" }).count()).toBe(0);
     await page.locator(".conversation-list").evaluate((list) => {
       list.scrollTop = list.scrollHeight;
@@ -530,7 +532,7 @@ describe("Conversations desktop workflow", () => {
     });
     await expect.poll(() => page.getByRole("button", { name: "Load 1 more" }).count()).toBe(1);
     await page.getByRole("button", { name: "Load 1 more" }).click();
-    await expect.poll(() => page.locator(".conversation-list-meta").textContent()).toMatch(/^201 conversations · /);
+    await expect.poll(() => page.locator(".conversation-list-pane .ui-catalog-toolbar__context").textContent()).toMatch(/^201 · /);
     await expect.poll(() => page.getByRole("button", { name: "Load 1 more" }).count()).toBe(0);
     expect(await page.locator(".conversation-list-item__icon img").count())
       .toBeGreaterThanOrEqual(4);
@@ -802,7 +804,7 @@ describe("Conversations desktop workflow", () => {
       name: /Repair the desktop release workflow/
     }).waitFor();
     await page.getByRole("searchbox", { name: "Search conversations" }).fill("");
-    await expect.poll(() => page.locator(".conversation-list-meta").textContent()).toContain("200 of 201 conversations");
+    await expect.poll(() => page.locator(".conversation-list-pane .ui-catalog-toolbar__context").textContent()).toContain("200/201");
     await page.waitForTimeout(450);
     await expect(page.getByRole("option", {
       name: /Long conversation performance test/

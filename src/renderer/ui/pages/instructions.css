@@ -312,25 +312,6 @@
   overscroll-behavior: contain;
 }
 
-.instructions-list-toolbar {
-  align-items: center;
-  display: grid;
-  gap: var(--space-1);
-  grid-template-columns: minmax(0, 1fr);
-  min-width: 0;
-  padding: var(--list-pane-inset) var(--list-pane-inset) 0;
-}
-
-.instructions-list-toolbar__actions {
-  align-items: center;
-  display: flex;
-  gap: var(--space-1);
-  min-width: 0;
-}
-
-.instructions-list-toolbar__spacer {
-  flex: 1;
-}
 
 .instructions-list-row__metadata {
   align-items: center;

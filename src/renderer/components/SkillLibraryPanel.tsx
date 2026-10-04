@@ -108,7 +108,7 @@ import {
 } from "../../shared/skillCleanup";
 import { isSharedSkillInventoryEntry } from "../../shared/skillLocationSemantics";
 import { useI18n } from "../i18n";
-import { ActionMenu, ActionMenuItem, Button, IconButton, InteractiveStatus, ModalFrame, Notice, RefreshAction, ResourcePanelToolbar, SegmentedControl, SelectControl, SearchField, Switch, TabBar, TextAction, ToolbarOverflowMenu } from "./ui";
+import { ActionMenu, ActionMenuItem, Button, IconButton, InteractiveStatus, ModalFrame, Notice, RefreshAction, SegmentedControl, SelectControl, SearchField, Switch, TabBar, TextAction, ToolbarOverflowMenu } from "./ui";
 import { SkillMaintenanceStatus } from "./SkillMaintenanceStatus";
 import { SkillMaintenanceAction } from "./SkillMaintenanceAction";
 import { skillMaintenanceState } from "../skillMaintenanceState";
@@ -127,7 +127,7 @@ import { SkillTagSuggestionsDialog } from "./SkillTagSuggestionsDialog";
 import { useAIPreferences } from "../hooks/useAIPreferences";
 import { LocalSkillAnalysis } from "./LocalSkillAnalysis";
 import { SkillLibraryFilters } from "./skillLibrary/SkillLibraryFilters";
-import { CatalogFilters } from "./skillLibrary/CatalogFilters";
+import { CatalogFilters, CatalogToolbar } from "./ui";
 import { useCatalogView } from "../hooks/useCatalogView";
 import { sortLibrarySkills } from "../catalogSort";
 import { CatalogSortMetric, SortMenu } from "./ui";
@@ -1770,17 +1770,16 @@ export const SkillLibraryPanel = ({ model, actions, onOpenLocalSkills, onRefresh
       {summaryHistoryId ? <SkillSummaryHistoryDialog id={summaryHistoryId} onClose={() => setSummaryHistoryId(undefined)} /> : null}
       {tagAnalysisSkills ? <SkillTagSuggestionsDialog skills={tagAnalysisSkills} vocabulary={availableTags} onSave={onSetTags} onClose={() => setTagAnalysisSkills(undefined)} /> : null}
       <div className="library-control-deck">
-        <ResourcePanelToolbar variant="catalog" className="library-toolbar" hidden={libraryMode !== "skills"}>
+        <CatalogToolbar className="library-toolbar" aria-label={t("Skill actions")} hidden={libraryMode !== "skills"} search={
           <SearchField
               fieldClassName="library-catalog-search"
-              icon={<Search size={15} strokeWidth={2.2} />}
               ref={searchInputRef}
               label={t("Search skills")}
               placeholder={t("Search skill name or description...")}
               value={search}
               onChange={(event) => updateControls({ search: event.currentTarget.value })}
             />
-          <div className="library-toolbar-actions">
+          } controls={<>
           <SortMenu label={t("Sort Skills")} value={skillView.sort} active={skillView.sort !== "name"}
             options={[{ value: "name", label: t("Name") },
               { value: "source-updated", label: t("Source updated") },
@@ -1800,6 +1799,7 @@ export const SkillLibraryPanel = ({ model, actions, onOpenLocalSkills, onRefresh
               onReset={() => updateControls({ ...resetSkillLibraryFilterPatch, statusFilter: "all" })}
             />
           </CatalogFilters>
+          </>} actions={<>
           <SkillMaintenanceAction action="check"
             busy={checkingAllUpdates}
             disabled={updateActivityBusy}
@@ -1816,8 +1816,7 @@ export const SkillLibraryPanel = ({ model, actions, onOpenLocalSkills, onRefresh
             id: "ai-tags", label: t("AI tags..."), icon: <Sparkles size={15} />, disabled: filteredSkills.length === 0,
             onSelect: () => setTagAnalysisSkills(filteredSkills)
           }] : [])]} />
-          </div>
-        </ResourcePanelToolbar>
+          </>} />
       </div>
 
       <section

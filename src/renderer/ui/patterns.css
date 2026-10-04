@@ -1376,19 +1376,6 @@ button.skill-tag-chip:focus-visible {
   flex: 1 1 180px;
   min-width: 0;
 }
-.catalog-filters {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-width: 0;
-}
-
-.catalog-filters__summary {
-  color: var(--muted);
-  font-size: var(--font-size-caption);
-  white-space: nowrap;
-}
-
 .catalog-filter-fields {
   display: grid;
   gap: var(--space-3);
@@ -1403,4 +1390,78 @@ button.skill-tag-chip:focus-visible {
 .catalog-filter-fields label > span {
   color: var(--muted);
   font-size: var(--font-size-caption);
+}
+
+/* Catalog pages own data and actions; this pattern owns control placement. */
+.ui-catalog-toolbar {
+  align-items: center;
+  display: grid;
+  gap: var(--space-2);
+  min-width: 0;
+  padding: 2px 0 6px;
+}
+
+.ui-catalog-toolbar[hidden] {
+  display: none;
+}
+
+.ui-catalog-toolbar--wide {
+  grid-template-columns: minmax(180px, 360px) auto minmax(0, 1fr) auto;
+}
+
+.ui-catalog-toolbar__search {
+  min-width: 0;
+}
+
+.ui-catalog-toolbar__search > .ui-search-field {
+  width: 100%;
+}
+
+.ui-catalog-toolbar__controls,
+.ui-catalog-toolbar__actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: nowrap;
+  gap: var(--space-1);
+}
+
+.ui-catalog-toolbar--wide > .ui-catalog-toolbar__actions {
+  grid-column: 4;
+}
+
+.ui-catalog-toolbar--pane {
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: var(--space-1);
+  padding: var(--list-pane-inset) var(--list-pane-inset) 6px;
+}
+
+.ui-catalog-toolbar--pane > .ui-catalog-toolbar__search {
+  grid-column: 1 / -1;
+}
+
+.ui-catalog-toolbar--pane > .ui-catalog-toolbar__controls {
+  grid-column: 2;
+  grid-row: 2;
+}
+
+.ui-catalog-toolbar--pane > .ui-catalog-toolbar__actions {
+  grid-column: 3;
+  grid-row: 2;
+}
+
+.ui-catalog-toolbar__context {
+  align-items: center;
+  color: var(--muted);
+  display: flex;
+  font-size: var(--font-size-caption);
+  gap: var(--space-1);
+  grid-column: 1;
+  grid-row: 2;
+  min-width: 0;
+}
+
+.ui-catalog-toolbar__context > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

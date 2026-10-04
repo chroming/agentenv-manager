@@ -185,9 +185,13 @@ describe("WorktreeDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Refresh Worktrees" }));
     await waitFor(() => expect(api.inventoryWorktrees).toHaveBeenCalledTimes(2));
     expect(paths()).toEqual([dirty.path, clean.path]);
-    fireEvent.click(screen.getByRole("tab", { name: "Kept" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Filters/ }));
+    fireEvent.change(screen.getByRole("combobox", { name: "Worktree filter" }), { target: { value: "kept" } });
+    fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.getByText("No kept Worktrees")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("tab", { name: "All" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Filters/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
+    fireEvent.keyDown(document, { key: "Escape" });
     expect(paths()).toEqual([dirty.path, clean.path]);
   });
 
@@ -273,7 +277,9 @@ describe("WorktreeDialog", () => {
     render(<WorktreeWorkspace />);
     await screen.findByText("/projects/_worktrees/clean");
     expect(screen.getByText("Clean")).toBeInTheDocument();
-    fireEvent.click(screen.getByRole("tab", { name: "Kept" }));
+    fireEvent.click(screen.getByRole("button", { name: /^Filters/ }));
+    fireEvent.change(screen.getByRole("combobox", { name: "Worktree filter" }), { target: { value: "kept" } });
+    fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.getByText("No kept Worktrees")).toBeInTheDocument();
     expect(screen.queryByText("No Worktrees found")).not.toBeInTheDocument();
   });

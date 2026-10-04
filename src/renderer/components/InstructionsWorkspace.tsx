@@ -18,7 +18,7 @@ import { useModalDialog } from "../hooks/useModalDialog";
 import { useI18n } from "../i18n";
 import { useCatalogView } from "../hooks/useCatalogView";
 import { projectInstructions } from "../catalogSort";
-import { CatalogFilters } from "./skillLibrary/CatalogFilters";
+import { CatalogFilters, CatalogToolbar, FilterReset } from "./ui";
 import { InstructionBlockEditorDialog } from "./InstructionBlockEditorDialog";
 import { InstructionDocumentDialog } from "./InstructionDocumentDialog";
 import { InstructionDocumentPreviewList } from "./InstructionDocumentPreviewList";
@@ -178,7 +178,8 @@ export const InstructionsWorkspace = ({
       <h2 className="ui-visually-hidden">{t("Instructions")}</h2>
       <MasterDetailLayout className="instructions-catalog" listWidth="compact" appearance="canvas">
         <MasterListPane className="instructions-list-pane">
-          <div className="instructions-list-toolbar" role="toolbar" aria-label={t("Instruction actions")}>
+          <CatalogToolbar layout="pane" aria-label={t("Instruction actions")}
+            context={<span title={`${t("Instructions")}: ${visible.length}`}>{visible.length}</span>} search={
           <SearchField
             fieldClassName="instructions-search"
             label={t("Search Instructions")}
@@ -186,11 +187,11 @@ export const InstructionsWorkspace = ({
             value={query}
             onChange={(event) => setQuery(event.currentTarget.value)}
           />
-          <div className="instructions-list-toolbar__actions">
+          } controls={<>
             <SortMenu label={t("Sort Instructions")} value={view.sort} active={view.sort !== "name"}
               options={[{ value: "name", label: t("Name") }, { value: "modified", label: t("Recently modified") }]}
               onChange={(sort) => updateView({ sort })} />
-            <CatalogFilters compact count={Number(view.usageFilter !== "all")}>
+            <CatalogFilters count={Number(view.usageFilter !== "all")}>
               <div className="catalog-filter-fields"><label><span>{t("Usage")}</span>
                 <SelectControl controlWidth="fill" aria-label={t("Instruction usage filter")} value={view.usageFilter}
                   onChange={(event) => updateView({ usageFilter: event.currentTarget.value as typeof view.usageFilter })}>
@@ -198,17 +199,16 @@ export const InstructionsWorkspace = ({
                   <option value="referenced">{t("Referenced")}</option>
                   <option value="unreferenced">{t("Unreferenced")}</option>
                 </SelectControl></label>
-                <Button disabled={view.usageFilter === "all"} onClick={() => updateView({ usageFilter: "all" })}>{t("Reset")}</Button>
+                <FilterReset disabled={view.usageFilter === "all"} onReset={() => updateView({ usageFilter: "all" })} />
               </div>
             </CatalogFilters>
-            <span className="instructions-list-toolbar__spacer" aria-hidden="true" />
+          </>} actions={<>
             <IconButton label={t("New")} variant={blocks.length === 0 ? "primary" : "secondary"} onClick={() => setEditor({})}><Plus size={15} /></IconButton>
             <ToolbarOverflowMenu label={t("More")} menuLabel={t("Instruction actions")} busy={loading} items={[
               { id: "import", label: t("Import"), icon: <FileInput size={14} />, onSelect: () => void onImport().then((initial) => { if (initial) setEditor({ initial }); }) },
               { id: "refresh", label: t("Refresh"), icon: <RefreshCw size={14} />, disabled: loading, onSelect: () => void onRefresh() }
             ]} />
-          </div>
-          </div>
+          </>} />
           <div className="instructions-list" role="list">
             {visible.length === 0 && blocks.length > 0 ? <EmptyState title={t("No matching Instructions")}
               description={t("Try another search or reset the filters.")} /> : null}

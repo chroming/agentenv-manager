@@ -1,7 +1,7 @@
 import {
   AlertTriangle, ArrowLeft, Check, CircleStop, Copy, FolderGit2, GitBranch,
   FolderSearch, History, LoaderCircle, LockKeyhole, Maximize2, Minimize2, Plus,
-  RotateCcw, Search, Trash2, X
+  RotateCcw, Trash2, X
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type {
@@ -15,8 +15,8 @@ import { useI18n } from "../i18n";
 import {
   AlignedResourceList, Badge, Button, CatalogSortMetric, ChoiceInput, ControlGroup, DetailList,
   DiagnosticMessage, DialogBody, DialogFooter, DialogHeader, EmptyState, IconButton,
-  InteractiveStatus, ModalFrame, Notice, OperationStatusBar, PageHeader, PathListPreview, RefreshAction, ResourceRow, SectionLabel,
-  SearchField, SortMenu, TabBar, TextAction
+  InteractiveStatus, ModalFrame, Notice, OperationStatusBar, PathListPreview, RefreshAction, ResourceRow, SectionLabel,
+  SearchField, SortMenu, TextAction, CatalogToolbar, CatalogFilters, FilterReset, SelectField
 } from "./ui";
 
 const entryKey = (entry: WorktreeEntry) => `${entry.commonDir}\0${entry.path}`;
@@ -221,17 +221,9 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
   const review = (entry: WorktreeEntry) => {
     setDetail(entry); setManualConfirm(false); setError(""); setView("detail");
   };
-  const toolbar = <PageHeader
-        title={t("Worktrees")}
-        navigation={<ControlGroup className="worktree-workspace__filters"><TabBar<"all" | "review" | "kept"> label={t("Worktree filter")} value={filter} onChange={(value) => { setFilter(value); setSelected([]); }}
-          options={[
-            { value: "all", label: t("All") },
-            { value: "review", label: t("Review") },
-            { value: "kept", label: t("Kept") }
-          ]} />
-          <SearchField label={t("Search Worktrees")} placeholder={t("Search")} icon={<Search size={14} />} value={query} onChange={(event) => { setQuery(event.target.value); setSelected([]); }} />
-        </ControlGroup>}
-        actions={<ControlGroup>
+  const toolbar = <CatalogToolbar aria-label={t("Worktrees")}
+        search={<SearchField label={t("Search Worktrees")} placeholder={t("Search")} value={query} onChange={(event) => { setQuery(event.target.value); setSelected([]); }} />}
+        controls={<>
           <SortMenu<WorktreeSort> label={t("Sort Worktrees")} value={sort} active={sort !== "name"}
             options={[
               { value: "name", label: t("Name") },
@@ -240,6 +232,15 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
               { value: "size-desc", label: t("Largest size") },
               { value: "status", label: t("Cleanup status") }
             ]} onChange={(value) => { setSort(value); onUpdateUiState?.({ worktreeSort: value }); }} />
+          <CatalogFilters count={Number(filter !== "all")} summary={filter === "review" ? t("Review") : t("Kept")}>
+            <SelectField label={t("Worktree filter")} value={filter} onChange={(event) => { setFilter(event.currentTarget.value as typeof filter); setSelected([]); }}>
+              <option value="all">{t("All")}</option>
+              <option value="review">{t("Review")}</option>
+              <option value="kept">{t("Kept")}</option>
+            </SelectField>
+            <FilterReset disabled={filter === "all"} onReset={() => { setFilter("all"); setSelected([]); }} />
+          </CatalogFilters>
+        </>} actions={<>
           {selected.length ? <Button size="compact" icon={<Trash2 size={15} />} title={t("Review selected")} aria-label={`${t("Review selected")} (${selected.length})`} busy={busy === "preview"} disabled={Boolean(busy)} onClick={() => void prepare((inventory?.entries ?? []).filter((entry) => selected.includes(entryKey(entry))))}>{selected.length}</Button> : null}
           <IconButton label={t("Scan locations")} variant="ghost" disabled={Boolean(busy)} onClick={() => { setError(""); setView("locations"); }} title={inventory?.incomplete ? [t("Some locations could not be fully scanned"), ...inventory.issues].join("\n") : t("Scan locations")}>
             {inventory?.incomplete ? <AlertTriangle size={16} /> : <FolderSearch size={16} />}
@@ -247,7 +248,7 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
           <RefreshAction label={t("Refresh Worktrees")} busy={busy === "scan"} disabled={Boolean(busy) && busy !== "scan"} onRefresh={() => void refresh()} />
           {busy === "scan" ? <IconButton label={t("Stop scanning")} variant="ghost" onClick={() => void window.agentEnv.cancelWorktreeScan()}><CircleStop size={16} /></IconButton> : null}
           <IconButton label={t("Worktree recovery")} variant="ghost" busy={busy === "recovery"} disabled={Boolean(busy)} onClick={() => void showRecovery()}><History size={16} /></IconButton>
-        </ControlGroup>}
+        </>}
       />;
   const failure = error ? <Notice tone="danger" icon={<AlertTriangle size={15} />} role="alert"><DiagnosticMessage message={error} /></Notice> : null;
   const list = <>

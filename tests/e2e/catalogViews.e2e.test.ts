@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { translate } from "../../src/renderer/i18n";
 import { expectInViewport, expectNoHorizontalOverflow } from "./layoutAssertions";
 import { requireCurrentElectronBuild } from "./currentBuild";
+import { expectCatalogToolbar } from "./catalogToolbarAssertions";
 
 requireCurrentElectronBuild();
 let root = "";
@@ -127,6 +128,10 @@ describe("Device-local catalog views", () => {
       }
       expect(await page.locator(".library-table-row .ui-catalog-sort-metric").evaluateAll((elements) => elements.every((element) => element.scrollWidth <= element.clientWidth + 1))).toBe(true);
       await expectNoHorizontalOverflow(page, [".library-toolbar"]);
+      const skillToolbar = await expectCatalogToolbar(page.locator(".library-toolbar"), "wide");
+      await page.locator(".library-toolbar").getByRole("button", { name: new RegExp(`^${t("Filters")}`) }).click();
+      await capture(`skill-filters-${width}`);
+      await page.keyboard.press("Escape");
       await capture(`skills-${width}`);
       await chooseSort("Sort Skills", "Profile references");
       expect(await page.locator(".library-table .library-skill-name-button").allTextContents()).toEqual(["Skill2", "Skill1", "Skill3"]);
@@ -136,20 +141,34 @@ describe("Device-local catalog views", () => {
       await page.getByRole("tab", { name: t("By source"), exact: true }).click();
       await chooseSort("Sort sources", "Changes");
       await expectNoHorizontalOverflow(page, [".skill-source-toolbar"]);
+      const sourceToolbar = await expectCatalogToolbar(page.locator(".skill-source-toolbar"), "wide");
+      expect(Math.abs(sourceToolbar.search.x - skillToolbar.search.x)).toBeLessThanOrEqual(1);
+      expect(Math.abs(sourceToolbar.sort.x - skillToolbar.sort.x)).toBeLessThanOrEqual(1);
       await capture(`sources-${width}`);
+      await page.locator(".skill-source-toolbar").getByRole("button", { name: t("More Skill actions"), exact: true }).click();
+      await page.getByRole("menuitem", { name: t("Merge"), exact: true }).click();
+      const sourceCheckboxes = page.locator(".skill-source-list").getByRole("checkbox");
+      await sourceCheckboxes.nth(0).check();
+      await sourceCheckboxes.nth(1).check();
+      await expectCatalogToolbar(page.locator(".skill-source-toolbar"), "wide");
+      await capture(`source-merge-${width}`);
+      await page.getByRole("button", { name: t("Exit merge selection"), exact: true }).click();
       await page.getByRole("tab", { name: t("Groups"), exact: true }).click();
       await chooseSort("Sort groups", "Updates");
       await expectNoHorizontalOverflow(page, [".skill-group-toolbar"]);
+      const groupToolbar = await expectCatalogToolbar(page.locator(".skill-group-toolbar"), "wide");
+      expect(Math.abs(groupToolbar.sort.x - skillToolbar.sort.x)).toBeLessThanOrEqual(1);
       await capture(`groups-${width}`);
       await nav("Instructions").click();
       await chooseSort("Sort Instructions", "Recently modified");
-      await expectNoHorizontalOverflow(page, [".instructions-list-toolbar"]);
-      const actions = page.locator(".instructions-list-toolbar__actions");
+      await expectNoHorizontalOverflow(page, [".instructions-list-pane .ui-catalog-toolbar"]);
+      const actions = page.locator(".instructions-list-pane .ui-catalog-toolbar");
+      await expectCatalogToolbar(actions, "pane");
       await expectAdjacentControls(actions.getByRole("button", { name: new RegExp(`^${t("Sort Instructions")}:`) }),
         actions.getByRole("button", { name: new RegExp(`^${t("Filters")}`) }));
       await expectAdjacentControls(actions.getByRole("button", { name: t("New"), exact: true }),
         actions.getByRole("button", { name: t("More"), exact: true }));
-      expect((await page.getByRole("searchbox", { name: t("Search Instructions") }).boundingBox())!.width).toBeGreaterThan(200);
+      expect((await page.getByRole("searchbox", { name: t("Search Instructions") }).boundingBox())!.width).toBeGreaterThan(175);
       expect(await page.locator(".instructions-list-row .ui-selectable-row__title").allTextContents()).toEqual(["Zebra", "Alpha"]);
       expect(await page.locator(".instructions-list-row .ui-catalog-sort-metric").count()).toBe(2);
       expect(await page.locator(".instructions-list-row .ui-catalog-sort-metric").evaluateAll((elements) => elements.every((element) => element.scrollWidth <= element.clientWidth + 1))).toBe(true);

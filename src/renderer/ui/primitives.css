@@ -628,6 +628,23 @@ button.ui-interactive-status.is-interactive:hover:not(:disabled) {
   z-index: var(--z-modal-popover);
 }
 
+.ui-filter-popover__fields {
+  display: grid;
+  gap: var(--space-3);
+  min-width: 0;
+}
+
+.ui-filter-reset {
+  border-top: 1px solid var(--border);
+  display: flex;
+  justify-content: flex-end;
+  padding-top: var(--space-2);
+}
+
+.ui-sort-trigger[data-custom-sort="true"] {
+  color: var(--accent-strong);
+}
+
 .ui-switch {
   --switch-width: 38px;
   --switch-height: 22px;

@@ -1630,8 +1630,8 @@ describe("Electron UI profile switching e2e", () => {
       await resizeAppWindow(page, width, width === 920 ? 620 : 900);
       for (const [workspace, toolbar] of [
         ["targets", ".target-list__header"],
-        ["instructions", ".instructions-list-toolbar"],
-        ["conversations", ".conversation-list-toolbar"]
+        ["instructions", ".instructions-list-pane .ui-catalog-toolbar"],
+        ["conversations", ".conversation-list-pane .ui-catalog-toolbar"]
       ]) {
         await page.locator(`.workspace-button[data-workspace="${workspace}"]`).click();
         const controls = page.locator(toolbar!);
@@ -1668,7 +1668,7 @@ describe("Electron UI profile switching e2e", () => {
       }
     }
     if (locale === "en") {
-      await page.locator(".conversation-list-toolbar").getByRole("button", { name: "More", exact: true }).click();
+      await page.locator(".conversation-list-pane .ui-catalog-toolbar").getByRole("button", { name: "More", exact: true }).click();
       await page.getByRole("menuitem", { name: "Conversation sources", exact: true }).click();
       await page.getByRole("dialog", { name: "Conversation sources", exact: true }).waitFor();
       await page.keyboard.press("Escape");
@@ -2867,13 +2867,13 @@ describe("Electron UI profile switching e2e", () => {
       expect(libraryHeaderGeometry.actionsInsideHeader).toBe(true);
       expect(libraryHeaderGeometry.actionsBesideTitle).toBe(true);
       expect(libraryHeaderGeometry.centerDelta).toBeLessThanOrEqual(1);
-      const toolbarLayout = await page.locator(".library-toolbar-actions:visible").evaluate((actions) => {
-        const row = actions.closest(".library-toolbar")!.getBoundingClientRect();
+      const toolbarLayout = await page.locator(".library-toolbar:visible").evaluate((actions) => {
+        const row = actions.getBoundingClientRect();
         const controls = [...actions.querySelectorAll("button")].map((button) => button.getBoundingClientRect()).filter((box) => box.width && box.height);
         return { count: controls.length, aligned: controls.every((box) => Math.abs(box.top - controls[0].top) <= 1),
           contained: controls.every((box) => box.left >= row.left && box.right <= row.right) };
       });
-      expect(toolbarLayout.count).toBe(4);
+      expect(toolbarLayout.count).toBe(5);
       expect(toolbarLayout.aligned).toBe(true);
       expect(toolbarLayout.contained).toBe(true);
       const toolbarActions = [
@@ -5736,7 +5736,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(pageActions.length).toBe(1);
     expect(new Set(pageActions.map(({ height }) => height))).toEqual(new Set([32]));
     const toolbarControls = await readBoxes(
-      page.locator(".library-toolbar > .ui-search-field, .library-toolbar-actions button")
+      page.locator(".library-toolbar .ui-search-field, .library-toolbar button")
     );
     expect(toolbarControls.length).toBeGreaterThanOrEqual(3);
     expect(new Set(toolbarControls.map(({ height }) => height))).toEqual(new Set([32]));
@@ -11795,7 +11795,7 @@ describe("Electron UI profile switching e2e", () => {
     await expect
       .poll(() => libraryRow.evaluate((row) => getComputedStyle(row).boxShadow))
       .toBe("none");
-    expect(await page.locator(".catalog-filters__summary:visible").textContent()).toBe("Disabled");
+    expect(await page.getByRole("button", { name: /^Filters/ }).getAttribute("title")).toBe("Filters: Disabled");
     expect(await page.getByRole("group", { name: /^Library item / }).count()).toBe(1);
     await setSkillCatalogStatus(page, "updates");
     expect(await page.getByRole("group", { name: "Library item layout-skill-1" }).count()).toBe(0);

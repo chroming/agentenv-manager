@@ -5,16 +5,6 @@
   overflow: hidden;
 }
 
-.skill-group-toolbar {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  justify-content: stretch;
-  gap: 8px;
-}
-
-.skill-group-search {
-  max-width: none;
-}
 
 .skill-group-list {
   align-content: start;
@@ -74,10 +64,4 @@
 .skill-group-icon-picker {
   height: var(--control-height-default);
   width: var(--control-height-default);
-}
-
-@media (max-width: 760px) {
-  .skill-group-toolbar {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
 }

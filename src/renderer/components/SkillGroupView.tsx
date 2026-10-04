@@ -1,4 +1,4 @@
-import { FolderTree, Pencil, Plus, Search, Trash2, SearchCheck } from "lucide-react";
+import { FolderTree, Pencil, Plus, Trash2, SearchCheck } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
 import type {
   CreateSkillGroupInput,
@@ -29,7 +29,6 @@ import {
   IconButton,
   InteractiveStatus,
   ModalFrame,
-  ResourcePanelToolbar,
   ResourceDisclosureSection,
   ResourceRow,
   SearchField,
@@ -42,7 +41,7 @@ import {
 import { SkillMaintenanceStatus } from "./SkillMaintenanceStatus";
 import { SkillMaintenanceAction } from "./SkillMaintenanceAction";
 import { skillMaintenanceState } from "../skillMaintenanceState";
-import { CatalogFilters } from "./skillLibrary/CatalogFilters";
+import { CatalogFilters, CatalogToolbar, FilterReset } from "./ui";
 
 interface SkillGroupViewProps {
   catalogMenuItems?: import("./ui/ToolbarOverflowMenu").ToolbarOverflowMenuItem[];
@@ -173,16 +172,15 @@ export const SkillGroupView = ({
 
   return (
     <section className="skill-group-view" aria-label={t("Skill Groups")}>
-      <ResourcePanelToolbar variant="catalog" className="skill-group-toolbar">
+      <CatalogToolbar className="skill-group-toolbar" aria-label={t("Skill actions")} search={
         <SearchField
           fieldClassName="skill-group-search"
-          icon={<Search size={15} strokeWidth={2.2} />}
           label={t("Search Skill Groups")}
           placeholder={t("Search Groups...")}
           value={query}
           onChange={(event) => setQuery(event.currentTarget.value)}
         />
-        <div className="library-toolbar-actions">
+        } controls={<>
           <SortMenu label={t("Sort groups")} value={groupView.sort} active={groupView.sort !== "name"}
             options={[{ value: "name", label: t("Name") }, { value: "updates", label: t("Updates") }]}
             onChange={(sort) => updateGroupView({ sort })} />
@@ -192,9 +190,10 @@ export const SkillGroupView = ({
                 onChange={(event) => onFilterChange(event.currentTarget.value as "all" | "updates")}>
                 <option value="all">{t("All")}</option><option value="updates">{t("Updates")}</option>
               </SelectControl></label>
-              <Button disabled={filter === "all"} onClick={() => onFilterChange("all")}>{t("Reset")}</Button>
+              <FilterReset disabled={filter === "all"} onReset={() => onFilterChange("all")} />
             </div>
           </CatalogFilters>
+          </>} actions={<>
           {onCheckUpdates ? <SkillMaintenanceAction action="check" busy={checkingGroup === "all"}
             disabled={Boolean(updateActivity) || visibleCheckIds.length === 0}
             onClick={() => void checkGroup("all", visibleCheckIds)} /> : null}
@@ -205,8 +204,7 @@ export const SkillGroupView = ({
           <ToolbarOverflowMenu label={t("More Skill actions")} menuLabel={t("Skill actions")}
             items={[{ id: "new-group", label: t("New group"), icon: <Plus size={15} />,
               onSelect: () => setDraft(emptyDraft()) }, ...catalogMenuItems]} />
-        </div>
-      </ResourcePanelToolbar>
+        </>} />
 
       <div className="skill-group-list">
         {visibleGroups.length === 0 ? (

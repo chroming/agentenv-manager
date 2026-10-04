@@ -409,8 +409,10 @@ describe("ConversationWorkspace", () => {
     expect(option).not.toHaveTextContent("24 KB");
     expect(within(option).getByText("Repair release workflow"))
       .toHaveClass("conversation-list-item__title");
-    expect(document.querySelector(".conversation-list-meta"))
-      .toHaveTextContent("1 conversations · 24 KB");
+    expect(document.querySelector(".conversation-list-pane .ui-catalog-toolbar__context"))
+      .toHaveTextContent("1 · 24 KB");
+    expect(document.querySelector(".conversation-list-pane .ui-catalog-toolbar__context span"))
+      .toHaveAttribute("title", "1 conversations · 24 KB");
 
     chooseConversationSort("Largest");
     expect(await screen.findByRole("option", {
@@ -442,7 +444,7 @@ describe("ConversationWorkspace", () => {
     chooseConversationSort("Largest");
     await waitFor(() => expect(screen.getByRole("button", {
       name: "Sort conversations: Largest"
-    })).toHaveAttribute("aria-pressed", "true"));
+    })).toHaveAttribute("data-custom-sort", "true"));
     first.unmount();
 
     expect(savedState).toEqual(expect.objectContaining({
@@ -461,7 +463,7 @@ describe("ConversationWorkspace", () => {
     expect(screen.getByRole("searchbox", { name: "Search conversations" }))
       .toHaveValue("release");
     expect(screen.getByRole("button", { name: "Sort conversations: Largest" }))
-      .toHaveAttribute("aria-pressed", "true");
+      .toHaveAttribute("data-custom-sort", "true");
     expect(screen.getByText("Please repair the release workflow.")).toBeInTheDocument();
     expect(api.listConversations).toHaveBeenCalled();
   });
@@ -900,7 +902,7 @@ describe("ConversationWorkspace", () => {
       target("opencode", "OpenCode")
     ]} />);
     await screen.findByText("Repair release workflow");
-    expect(screen.getByText(/1 of 2 conversations/)).toBeInTheDocument();
+    expect(screen.getByTitle(/1 of 2 conversations/)).toHaveTextContent("1/2");
 
     const list = screen.getByRole("listbox");
     Object.defineProperties(list, {
@@ -916,7 +918,7 @@ describe("ConversationWorkspace", () => {
     fireEvent.click(screen.getByRole("button", { name: "Load 1 more" }));
 
     expect(await screen.findByText("Second indexed conversation")).toBeInTheDocument();
-    expect(screen.getByText(/2 conversations/)).toBeInTheDocument();
+    expect(screen.getByTitle(/2 conversations/)).toHaveTextContent("2 ·");
     expect(screen.queryByRole("button", { name: "Load 1 more" })).toBeNull();
     expect(api.listConversations).toHaveBeenCalledWith({
       offset: 1,
@@ -1184,7 +1186,7 @@ describe("ConversationWorkspace", () => {
     });
     await waitFor(() => expect(screen.getByRole("button", {
       name: "Sort conversations: Recent"
-    })).toHaveAttribute("aria-pressed", "false"));
+    })).toHaveAttribute("data-custom-sort", "false"));
     await waitFor(() => expect(api.listConversations).toHaveBeenLastCalledWith({ limit: 200 }));
   });
 
@@ -1194,7 +1196,7 @@ describe("ConversationWorkspace", () => {
     await screen.findByText("Repair release workflow");
 
     const trigger = screen.getByRole("button", { name: "Sort conversations: Recent" });
-    expect(trigger).toHaveAttribute("aria-pressed", "false");
+    expect(trigger).toHaveAttribute("data-custom-sort", "false");
     fireEvent.click(trigger);
     expect(screen.getByRole("menuitemradio", { name: "Recent" }))
       .toHaveAttribute("aria-checked", "true");

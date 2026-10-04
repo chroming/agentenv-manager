@@ -65,6 +65,8 @@ import {
   DialogFooter,
   DialogHeader,
   FilterPopover,
+  FilterReset,
+  CatalogToolbar,
   focusInitialActionMenuItem,
   IconButton,
   SortMenu,
@@ -1573,8 +1575,7 @@ export const ConversationWorkspace = ({
             className="conversation-layout"
           >
           <aside className="conversation-list-pane" aria-label={t("Conversation list")}>
-            <div className="conversation-list-toolbar">
-              <div className="conversation-search-row">
+            <CatalogToolbar layout="pane" aria-label={t("Conversations")} search={
                 <SearchField
                   ref={searchInputRef}
                   fieldClassName="conversation-search"
@@ -1594,6 +1595,7 @@ export const ConversationWorkspace = ({
                     setQuery(nextQuery);
                   }}
                 />
+              } controls={<>
                 <ConversationSortMenu
                   queryActive={Boolean(query.trim())}
                   sort={sort}
@@ -1605,7 +1607,7 @@ export const ConversationWorkspace = ({
                   icon={<ListFilter size={15} />}
                   label={t("Filter conversations")}
                 >
-                  <div className="conversation-filter-fields">
+                  <div className="catalog-filter-fields">
                     <SelectField label={t("Device")} value={deviceFilter} onChange={(e) => setDeviceFilter(e.currentTarget.value)}>
                       <option value="">{t("All devices")}</option>
                       {[...new Map(historyStatus?.availableSources.map((s) => [s.deviceId, s.deviceName]) ?? []).entries()].map(([id, name]) => <option key={id} value={id}>{name}</option>)}
@@ -1654,19 +1656,17 @@ export const ConversationWorkspace = ({
                         </optgroup>
                       ) : null}
                     </SelectField>
-                    <Button
-                      size="compact"
+                    <FilterReset
                       disabled={!agentFilter && !workspaceFilter && !deviceFilter && !includeTools && !updatedAfter}
-                      onClick={() => {
+                      onReset={() => {
                         setAgentFilter("");
                         setWorkspaceFilter("");
                         setDeviceFilter(""); setIncludeTools(false); setUpdatedAfter("");
                       }}
-                    >
-                      {t("Clear filters")}
-                    </Button>
+                    />
                   </div>
                 </FilterPopover>
+              </>} actions={
                 <HistorySearchSettings renderTrigger={(openSources) => (
                   <ToolbarOverflowMenu label={t("More")} menuLabel={t("Conversations")} busy={refreshBusy} allowWhileBusy items={[
                     { id: "refresh", label: t("Refresh"), icon: <RefreshCw size={15} />,
@@ -1677,20 +1677,18 @@ export const ConversationWorkspace = ({
                       onSelect: openSources }
                   ]} />
                 )} />
-              </div>
-            </div>
-            <div className="conversation-list-meta">
+              } context={<>
               {historyStatus?.config.paused ? <IconButton label={t("Resume")} busy={pauseBusy} onClick={() => void toggleHistoryPause()}><Play size={16} /></IconButton> : null}
-              <span>
-                {items.length < total
+              <span title={`${items.length < total
                   ? t("{{loaded}} of {{total}} conversations", {
                       loaded: items.length,
                       total
                     })
-                  : t("{{count}} conversations", { count: total })}
+                  : t("{{count}} conversations", { count: total })} · ${formatConversationSize(totalSizeBytes)}`}>
+                {items.length < total ? `${items.length}/${total}` : total}
                 {" · "}{formatConversationSize(totalSizeBytes)}
               </span>
-            </div>
+            </>} />
             <div
               className="conversation-list"
               ref={conversationListRef}

@@ -2015,7 +2015,7 @@ Status: shared transient success, persistent error, background progress, GitHub 
   rows follow the table header directly, without another This Mac/count band; remote device
   headers retain device identity and connection actions. Verification MUST include configured,
   pending, and recovery cases, not only empty Configure rows.
-- Skills uses two permanent control rows: the page title with the three view tabs and Import; then one shared search/filter/maintenance toolbar. Skill list, By source, and Groups MUST NOT add a separate status-tab strip or inline filter form. A single FilterPopover owns all applicable refinements; active scopes remain visible as a compact summary, and Reset clears them. Enabled remains the list default and Monitored remains the source default. Local Skills, Refresh, AI tags, source Merge, and group creation remain directly reachable through the catalog overflow menu; merge confirmation and exit appear only during explicit selection.
+- Skills uses two permanent control rows: the three view tabs and Import; then one shared search/filter/maintenance toolbar. Skill list, By source, and Groups MUST NOT add a separate status-tab strip or inline filter form. A single FilterPopover owns all applicable refinements; a quiet dot signals active filters, and the trigger tooltip/panel exposes the scope. Clear filters clears all refinements, not the search or sort. Enabled remains the list default and Monitored remains the source default. Local Skills, Refresh, AI tags, source Merge, and group creation remain directly reachable through the catalog overflow menu; merge confirmation and exit appear only during explicit selection.
 - Check updates is an icon-only read operation with local busy feedback. Update all retains text, appears only for a nonempty eligible set, and opens a preview rather than mutating data. Skill list, By source, and Groups share this command grammar. Source filters do not change the execution scope of Check monitored. Update available and Check failed remain interactive statuses that open review or failure details; source checking, monitoring, rename, and other row-specific commands remain in the row menu.
 - Catalog geometry evidence must cover 920/1180/1440 widths, English and Chinese, all three projections, populated update/group states, and open filters. Opening filters must not move the list, and closing with Escape restores trigger focus. Parent page styles may arrange shared controls but cannot redefine their geometry or create a third toolbar.
 - A newly discovered source candidate MAY be ignored without importing or hiding it. Ignore identity is the normalized source record plus its source-relative path, never the Skill name, so an identically named Skill in another source is unaffected. Ignored candidates remain visible as `Ignored`, are excluded from source change counts and bulk actions, and expose an explicit `Unignore` action that returns them to `New` without importing files. `Add` is available only after that state transition. Source merges preserve and remap ignored relative paths into the merged scope.
@@ -2663,8 +2663,8 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
   when siblings expand, collapse, load, or show maintenance progress. Commands cannot be nested
   inside the disclosure trigger. Check updates lives in the Skill group's More menu; Add remains
   a labeled plus icon. Bulk operation behavior, item policies, and persistence do not change.
-- Conversations retain their master/detail workspace. Search, sort, filters, and the list menu share
-  one list toolbar; one quiet line reports count and size. Pause is configured in History sources,
+- Conversations retain their master/detail workspace. The shared pane CatalogToolbar gives search
+  its full width, followed by quiet count/size context alongside sort, filters, and the list menu. Pause is configured in History sources,
   and an already-paused index exposes Resume on the page. Agent, device, path, and activity time
   remain discoverable without opening settings.
 - Conversation detail headers retain the title, selectable path, Agent and activity time. Per-session
@@ -2726,8 +2726,8 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
   with only one separator between the parent and its first child.
 - Shared controls retain their visual role while disabled: ghost controls remain unframed, primary
   and destructive controls keep a subdued semantic fill, and busy controls keep a visible spinner.
-  An open menu has neutral emphasis; an active non-default filter/sort retains accent emphasis even
-  while open. Input, select, and composite search fields share neutral hover borders and focus tokens.
+  An open menu has neutral emphasis; an active non-default sort uses accent ink and active filters
+  use one quiet dot, without an additional filled button. Input, select, and composite search fields share neutral hover borders and focus tokens.
   Import sources use SegmentedControl with tab keyboard behavior. ActionMenuItem owns command/object
   row density; page CSS must not override menu hover or disabled surfaces. Profile pending state is
   neutral, review/unavailable is warning, and save/validation/preview failure is danger.
@@ -2736,7 +2736,7 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
   growing at wide desktop widths. Settings sections fill the same content boundary as their frame,
   while individual fields retain their control width. Master-list selection spans the whole list;
   only toolbar controls and row contents are inset, using the shared list-pane inset.
-- Skill list, By source, and Groups use ResourcePanelToolbar's catalog variant for the same search
+- Skill list, By source, Groups, and Worktrees use CatalogToolbar's wide layout for the same search
   baseline, outer spacing, and page-action density. Source identity icons retain a fixed gap and
   vertical center with both interactive repository labels and static local labels. Source child
   rows follow their parent's identity column across responsive and merge-selection layouts; compact
@@ -2765,6 +2765,15 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
   cleanup continues to use the complete validated inventory; protected recovery records are never
   made deletable by filtering. Filter menus inside a modal stay above that modal and consume Escape
   before the parent dismisses. Empty filtered catalogs retain a discoverable reset action.
+- CatalogToolbar owns the search/control/action slots, density, and responsive allocation. Wide
+  lists keep bounded search adjacent to Sort and Filters, with effectful actions at the trailing
+  edge. Instructions and Conversations use the pane layout: full-width search, then context and
+  controls. Page CSS must not override these slots or control geometry. SearchField supplies the
+  standard search icon by default; a spinner may replace it without moving the input text.
+- TabBar switches peer views/categories (Skills and Settings). Worktrees All/Review/Kept filters
+  live in FilterPopover, not a separate view-tab strip. FilterPopover owns field spacing and default
+  control density; FilterReset consistently says Clear filters and never resets search or sorting.
+  These presentation changes must not trigger scans, change manual object order, or write resources.
 - The Profile Target selector uses the selected Target name as its visible label without a redundant `Target:` prefix; its accessible name retains the full command meaning.
 - First and last row menus are topmost and in viewport.
 - Escape, outside click, keyboard focus, focus restoration, and Arrow/Home/End navigation for renderer action menus.

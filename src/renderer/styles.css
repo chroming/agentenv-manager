@@ -2259,14 +2259,6 @@ summary {
   margin-bottom: -16px;
 }
 
-.library-toolbar {
-  border-bottom: 0;
-}
-
-.library-toolbar > * {
-  min-width: 0;
-}
-
 .library-search {
   display: grid;
   gap: 5px;
@@ -2522,8 +2514,6 @@ summary {
 }
 
 .page-actions button,
-.library-toolbar button,
-.library-toolbar select,
 .library-quick-tab {
   white-space: nowrap;
 }
@@ -2656,13 +2646,6 @@ summary {
 .library-quick-tab.is-active {
   border-bottom-color: var(--accent);
   color: var(--accent);
-}
-
-.library-toolbar {
-  background: #fff;
-  border: 0;
-  border-top: 1px solid #eef2f7;
-  grid-template-columns: minmax(260px, 1fr) auto minmax(130px, 160px) minmax(130px, 160px) auto;
 }
 
 .library-search span {
@@ -3696,43 +3679,12 @@ summary {
   white-space: nowrap;
 }
 
-.library-toolbar {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  min-width: 0;
-  padding: 12px 14px;
-}
-
-.library-toolbar .library-search {
-  flex: 1 1 240px;
-  min-width: min(240px, 100%);
-}
-
-.library-toolbar select {
-  flex: 0 1 132px;
-  min-width: 112px;
-}
-
-.library-toolbar select,
 .row-action-source-editor select,
 .resource-settings-grid select,
 .mcp-server-form select,
 .profile-form-grid select {
   font-size: 13px;
   font-weight: var(--font-weight-regular);
-}
-
-.library-toolbar select {
-  background-color: #fbfdff;
-  border-color: #cfdaea;
-}
-
-.library-toolbar button {
-  flex: 0 0 auto;
-  min-width: 0;
-  white-space: nowrap;
 }
 
 .library-table {

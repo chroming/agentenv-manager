@@ -25,14 +25,9 @@
   background: var(--surface-subtle);
   border-right: 1px solid var(--border);
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   min-height: 0;
   min-width: 0;
-}
-
-.conversation-list-toolbar {
-  display: block;
-  padding: var(--list-pane-inset) var(--list-pane-inset) 6px;
 }
 
 .conversation-search {
@@ -40,42 +35,9 @@
   margin: 0;
 }
 
-.conversation-search-row {
-  align-items: center;
-  display: grid;
-  gap: 6px;
-  grid-template-columns: minmax(0, 1fr) repeat(3, var(--control-height-default));
-}
-
 .conversation-search input {
   color: var(--text);
   font-size: var(--font-size-body);
-}
-
-.conversation-filter-fields {
-  display: grid;
-  gap: var(--space-3);
-}
-
-.conversation-filter-fields .ui-button {
-  justify-self: end;
-}
-
-.conversation-list-meta {
-  align-items: center;
-  color: var(--subtle);
-  display: flex;
-  font-size: var(--font-size-caption);
-  justify-content: space-between;
-  min-height: 20px;
-  padding: 0 12px 4px;
-}
-
-.conversation-list-meta > span:first-child {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .conversation-list {

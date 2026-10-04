@@ -47,6 +47,15 @@ requireText(capture, "readInterfaceTypography(page)", "Capture typography eviden
 requireText(worktrees, "<SectionLabel", "Worktree group and detail headings");
 requireText(worktrees, "<PathListPreview", "Worktree path preview typography");
 
+for (const file of ["SkillLibraryPanel", "SkillSourceView", "SkillGroupView", "InstructionsWorkspace", "ConversationWorkspace", "WorktreeDialog"]) {
+  requireText(await read(`src/renderer/components/${file}.tsx`), "<CatalogToolbar", `${file} catalog control owner`);
+}
+const catalogPattern = await read("src/renderer/components/ui/CatalogToolbar.tsx");
+requireText(catalogPattern, 'layout?: "wide" | "pane"', "Catalog layout variants");
+requireText(await read("tests/e2e/catalogViews.e2e.test.ts"), "expectCatalogToolbar", "Cross-surface toolbar geometry evidence");
+requireText(await read("tests/e2e/worktrees.e2e.test.ts"), "expectCatalogToolbar", "Worktree toolbar geometry evidence");
+requireText(await read("tests/e2e/conversations.e2e.test.ts"), "expectCatalogToolbar", "Conversation toolbar geometry evidence");
+
 requireText(profileEditor, "<AlignedResourceList", "Profile Skills");
 requireText(workspace, "<AlignedResourceList", "Workspace resources");
 requireText(workspace, 'actionTrack="compact"', "Workspace resources");

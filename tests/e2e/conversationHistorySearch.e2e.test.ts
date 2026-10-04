@@ -79,7 +79,7 @@ it.skipIf(process.platform === "win32")("requires opt-in, searches local and SSH
   }
   await expect.poll(async () => (await page.evaluate(()=>window.agentEnv.listConversations({query:"needle"}))).total,{timeout:20000}).toBe(2);
   const openSources = async () => {
-    await page.locator(".conversation-list-toolbar").getByRole("button",{name:"More",exact:true}).click();
+    await page.locator(".conversation-list-pane .ui-catalog-toolbar").getByRole("button",{name:"More",exact:true}).click();
     await page.getByRole("menuitem",{name:"Conversation sources",exact:true}).click();
     await expect.poll(() => dialog.getByRole("button",{name:"Save",exact:true}).isEnabled()).toBe(true);
   };

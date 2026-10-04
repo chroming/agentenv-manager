@@ -18,7 +18,7 @@ import { FileTypeIcon } from "./FileTypeIcon";
 import { Button, SelectControl, SortMenu, ToolbarOverflowMenu } from "./ui";
 import { useCatalogView } from "../hooks/useCatalogView";
 import { projectBackups, compareCatalogNames } from "../catalogSort";
-import { CatalogFilters } from "./skillLibrary/CatalogFilters";
+import { CatalogFilters, FilterReset } from "./ui";
 
 type Translate = (message: string, values?: TranslationValues) => string;
 
@@ -264,7 +264,7 @@ export const BackupManagerDialog = ({
               <SortMenu label={t("Sort backups")} value={view.sort} active={view.sort !== "newest"}
                 options={[{ value: "newest", label: t("Newest first") }, { value: "oldest", label: t("Oldest first") },
                   { value: "size", label: t("Largest first") }]} onChange={(sort) => updateView({ sort })} />
-              <CatalogFilters compact count={filterCount}>
+              <CatalogFilters count={filterCount}>
                 <div className="catalog-filter-fields">
                   <label><span>{t("Type")}</span>
                     <SelectControl controlWidth="fill" aria-label={t("Backup type filter")} value={view.kindFilter}
@@ -284,7 +284,7 @@ export const BackupManagerDialog = ({
                       <option value="all">{t("All Agents")}</option>
                       {targetIds.map((id) => <option key={id} value={id}>{id}</option>)}
                     </SelectControl></label>
-                  <Button disabled={!filterCount} onClick={() => updateView({ kindFilter: "all", statusFilter: "all", targetFilter: "all" })}>{t("Reset")}</Button>
+                  <FilterReset disabled={!filterCount} onReset={() => updateView({ kindFilter: "all", statusFilter: "all", targetFilter: "all" })} />
                 </div>
               </CatalogFilters>
               </div>

@@ -20,8 +20,6 @@ import {
   Pencil,
   Plus,
   RefreshCw,
-  RotateCcw,
-  Search,
   SearchCheck,
   Trash2,
   X
@@ -45,7 +43,7 @@ import type {
 } from "../libraryViewState";
 import type { SkillUpdateActivity } from "../skillUpdateActivity";
 import { useModalDialog } from "../hooks/useModalDialog";
-import { CatalogFilters } from "./skillLibrary/CatalogFilters";
+import { CatalogFilters, CatalogToolbar, FilterReset } from "./ui";
 import { OverflowTooltip } from "./OverflowTooltip";
 import { ResourceIconArtwork } from "./ResourceIconPicker";
 import { SkillMaintenanceStatus } from "./SkillMaintenanceStatus";
@@ -64,7 +62,6 @@ import {
   ModalFrame,
   SelectControl,
   SearchField,
-  ResourcePanelToolbar,
   ToolbarOverflowMenu
 } from "./ui";
 import { SortMenu } from "./ui";
@@ -621,14 +618,14 @@ export const SkillSourceView = ({
       aria-label={t("Skills by source")}
       aria-hidden={!active}
     >
-      <ResourcePanelToolbar variant="catalog" className={`skill-source-toolbar${canMergeSources ? " has-merge" : ""}${mergeSelectionMode ? " is-merge-selection" : ""}`}>
-        <SearchField fieldClassName="library-catalog-search" icon={<Search size={15} strokeWidth={2.2} />}
+      <CatalogToolbar className="skill-source-toolbar" aria-label={t("Skill actions")} search={
+        <SearchField fieldClassName="library-catalog-search"
             label={t("Search sources and skills")}
             placeholder={t("Search source or skill...")}
             value={search}
             onChange={(event) => setSearch(event.currentTarget.value)}
           />
-        <div className="library-toolbar-actions">
+        } controls={<>
         <SortMenu label={t("Sort sources")} value={sourceView.sort} active={sourceView.sort !== "name"}
           options={[{ value: "name", label: t("Name") }, { value: "changes", label: t("Changes") }]}
           onChange={(sort) => updateSourceView({ sort })} />
@@ -656,10 +653,11 @@ export const SkillSourceView = ({
                 <option value="failed">{t("Failed")}</option><option value="not-checked">{t("Not checked")}</option>
               </SelectControl>
             </label>
-            <Button icon={<RotateCcw size={15} />} disabled={activeFilterCount === 0 && scopeFilter === "all"}
-              onClick={() => { onScopeFilterChange("all"); onSourceKindFilterChange("all"); onResultFilterChange("all"); }}>{t("Reset")}</Button>
+            <FilterReset disabled={activeFilterCount === 0 && scopeFilter === "all"}
+              onReset={() => { onScopeFilterChange("all"); onSourceKindFilterChange("all"); onResultFilterChange("all"); }} />
           </div>
         </CatalogFilters>
+        </>} actions={<>
         <SkillMaintenanceAction action="check" scope="sources"
           busy={activeCheckingAll}
           disabled={activeCheckingAll || checking.size > 0 || Boolean(activeCheckingSourceId) || Boolean(operation) || monitoredSourceCount === 0}
@@ -694,8 +692,7 @@ export const SkillSourceView = ({
             <X />
           </IconButton>
         ) : null}
-        </div>
-      </ResourcePanelToolbar>
+        </>} />
 
       <div
         className={`skill-source-list${mergeSelectionMode ? " can-merge" : ""}${selectionDragging ? " is-selecting" : ""}`}

@@ -8,6 +8,7 @@ import {
   type TextareaHTMLAttributes
 } from "react";
 import { DiagnosticMessage } from "./DiagnosticCopyButton";
+import { Search } from "lucide-react";
 
 interface FieldFrameProps {
   children: ReactNode;
@@ -74,7 +75,7 @@ interface SearchFieldProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "
 export const SearchField = forwardRef<HTMLInputElement, SearchFieldProps>(({
   className = "",
   fieldClassName = "",
-  icon,
+  icon = <Search size={15} />,
   id,
   label,
   ...props

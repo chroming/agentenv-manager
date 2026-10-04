@@ -8,6 +8,7 @@ import { _electron as electron, type ElectronApplication } from "playwright-core
 import { afterEach, describe, expect, it } from "vitest";
 import { requireCurrentElectronBuild } from "./currentBuild";
 import { translate } from "../../src/renderer/i18n";
+import { expectCatalogToolbar } from "./catalogToolbarAssertions";
 // @ts-expect-error Shared capture evidence is implemented as an executable JavaScript module.
 import { readInterfaceTypography } from "../../scripts/interface-typography.mjs";
 
@@ -107,6 +108,7 @@ describe("Worktrees desktop workflow", () => {
     expect(scanEvents.some((event) => event.error)).toBe(false);
     for (const viewport of [{ width: 920, height: 620 }, { width: 1180, height: 728 }, { width: 1440, height: 900 }]) {
       await page.setViewportSize(viewport);
+      await expectCatalogToolbar(workspace.locator(".ui-catalog-toolbar"), "wide");
       const geometry = await workspace.evaluate((element) => {
         const frame = element.getBoundingClientRect();
         const body = element.querySelector(".worktree-dialog__body")!;
@@ -152,6 +154,11 @@ describe("Worktrees desktop workflow", () => {
       await page.keyboard.press("Escape");
       expect(await sortMenu.count()).toBe(0);
       expect(await sortTrigger.evaluate((element) => element === document.activeElement)).toBe(true);
+      await workspace.getByRole("button", { name: new RegExp(`^${t("Filters")}`) }).click();
+      await page.getByRole("combobox", { name: t("Worktree filter") }).selectOption("kept");
+      if (captureDir) await page.screenshot({ path: join(captureDir, `worktree-filters-${locale}-${viewport.width}.png`) });
+      await page.getByRole("button", { name: t("Clear filters"), exact: true }).click();
+      await page.keyboard.press("Escape");
     }
     await page.setViewportSize({ width: 920, height: 620 });
     expect(await workspace.locator(".worktree-workspace__body").evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
@@ -187,7 +194,7 @@ describe("Worktrees desktop workflow", () => {
     expect(await workspace.locator(".ui-resource-row").filter({
       has: page.getByRole("checkbox", { name: t("Select Worktree for review"), checked: true })
     }).locator(".ui-resource-row__identity > span").textContent()).toBe(selectedPath);
-    expect(await workspace.locator(".ui-page-header").evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+    await expectCatalogToolbar(workspace.locator(".ui-catalog-toolbar"), "wide");
     await workspace.getByRole("checkbox", { name: t("Select Worktree for review") }).first().uncheck();
     await workspace.getByRole("button", { name: t("Scan locations") }).click();
     const scope = page.getByRole("dialog", { name: t("Scan locations") });

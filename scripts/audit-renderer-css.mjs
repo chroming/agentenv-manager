@@ -81,6 +81,8 @@ const primitiveRootSelectors = new Set([
   ".ui-page-header",
   ".ui-resource-disclosure",
   ".ui-resource-panel-toolbar",
+  ".ui-catalog-toolbar",
+  ".ui-filter-popover",
   ".ui-resource-section",
   ".ui-section-label",
   ".ui-path-list-preview",
@@ -277,6 +279,9 @@ const pagePrimitiveRedefinitions = reports.flatMap((report) => {
     .map((selector) => ({ file: report.file, selector }));
 });
 const protectedPrimitiveDescendants = [
+  ".ui-catalog-toolbar",
+  ".ui-filter-popover__",
+  ".ui-sort-trigger",
   ".profile-edit-button",
   ".project-detail__edit",
   ".conversation-move-workspace-button",

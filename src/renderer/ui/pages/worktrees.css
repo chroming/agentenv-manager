@@ -23,15 +23,6 @@
   display: block;
 }
 
-.worktree-workspace__filters {
-  flex-wrap: wrap;
-  min-width: 0;
-}
-
-.worktree-workspace__filters > .ui-search-field {
-  width: 160px;
-  min-width: 100px;
-}
 
 .worktree-dialog__entries {
   --resource-row-metadata-track: minmax(64px, 140px);
