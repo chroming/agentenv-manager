@@ -227,6 +227,7 @@ export const SkillGroupView = ({
           });
           const checkIds = memberSkills.filter(eligible).map((skill) => skill.id);
           const updateIds = checkIds.filter((id) => updatesById.get(id)?.updateAvailable && !updatesById.get(id)?.error && updatesById.get(id)?.sourceStatus !== "removed");
+          const updateCount = new Set(memberSkills.filter(hasUpdate).map((skill) => skill.id)).size;
           return (
             <ResourceDisclosureSection
               key={group.id}
@@ -285,7 +286,8 @@ export const SkillGroupView = ({
                   ? current.filter((id) => id !== group.id)
                   : [...current, group.id]
               )}
-              summary={t("{{count}} Skills", { count: group.skillIds.length })}
+              summary={[...(groupView.sort === "updates" ? [t(updateCount === 1 ? "{{count}} update" : "{{count}} updates", { count: updateCount })] : []),
+                t("{{count}} Skills", { count: group.skillIds.length })].join(" · ")}
               title={group.name}
               toggleLabel={t("Toggle {{name}}", { name: group.name })}
             >

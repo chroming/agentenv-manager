@@ -8,12 +8,12 @@ import type {
   WorktreeCleanupPreview, WorktreeEntry, WorktreeInventory, WorktreeRecoveryRecord
 } from "../../shared/worktrees";
 import type { UiState, UiStateUpdate, WorktreeSort } from "../../shared/uiState";
-import { sortWorktreeGroups, worktreeName } from "../worktreeSort";
+import { sortWorktreeGroups, worktreeGroupMetric, worktreeName } from "../worktreeSort";
 import { formatBytes } from "../formatBytes";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { useI18n } from "../i18n";
 import {
-  AlignedResourceList, Badge, Button, ChoiceInput, ControlGroup, DetailList,
+  AlignedResourceList, Badge, Button, CatalogSortMetric, ChoiceInput, ControlGroup, DetailList,
   DiagnosticMessage, DialogBody, DialogFooter, DialogHeader, EmptyState, IconButton,
   InteractiveStatus, ModalFrame, Notice, OperationStatusBar, PageHeader, PathListPreview, RefreshAction, ResourceRow, SectionLabel,
   SearchField, SortMenu, TabBar, TextAction
@@ -257,13 +257,19 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
             title={filter === "all" ? t("No Worktrees found") : filter === "review" ? t("No Worktrees to review") : t("No kept Worktrees")}
             description={filter === "all" ? t("Add a scan location to look for local Git working directories.") : undefined} /> : null}
           {entriesByRepo.map(([commonDir, entries]) => <section className="worktree-dialog__group" key={commonDir}>
+            <div className="worktree-dialog__group-header">
             <SectionLabel className="worktree-dialog__group-title" tone="muted" icon={<GitBranch size={15} />} count={entries.length}><span className="selectable" title={entries[0].repositoryPath}>{nameFromPath(entries[0].repositoryPath)}</span></SectionLabel>
+            {sort === "size-desc" ? <CatalogSortMetric kind="size" label={t("Total size")} value={worktreeGroupMetric(entries, sort)} />
+              : sort === "modified-desc" || sort === "modified-asc" ? <CatalogSortMetric kind="date" label={sort === "modified-asc" ? t("Oldest modified") : t("Last modified")} value={worktreeGroupMetric(entries, sort)} /> : null}
+            </div>
             <AlignedResourceList actionTrack="compact" className="worktree-dialog__entries">
             {entries.map((entry) => <ResourceRow
               key={entryKey(entry)} density="compact" appearance="plain" icon={entry.locked ? <LockKeyhole size={16} /> : <FolderGit2 size={16} />}
               title={<TextAction title={entry.path} onClick={() => review(entry)}>{nameFromPath(entry.path)}</TextAction>}
               description={<span className="selectable" title={entry.path}>{entry.path}</span>}
-              metadata={<span title={entry.branch ?? entry.head}>{entry.branch ?? (entry.detached ? t("Detached HEAD") : entry.head?.slice(0, 8))}</span>}
+              metadata={sort === "size-desc" ? <CatalogSortMetric kind="size" label={t("Size")} value={entry.sizeBytes} detail={entry.branch ?? entry.head} />
+                : sort === "modified-desc" || sort === "modified-asc" ? <CatalogSortMetric kind="date" label={t("Last modified")} value={entry.modifiedAt} detail={entry.branch ?? entry.head} />
+                : <span title={entry.branch ?? entry.head}>{entry.branch ?? (entry.detached ? t("Detached HEAD") : entry.head?.slice(0, 8))}</span>}
               state={<InteractiveStatus size="metadata" tone={entry.state === "review" ? "warning" : "neutral"} title={entry.reasons.join("\n")} reviewLabel={t("Review {{name}}", { name: nameFromPath(entry.path) })} onReview={() => review(entry)}
                 label={entry.main ? t("Main") : entry.state === "candidate" ? t("Clean") : entry.state === "kept" ? t("Kept") : entry.state === "review" ? t("Needs review") : t("Unavailable")} />}
               actions={<ControlGroup>

@@ -2751,6 +2751,14 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
   Source-date sorting uses the reported upstream modification time, never import or check time;
   unavailable dates sort last. Profile reference counts count distinct Profiles. Group update
   counts exclude disabled Skills and removed/failed sources. Stable name/ID ties prevent jitter.
+- An active sort criterion MUST be visible in each row using the same value as the comparator,
+  not only in a hover detail. Reuse the existing information or metadata track instead of adding
+  permanent columns for every sort. Date metrics expose the full timestamp in their accessible
+  label and hover detail; compact size/count metrics distinguish zero from unavailable. Worktree
+  repository headers expose the exact aggregate used to sort the currently visible linked
+  Worktrees, excluding the main working directory and marking partial measurements unavailable.
+  Group update counts are distinct eligible Skills; source changes include updates, additions,
+  and removals. Tests MUST verify both order and visible values across locales and widths.
 - Instructions supports referenced/unreferenced filtering without changing the selected detail.
   Its narrow list gives search a full-width row instead of compressing input or icon hit areas.
   Backup type, Agent, and eligibility filters affect visibility only. Automatic/manual retention

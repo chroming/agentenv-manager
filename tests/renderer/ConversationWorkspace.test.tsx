@@ -1123,7 +1123,7 @@ describe("ConversationWorkspace", () => {
     const api = installApi();
     api.listConversations.mockImplementation(async (input?: { sort?: string }) => ({
       items: input?.sort === "size-desc"
-        ? [{ ...conversationSummary, id: "codex:large", title: "Large conversation" }]
+        ? [{ ...conversationSummary, id: "codex:large", title: "Large conversation", sizeBytes: undefined }]
         : input?.sort === "messages-desc"
           ? [{ ...conversationSummary, id: "codex:long", title: "Long conversation" }]
           : input?.sort === "last-active-desc"
@@ -1141,6 +1141,7 @@ describe("ConversationWorkspace", () => {
 
     chooseConversationSort("Largest");
     expect(await screen.findByText("Large conversation")).toBeInTheDocument();
+    expect(document.querySelector(".conversation-list-item__metric")).toHaveTextContent("Unavailable");
     expect(api.listConversations).toHaveBeenLastCalledWith({
       sort: "size-desc",
       limit: 200
@@ -1149,6 +1150,7 @@ describe("ConversationWorkspace", () => {
 
     chooseConversationSort("Most messages");
     expect(await screen.findByText("Long conversation")).toBeInTheDocument();
+    expect(document.querySelector(".conversation-list-item__metric")).toHaveTextContent("2 messages");
     expect(api.listConversations).toHaveBeenLastCalledWith({
       sort: "messages-desc",
       limit: 200

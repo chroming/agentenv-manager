@@ -130,7 +130,7 @@ import { SkillLibraryFilters } from "./skillLibrary/SkillLibraryFilters";
 import { CatalogFilters } from "./skillLibrary/CatalogFilters";
 import { useCatalogView } from "../hooks/useCatalogView";
 import { sortLibrarySkills } from "../catalogSort";
-import { SortMenu } from "./ui";
+import { CatalogSortMetric, SortMenu } from "./ui";
 import { CleanupBucketHeader } from "./CleanupBucketHeader";
 import { BulkSkillUpdateDialog } from "./BulkSkillUpdateDialog";
 import { SkillImportDialog } from "./SkillImportDialog";
@@ -1829,7 +1829,7 @@ export const SkillLibraryPanel = ({ model, actions, onOpenLocalSkills, onRefresh
           <div className="library-table__head">
             <span>{t("Skill")}</span>
             {availableTags.length > 0 ? <span>{t("Tags")}</span> : null}
-            <span>{t("Source")}</span>
+            <span>{skillSort === "source-updated" ? t("Source updated") : skillSort === "references" ? t("Profile references") : t("Source")}</span>
             <span className="library-column-label catalog-status-heading">{t("Status")}</span>
             <span aria-label={t("More")} />
           </div>
@@ -1859,7 +1859,7 @@ export const SkillLibraryPanel = ({ model, actions, onOpenLocalSkills, onRefresh
             const hasUpdate = maintenanceState === "update";
             const hasError = maintenanceState === "error";
             const sourceRemoved = maintenanceState === "removed";
-            const usageCount = (skillUsage[skill.id] ?? []).length;
+            const usageCount = new Set(skillUsage[skill.id] ?? []).size;
             const revisionLabel = shortSkillRevision(skill);
             const versionLabel = skill.version ?? skill.remoteRef ?? revisionLabel;
             const installedAgentNames = Array.from(new Set(
@@ -1985,7 +1985,11 @@ export const SkillLibraryPanel = ({ model, actions, onOpenLocalSkills, onRefresh
                 </div>
                 {availableTags.length > 0 ? <SkillTagCell skill={skill} onSelect={(tag) => updateControls({ tagFilter: tag })} /> : null}
                 <div className="library-source-cell">
-                  {(skill.sourceType === "github" || skill.sourceType === "git") && /^https?:\/\//i.test(skill.source ?? "") ? (
+                  {skillSort !== "name" ? (
+                    skillSort === "source-updated"
+                      ? <CatalogSortMetric kind="date" label={t("Source updated")} value={skill.upstream?.updatedAt} detail={[skillSourceLabel(skill), versionLabel].filter(Boolean).join(" · ")} />
+                      : <CatalogSortMetric kind="count" label={t("Profile references")} value={usageCount} detail={usageDetail} />
+                  ) : (skill.sourceType === "github" || skill.sourceType === "git") && /^https?:\/\//i.test(skill.source ?? "") ? (
                     <TextAction
                       className="library-source-primary is-interactive"
                       type="button"

@@ -6,6 +6,7 @@ export {
 export { Badge } from "./Badge";
 export { Button, type ButtonProps, type ButtonSize, type ButtonVariant } from "./Button";
 export { ChoiceInput, type ChoiceInputProps } from "./ChoiceInput";
+export { CatalogSortMetric } from "./CatalogSortMetric";
 export { ControlGroup } from "./ControlGroup";
 export { DialogBody, DialogFooter, DialogHeader } from "./DialogParts";
 export { DiagnosticCopyButton, DiagnosticMessage } from "./DiagnosticCopyButton";

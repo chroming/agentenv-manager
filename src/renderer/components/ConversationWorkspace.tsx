@@ -1834,8 +1834,10 @@ export const ConversationWorkspace = ({
                             text={item.title}
                           />
                           <span className="conversation-list-item__metric">
-                            {sort === "size-desc" && item.sizeBytes !== undefined ? (
-                              formatConversationSize(item.sizeBytes)
+                            {sort === "size-desc" ? (
+                              item.sizeBytes === undefined ? t("Unavailable") : formatConversationSize(item.sizeBytes)
+                            ) : sort === "messages-desc" ? (
+                              t(item.messageCount === 1 ? "1 message" : "{{count}} messages", { count: item.messageCount })
                             ) : (
                               <time
                                 aria-label={t("Last reply {{time}}", {
@@ -1875,7 +1877,7 @@ export const ConversationWorkspace = ({
                               />
                             </>
                           ) : null}
-                          {sort === "size-desc" ? (
+                          {sort === "size-desc" || sort === "messages-desc" ? (
                             <>
                               <span aria-hidden="true">·</span>
                               <time

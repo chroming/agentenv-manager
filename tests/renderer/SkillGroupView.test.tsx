@@ -45,6 +45,8 @@ describe("SkillGroupView", () => {
     fireEvent.click(screen.getByRole("menuitemradio", { name: "Updates" }));
     expect(screen.getAllByRole("button", { name: /^Toggle / }).map((button) => button.getAttribute("aria-label")))
       .toEqual(["Toggle Zebra", "Toggle Alpha"]);
+    expect(screen.getByText("1 update · 2 Skills")).toBeInTheDocument();
+    expect(screen.getByText("0 updates · 2 Skills")).toBeInTheDocument();
     expect(onCheckUpdates).not.toHaveBeenCalled();
     expect(onUpdate).not.toHaveBeenCalled();
   });

@@ -29,6 +29,11 @@ describe("InstructionsWorkspace", () => {
     fireEvent.click(screen.getByRole("button", { name: "Sort Instructions: Name" }));
     fireEvent.click(screen.getByRole("menuitemradio", { name: "Recently modified" }));
     expect(within(list).getAllByRole("button")[0]).toHaveAccessibleName("Recent");
+    const metrics = list.querySelectorAll(".ui-catalog-sort-metric");
+    expect(metrics).toHaveLength(2);
+    expect(metrics[0].getAttribute("aria-label")).toContain("9/1/2026");
+    expect(metrics[1].getAttribute("aria-label")).toContain("8/20/2026");
+    expect(metrics[0]).toHaveTextContent("Sep 1");
     fireEvent.click(screen.getByRole("button", { name: "Filters" }));
     fireEvent.change(screen.getByRole("combobox", { name: "Instruction usage filter" }), { target: { value: "unreferenced" } });
     fireEvent.keyDown(document, { key: "Escape" });

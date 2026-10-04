@@ -148,6 +148,39 @@ const LegacySkillLibraryPanel = (props: Record<string, any>) => (
 );
 
 describe("SkillLibraryPanel", () => {
+  it("displays the exact sort values in the existing information column without scanning", () => {
+    const onRefreshInventory = vi.fn();
+    const skills = [
+      { id: "old", name: "Old", upstream: { kind: "local", locator: "/old", updatedAt: "2026-09-01T00:00:00Z" } },
+      { id: "new", name: "New", upstream: { kind: "local", locator: "/new", updatedAt: "2026-10-04T00:00:00Z" } },
+      { id: "unknown", name: "Unknown" }
+    ].map((skill) => ({ ...skill, description: "Synthetic", sourceType: "local", contentHash: skill.id, path: `/library/${skill.id}` }));
+    const Harness = () => {
+      const [viewState, onViewStateChange] = useState(defaultSkillLibraryViewState);
+      return <SkillLibraryPanel model={{
+        status: {}, catalog: { librarySkills: skills, skillUsage: { old: ["Daily", "Daily", "Review"] },
+          skillUpdates: [{ id: "old", name: "Old", sourceType: "local", latestUpdatedAt: "2026-12-01T00:00:00Z", updateAvailable: true }] },
+        sources: { sourceGroups: [], libraryMode: "skills" }, cleanup: { skillInventory: [], cleanupBackups: [] },
+        updates: {}, workspace: {}, view: { viewState }
+      } as never} actions={{ navigation: { onViewStateChange }, inventory: { onRefreshInventory }, files: {}, repository: {},
+        sources: {}, catalog: {}, updates: {} } as never} />;
+    };
+    const { container } = render(<Harness />);
+    fireEvent.click(screen.getByRole("button", { name: "Sort Skills: Name" }));
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "Source updated" }));
+    const rows = () => [...container.querySelectorAll(".library-table-row")];
+    expect(rows().map((row) => row.querySelector(".library-skill-name-button")!.textContent)).toEqual(["New", "Old", "Unknown"]);
+    const compact = (value: string) => new Date(value).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+    expect(rows().map((row) => row.querySelector(".ui-catalog-sort-metric")!.textContent)).toEqual([
+      compact("2026-10-04T00:00:00Z"), compact("2026-09-01T00:00:00Z"), "Unavailable"
+    ]);
+    expect(screen.getByLabelText(`Source updated: ${new Date("2026-09-01T00:00:00Z").toLocaleString("en-US")}`)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Sort Skills: Source updated" }));
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "Profile references" }));
+    expect(rows().map((row) => row.querySelector(".ui-catalog-sort-metric")!.textContent)).toEqual(["2", "0", "0"]);
+    expect(container.querySelector(".library-table__head")).toHaveTextContent("Profile references");
+    expect(onRefreshInventory).not.toHaveBeenCalled();
+  });
   it("uses refreshed Skill metadata when opening settings from an existing inspector", async () => {
     const onListSkillFiles = vi.fn().mockResolvedValue([]);
     const skill = { id: "example", name: "Example", description: "Example Skill", sourceType: "local",

@@ -179,6 +179,9 @@ describe("WorktreeDialog", () => {
     const paths = () => [...document.querySelectorAll(".worktree-dialog__entries .ui-resource-row__identity > span")]
       .map((element) => element.textContent);
     expect(paths()).toEqual([dirty.path, clean.path]);
+    expect([...document.querySelectorAll(".worktree-dialog__entries .ui-catalog-sort-metric")].map((element) => element.textContent))
+      .toEqual(["100 B", "1 B"]);
+    expect(screen.getByLabelText("Total size: 101 B")).toHaveTextContent("101 B");
     fireEvent.click(screen.getByRole("button", { name: "Refresh Worktrees" }));
     await waitFor(() => expect(api.inventoryWorktrees).toHaveBeenCalledTimes(2));
     expect(paths()).toEqual([dirty.path, clean.path]);
@@ -186,6 +189,23 @@ describe("WorktreeDialog", () => {
     expect(screen.getByText("No kept Worktrees")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("tab", { name: "All" }));
     expect(paths()).toEqual([dirty.path, clean.path]);
+  });
+
+  it("shows unknown measurements as unavailable, not zero or a different field", async () => {
+    const api = installApi();
+    api.inventoryWorktrees.mockResolvedValue({ ...inventory, entries: [
+      { ...clean, sizeBytes: 0, modifiedAt: "2026-10-01T10:00:00Z" },
+      { ...dirty, modifiedAt: "invalid" }
+    ] });
+    render(<WorktreeWorkspace uiState={{ worktreeSort: "size-desc" }} />);
+    await screen.findByText(clean.path);
+    expect(screen.getByLabelText("Size: 0 B")).toHaveTextContent("0 B");
+    expect(screen.getByLabelText("Size: Unavailable")).toHaveTextContent("Unavailable");
+    expect(screen.getByLabelText("Total size: Unavailable")).toHaveTextContent("Unavailable");
+    fireEvent.click(screen.getByRole("button", { name: "Sort Worktrees: Largest size" }));
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "Newest modified" }));
+    expect(screen.getAllByLabelText("Last modified: Unavailable")).toHaveLength(2);
+    expect(api.inventoryWorktrees).toHaveBeenCalledTimes(1);
   });
 
   it("restores the supplied preference and closes only the sorting menu on Escape inside a dialog", async () => {

@@ -1414,3 +1414,15 @@ button.ui-interactive-status.is-interactive:hover:not(:disabled) {
   margin-right: auto;
   min-width: 0;
 }
+.ui-catalog-sort-metric {
+  color: var(--muted);
+  display: block;
+  font-size: var(--font-size-metadata);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--font-weight-regular);
+  line-height: 18px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

@@ -423,13 +423,15 @@ describe("Conversations desktop workflow", () => {
     await expect.poll(() => page.getByText("Could not complete this step").count()).toBe(0);
     await expect.poll(() => page.locator(".conversation-list-meta").textContent()).toContain("200 of 201 conversations");
     const sortedConversationTitles = await page.evaluate(async () => {
-      const [largest, recent] = await Promise.all([
+      const [largest, recent, longest] = await Promise.all([
         window.agentEnv.listConversations({ sort: "size-desc", limit: 1 }),
-        window.agentEnv.listConversations({ limit: 1 })
+        window.agentEnv.listConversations({ limit: 1 }),
+        window.agentEnv.listConversations({ sort: "messages-desc", limit: 1 })
       ]);
       return {
         largest: largest.items[0]?.title,
-        recent: recent.items[0]?.title
+        recent: recent.items[0]?.title,
+        longest: longest.items[0]
       };
     });
     expect(sortedConversationTitles.largest).toBeTruthy();
@@ -454,7 +456,7 @@ describe("Conversations desktop workflow", () => {
       expect(await conversationSort.evaluate((element) => element === document.activeElement)).toBe(true);
     }
     if (originalViewport) await page.setViewportSize(originalViewport);
-    const chooseConversationSort = async (label: "Recent" | "Last activity" | "Largest") => {
+    const chooseConversationSort = async (label: "Recent" | "Last activity" | "Largest" | "Most messages") => {
       await conversationSort.click();
       await page.getByRole("menuitemradio", { name: label }).click();
     };
@@ -462,6 +464,7 @@ describe("Conversations desktop workflow", () => {
     await expect.poll(() => page.locator(".conversation-list-item__title").first().textContent())
       .toBe(sortedConversationTitles.largest);
     await expect(page.locator(".conversation-date-group").count()).resolves.toBe(0);
+    expect(await page.locator(".conversation-list-item__metric").first().textContent()).toMatch(/\d.*B/);
     if (process.env.AGENTENV_CAPTURE_CONVERSATIONS) {
       await conversationSort.focus();
       await page.mouse.move(1100, 40);
@@ -474,6 +477,24 @@ describe("Conversations desktop workflow", () => {
         )
       });
     }
+    await chooseConversationSort("Most messages");
+    await expect.poll(() => page.locator(".conversation-list-item__title").first().textContent()).toBe(sortedConversationTitles.longest?.title);
+    expect(await page.locator(".conversation-list-item__metric").first().textContent()).toBe(`${sortedConversationTitles.longest?.messageCount} messages`);
+    for (const viewport of [{ width: 920, height: 620 }, { width: 1180, height: 728 }, { width: 1440, height: 900 }]) {
+      await page.setViewportSize(viewport);
+      expect(await page.locator(".conversation-list-item__metric").evaluateAll((elements) => elements.every((element) => {
+        const row = element.closest(".conversation-list-item")!.getBoundingClientRect();
+        const metric = element.getBoundingClientRect();
+        return metric.right <= row.right && metric.left >= row.left && element.scrollWidth <= element.clientWidth + 1;
+      }))).toBe(true);
+      if (process.env.AGENTENV_CAPTURE_SORT_DIR) {
+        await page.mouse.move(0, 0);
+        await page.keyboard.press("Escape");
+        await expect.poll(() => page.getByRole("tooltip").count()).toBe(0);
+        await page.screenshot({ path: join(process.env.AGENTENV_CAPTURE_SORT_DIR, `conversation-counts-${viewport.width}.png`) });
+      }
+    }
+    if (originalViewport) await page.setViewportSize(originalViewport);
     await chooseConversationSort("Recent");
     await expect.poll(() => page.locator(".conversation-list-item__title").first().textContent())
       .toBe(sortedConversationTitles.recent);

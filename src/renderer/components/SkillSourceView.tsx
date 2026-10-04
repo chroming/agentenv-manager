@@ -782,11 +782,11 @@ export const SkillSourceView = ({
                 <OverflowTooltip
                   className="skill-source-status-label"
                   text={group.error}
-                  displayText={t(sourceStatus)}
+                  displayText={sourceView.sort === "changes" ? `${t(sourceStatus)} · ${changedCount}` : t(sourceStatus)}
                 />
               ) : (
-                <span className="skill-source-status-label">{!isChecking && changedCount > 0
-                  ? t(group.counts.updates === changedCount
+                <span className="skill-source-status-label">{!isChecking && (changedCount > 0 || sourceView.sort === "changes")
+                  ? t(changedCount > 0 && group.counts.updates === changedCount
                     ? changedCount === 1 ? "{{count}} update" : "{{count}} updates"
                     : changedCount === 1 ? "{{count}} change" : "{{count}} changes", { count: changedCount })
                   : t(sourceStatus)}</span>

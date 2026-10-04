@@ -66,6 +66,17 @@ const group: SkillSourceGroupView = {
 };
 
 describe("SkillSourceView", () => {
+  it("shows zero changes and retains error information when sorted by changes", () => {
+    render(<SkillSourceView active loading={false} groups={[
+      { ...group, sourceId: "current", displayName: "Current", counts: { total: 1, updates: 0, new: 0, removed: 0 } },
+      { ...group, sourceId: "failed", displayName: "Failed", observationState: "error", error: "Folder unavailable", counts: { total: 1, updates: 1, new: 0, removed: 0 } }
+    ]} onCheckGroup={vi.fn()} onCheckMonitored={vi.fn()} onRename={vi.fn()} onPreviewMerge={vi.fn()} onMerge={vi.fn()}
+      onAdd={vi.fn()} onUpdate={vi.fn()} onReviewUpdates={vi.fn()} onDelete={vi.fn()} onOpenSource={vi.fn()} onCopySource={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Sort sources: Name" }));
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "Changes" }));
+    expect(screen.getByText("0 changes")).toBeInTheDocument();
+    expect(screen.getByText("Check failed · 1")).toBeInTheDocument();
+  });
   it("changes source monitoring without running a source scan", async () => {
     const onSetMonitored = vi.fn().mockResolvedValue(undefined);
     const onCheckGroup = vi.fn().mockResolvedValue(undefined);

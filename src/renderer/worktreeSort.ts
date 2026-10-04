@@ -40,23 +40,25 @@ export const sortWorktreeGroups = (
         : sort === "status" ? rank(left) - rank(right) : 0;
     return order || byName(left.path, right.path);
   };
-  const metric = (entries: WorktreeEntry[]) => {
-    const linked = entries.filter((entry) => !entry.main);
-    if (sort === "status") return Math.min(...linked.map(rank));
-    const values = linked.map(sort === "size-desc" ? size : modified);
-    // A partial measurement is not a trustworthy group total or time range.
-    if (!values.length || values.some((value) => value === undefined)) return undefined;
-    const known = values as number[];
-    return sort === "size-desc" ? known.reduce((total, value) => total + value, 0)
-      : sort === "modified-asc" ? Math.min(...known) : Math.max(...known);
-  };
   return groups.map(([id, entries]): [string, WorktreeEntry[]] =>
     [id, [...entries].sort(compareEntries)]
   ).sort((left, right) => {
     const order = sort === "name" ? 0 : compareMetric(
-      metric(left[1]), metric(right[1]), sort === "modified-asc" || sort === "status"
+      worktreeGroupMetric(left[1], sort), worktreeGroupMetric(right[1], sort), sort === "modified-asc" || sort === "status"
     );
     return order || byName(left[1][0].repositoryPath, right[1][0].repositoryPath) ||
       left[0].localeCompare(right[0]);
   });
+};
+
+export const worktreeGroupMetric = (entries: WorktreeEntry[], sort: WorktreeSort) => {
+  const linked = entries.filter((entry) => !entry.main);
+  if (!linked.length || sort === "name") return undefined;
+  if (sort === "status") return Math.min(...linked.map(rank));
+  const values = linked.map(sort === "size-desc" ? size : modified);
+  // A partial measurement is not a trustworthy group total or time range.
+  if (values.some((value) => value === undefined)) return undefined;
+  const known = values as number[];
+  return sort === "size-desc" ? known.reduce((total, value) => total + value, 0)
+    : sort === "modified-asc" ? Math.min(...known) : Math.max(...known);
 };

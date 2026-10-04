@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { sortWorktreeGroups } from "../../src/renderer/worktreeSort";
+import { sortWorktreeGroups, worktreeGroupMetric } from "../../src/renderer/worktreeSort";
 import type { WorktreeEntry } from "../../src/shared/worktrees";
 import type { WorktreeSort } from "../../src/shared/uiState";
 
@@ -13,6 +13,16 @@ const ordered = (entries: WorktreeEntry[], sort: WorktreeSort) =>
   sortWorktreeGroups([["app", entries]], sort)[0][1].map((item) => item.path);
 
 describe("Worktree display sorting", () => {
+  it("exposes the exact group values used for ordering, excluding main and incomplete measurements", () => {
+    const rows = [entry("main", { main: true, sizeBytes: 99999 }),
+      entry("zero", { sizeBytes: 0, modifiedAt: "2026-09-01" }),
+      entry("one", { sizeBytes: 100, modifiedAt: "2026-10-04" })];
+    expect(worktreeGroupMetric(rows, "size-desc")).toBe(100);
+    expect(worktreeGroupMetric(rows, "modified-asc")).toBe(Date.parse("2026-09-01"));
+    expect(worktreeGroupMetric(rows, "modified-desc")).toBe(Date.parse("2026-10-04"));
+    expect(worktreeGroupMetric([...rows, entry("unknown")], "size-desc")).toBeUndefined();
+    expect(worktreeGroupMetric([], "modified-desc")).toBeUndefined();
+  });
   it("uses natural folder names, not branch or discovery order", () => {
     expect(ordered([entry("task-10"), entry("task-2"), entry("task-1")], "name"))
       .toEqual(["/worktrees/task-1", "/worktrees/task-2", "/worktrees/task-10"]);

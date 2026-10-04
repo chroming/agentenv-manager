@@ -165,6 +165,25 @@ describe("Worktrees desktop workflow", () => {
     const sortedPaths = await workspace.locator(".worktree-dialog__entries .ui-resource-row__identity > span").allTextContents();
     expect(sortedPaths[0]).toBe(repo);
     expect(sortedPaths[1]).toBe(dirty);
+    const metrics = workspace.locator(".worktree-dialog__entries .ui-catalog-sort-metric");
+    expect(await metrics.count()).toBe(sortedPaths.length);
+    expect(await metrics.allTextContents()).toEqual(expect.arrayContaining([expect.stringMatching(/\d.*B/)]));
+    for (const width of [920, 1180, 1440]) {
+      await page.setViewportSize({ width, height: width === 920 ? 620 : 900 });
+      expect(await metrics.evaluateAll((elements) => elements.every((element) => {
+        const row = element.closest(".ui-resource-row")!.getBoundingClientRect();
+        const metric = element.getBoundingClientRect();
+        return element.scrollWidth <= element.clientWidth + 1 && Math.abs(row.y + row.height / 2 - metric.y - metric.height / 2) <= 1;
+      }))).toBe(true);
+      expect(await workspace.locator(".worktree-dialog__group-header .ui-catalog-sort-metric").count()).toBeGreaterThan(0);
+      if (process.env.AGENTENV_CAPTURE_WORKTREES_DIR) {
+        await page.mouse.move(0, 0);
+        await page.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); });
+        await expect.poll(() => page.getByRole("tooltip").count()).toBe(0);
+        await page.screenshot({ path: join(process.env.AGENTENV_CAPTURE_WORKTREES_DIR, `worktree-sizes-${locale}-${width}.png`) });
+      }
+    }
+    await page.setViewportSize({ width: 920, height: 620 });
     expect(await workspace.locator(".ui-resource-row").filter({
       has: page.getByRole("checkbox", { name: t("Select Worktree for review"), checked: true })
     }).locator(".ui-resource-row__identity > span").textContent()).toBe(selectedPath);

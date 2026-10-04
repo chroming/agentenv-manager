@@ -328,6 +328,7 @@ const zhCN: Record<string, string> = {
   "Archived": "已归档",
   "{{count}} conversations": "{{count}} 个对话",
   "{{count}} messages": "{{count}} 条消息",
+  "1 message": "1 条消息",
   "{{loaded}} of {{total}} conversations": "已加载 {{loaded}} / {{total}} 个对话",
   "Loading conversations": "正在加载对话",
   "Refreshing history…": "正在刷新历史…",
@@ -3080,6 +3081,7 @@ const zhTW: Record<string, string> = {
   "Archived": "已封存",
   "{{count}} conversations": "{{count}} 個對話",
   "{{count}} messages": "{{count}} 則訊息",
+  "1 message": "1 則訊息",
   "{{loaded}} of {{total}} conversations": "已載入 {{loaded}} / {{total}} 個對話",
   "Loading conversations": "正在載入對話",
   "Refreshing history…": "正在重新整理歷史…",
@@ -5586,7 +5588,7 @@ Object.assign(zhCN, {
   "Recheck recovery": "重新检查恢复状态",
   "An interrupted cleanup needs a check of its original folder and Git registration. Restore is unavailable until the removal is verified.": "清理中断后需检查原目录及 Git 登记。确认工作树已移除前，不能执行恢复。",
   "From a saved Workspace": "来自已保存的工作区", "Restored": "已恢复", "Unchanged": "未变更", "Prepared": "已准备",
-  "Local files": "本地文件", "Last modified": "最近修改"
+  "Local files": "本地文件", "Last modified": "最近修改", "Total size": "总占用空间"
 });
 Object.assign(zhTW, {
   "Worktrees": "工作樹", "Worktree recovery": "工作樹復原", "Working directories found in your local scan locations": "本機掃描位置中找到的工作目錄",
@@ -5621,5 +5623,5 @@ Object.assign(zhTW, {
   "Recheck recovery": "重新檢查復原狀態",
   "An interrupted cleanup needs a check of its original folder and Git registration. Restore is unavailable until the removal is verified.": "清理中斷後需檢查原目錄及 Git 登記。確認工作樹已移除前，不能執行復原。",
   "From a saved Workspace": "來自已儲存的工作區", "Restored": "已復原", "Unchanged": "未變更", "Prepared": "已準備",
-  "Local files": "本機檔案", "Last modified": "最近修改"
+  "Local files": "本機檔案", "Last modified": "最近修改", "Total size": "總佔用空間"
 });

@@ -46,7 +46,7 @@ describe("Device-local catalog views", () => {
       skillContents.set(join(skillDir, "SKILL.md"), content);
       await writeFile(join(skillDir, "SKILL.md"), content);
       await json(join(skillDir, ".agentenv-skill.json"), { sourceType: "local", source: repository,
-        updatePolicy: "untracked", sourceCollection: collection,
+        updatePolicy: "untracked", sourceCollection: collection, tags: index === 1 ? ["Review"] : [],
         upstream: { kind: "local", locator: repository, updatedAt: `2026-09-0${index + 1}T00:00:00Z` } });
       sources.push({ ...collection, id: sourceId, displayName: `Source ${index + 1}`, automaticChecks: true,
         createdAt: "2026-01-01T00:00:00Z", updatedAt: "2026-01-01T00:00:00Z" });
@@ -119,8 +119,20 @@ describe("Device-local catalog views", () => {
       await page.getByRole("button", { name: "Skill1", exact: true }).waitFor();
       await chooseSort("Sort Skills", "Source updated");
       expect(await page.locator(".library-table .library-skill-name-button").allTextContents()).toEqual(["Skill3", "Skill2", "Skill1"]);
+      expect(await page.locator(".library-table-row .ui-catalog-sort-metric").count()).toBe(3);
+      for (const [index, date] of ["2026-09-03", "2026-09-02", "2026-09-01"].entries()) {
+        const metric = page.locator(".library-table-row .ui-catalog-sort-metric").nth(index);
+        const timestamp = await page.evaluate(({ date, locale }) => new Date(`${date}T00:00:00Z`).toLocaleString(locale === "en" ? "en-US" : locale === "zh_CN" ? "zh-CN" : "zh-TW"), { date, locale });
+        expect(await metric.getAttribute("aria-label")).toBe(`${t("Source updated")}: ${timestamp}`);
+      }
+      expect(await page.locator(".library-table-row .ui-catalog-sort-metric").evaluateAll((elements) => elements.every((element) => element.scrollWidth <= element.clientWidth + 1))).toBe(true);
       await expectNoHorizontalOverflow(page, [".library-toolbar"]);
       await capture(`skills-${width}`);
+      await chooseSort("Sort Skills", "Profile references");
+      expect(await page.locator(".library-table .library-skill-name-button").allTextContents()).toEqual(["Skill2", "Skill1", "Skill3"]);
+      expect(await page.locator(".library-table-row .ui-catalog-sort-metric").allTextContents()).toEqual(["1", "0", "0"]);
+      await capture(`skill-references-${width}`);
+      await chooseSort("Sort Skills", "Source updated");
       await page.getByRole("tab", { name: t("By source"), exact: true }).click();
       await chooseSort("Sort sources", "Changes");
       await expectNoHorizontalOverflow(page, [".skill-source-toolbar"]);
@@ -139,6 +151,8 @@ describe("Device-local catalog views", () => {
         actions.getByRole("button", { name: t("More"), exact: true }));
       expect((await page.getByRole("searchbox", { name: t("Search Instructions") }).boundingBox())!.width).toBeGreaterThan(200);
       expect(await page.locator(".instructions-list-row .ui-selectable-row__title").allTextContents()).toEqual(["Zebra", "Alpha"]);
+      expect(await page.locator(".instructions-list-row .ui-catalog-sort-metric").count()).toBe(2);
+      expect(await page.locator(".instructions-list-row .ui-catalog-sort-metric").evaluateAll((elements) => elements.every((element) => element.scrollWidth <= element.clientWidth + 1))).toBe(true);
       await capture(`instructions-${width}`);
     }
     const instructions = page.locator(".instructions-list-pane");
