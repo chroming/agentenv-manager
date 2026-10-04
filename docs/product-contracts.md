@@ -278,10 +278,22 @@ The visible scan scope must distinguish built-in, saved-Workspace, and manually 
 locations. A missing result only means no worktree was found within that scope.
 Paths and Git common directories are canonicalized before deduplication. Traversal
 advances roots in round-robin order, breadth-first within each root under a shared
-directory budget; large earlier locations cannot starve later locations. Directory
-and depth limits are reported as incomplete, never as a full scan. Manual locations and
-nested repositories retain recursive discovery. Linked worktrees outside the scan
-roots are included when Git registers them in a discovered repository.
+directory budget; large earlier locations cannot starve later locations. There is
+no fixed depth limit. Container traversal discovers repository entry points; Git
+registration then supplies all of that repository's Worktrees, including those
+outside scan roots. Once a repository is found, discovery does not recurse through
+tracked source folders: Git's NUL-separated untracked directory inventory (including
+ignored directories), declared submodule paths and conventional in-repository
+Worktree containers supply further candidates. Dependency/cache/build folders remain
+excluded from generic discovery. Declared submodule paths must stay within their
+repository and cannot follow descendant directory links; Git config includes are
+not loaded from `.gitmodules`. Unusual undeclared repositories embedded entirely
+in tracked source must be added as explicit scan locations. Budget, permission and
+Git discovery failures report the affected location as incomplete, never as a full
+disk inventory or missing registrations in an already read repository.
+Absorbed submodule main paths reported as Git administration directories are
+resolved through Git's declared working root, remain protected as main trees,
+and are never offered for cleanup.
 Automatic aliases resolving to Home or its parent are excluded and reported.
 Descendant directory links are not recursively followed; explicitly added locations
 and Git-registered worktree paths can resolve links without unbounded traversal.

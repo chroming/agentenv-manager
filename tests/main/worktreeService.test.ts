@@ -192,6 +192,8 @@ describe("worktree inventory and cleanup", () => {
     expect(inventory.entries.map((entry) => entry.path)).toContain(linked);
     expect(inventory.incomplete).toBe(true);
     expect(inventory.issues).toEqual([expect.stringContaining("directory limit")]);
+    expect(inventory.issues[0]).toContain(broad);
+    expect(inventory.issues[0]).toContain("Registered Worktrees from discovered repositories are already included");
   }, 20_000);
 
   it("removes legacy aliased scan locations without touching their folders", async () => {
@@ -242,7 +244,7 @@ describe("worktree inventory and cleanup", () => {
     expect(inventory.incomplete).toBe(false);
   });
 
-  it("reports a depth-limited discovery instead of presenting it as a full scan", async () => {
+  it("discovers repositories beyond seven container levels without a depth warning", async () => {
     const { root, repo, runner } = await fixture();
     const location = join(root, "deep-container");
     const nested = join(location, ...Array.from({ length: 8 }, (_, index) => `level-${index}`));
@@ -255,9 +257,66 @@ describe("worktree inventory and cleanup", () => {
     });
     await service.addScanRoot(location);
     const inventory = await service.inventory();
-    expect(inventory.entries).toEqual([]);
-    expect(inventory.incomplete).toBe(true);
-    expect(inventory.issues).toEqual([expect.stringContaining("depth limit")]);
+    expect(inventory.entries.map((entry) => entry.path)).toEqual([nested]);
+    expect(inventory.incomplete).toBe(false);
+    expect(inventory.issues).toEqual([]);
+  });
+
+  it("does not mistake deep tracked source folders for incomplete Worktree discovery", async () => {
+    const { repo, linked, service, runner } = await fixture();
+    const source = join(repo, "src", ...Array.from({ length: 10 }, (_, index) => `level-${index}`));
+    await mkdir(source, { recursive: true });
+    await writeFile(join(source, "source.txt"), "tracked source\n");
+    await run("git", ["-C", repo, "add", "src"]);
+    const commands = vi.spyOn(runner, "run");
+    const inventory = await service.inventory();
+    expect(inventory.entries.map((entry) => entry.path)).toEqual([repo, linked]);
+    expect(inventory.incomplete).toBe(false);
+    expect(inventory.issues).toEqual([]);
+    expect(commands.mock.calls.filter(([args]) => args[0] === "worktree" && args[1] === "list")).toHaveLength(1);
+  });
+
+  it("finds ignored nested repositories and their deeply located registered trees", async () => {
+    const { root, repo, runner } = await fixture();
+    await writeFile(join(repo, ".gitignore"), "nested/\n.worktrees/\n");
+    const nested = join(repo, "nested", "team", "project");
+    await mkdir(join(nested, ".."), { recursive: true });
+    await run("git", ["clone", "--local", repo, nested]);
+    const nestedTree = join(root, "elsewhere", ...Array.from({ length: 12 }, (_, index) => `level-${index}`), "review");
+    await run("git", ["-C", nested, "worktree", "add", "-b", "nested-review", nestedTree]);
+    const localTree = join(repo, ".worktrees", "local-review");
+    await run("git", ["-C", repo, "worktree", "add", "-b", "local-review", localTree]);
+    const service = createWorktreeService({
+      appDataRoot: join(root, "ignored-data"), homeDir: join(root, "home"),
+      projectStore: { listLocalRootPaths: async () => [repo] } as unknown as ProjectStore,
+      resolveRunner: async () => runner
+    });
+    const inventory = await service.inventory();
+    expect(inventory.entries.map((entry) => entry.path)).toEqual(expect.arrayContaining([nested, nestedTree, localTree]));
+    expect(inventory.incomplete).toBe(false);
+    expect(inventory.issues).toEqual([]);
+  });
+
+  it("discovers a declared submodule under tracked source paths without crawling that source", async () => {
+    const { root, repo, runner } = await fixture();
+    const submodulePath = ["modules", ...Array.from({ length: 9 }, (_, index) => `level-${index}`), "dependency"].join("/");
+    await run("git", ["-C", repo, "-c", "protocol.file.allow=always", "submodule", "add", repo, submodulePath]);
+    const submodule = join(repo, submodulePath);
+    const submoduleTree = join(root, "submodule-review");
+    await run("git", ["-C", submodule, "worktree", "add", "-b", "dependency-review", submoduleTree]);
+    const service = createWorktreeService({
+      appDataRoot: join(root, "submodule-data"), homeDir: join(root, "home"),
+      projectStore: { listLocalRootPaths: async () => [repo] } as unknown as ProjectStore,
+      resolveRunner: async () => runner
+    });
+    const inventory = await service.inventory();
+    expect(inventory.entries.map((entry) => entry.path)).toEqual(expect.arrayContaining([submodule, submoduleTree]));
+    expect(inventory.issues).toEqual([]);
+    expect(inventory.incomplete).toBe(false);
+    const main = inventory.entries.find((entry) => entry.path === submodule)!;
+    expect(main.main).toBe(true);
+    expect(main.cleanupReviewAvailable).toBe(false);
+    await expect(service.preview(main.commonDir, main.path)).rejects.toThrow("Main working tree");
   });
 
   it("does not expand an automatic container to a Home-level Git repository", async () => {

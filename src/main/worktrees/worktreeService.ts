@@ -15,7 +15,7 @@ import { isMissingFileError, writeAtomic } from "../fileUtils";
 import type { ProjectStore } from "../projects/projectStore";
 import type { GitCommandRunner } from "../skillSources/gitCommandRunner";
 import { copyWorktreeVerified, hashWorktreeTree, measureWorktreeTree } from "./worktreeSnapshot";
-import { worktreeDiscoveryCandidates } from "./worktreeDiscovery";
+import { repositoryDiscoveryDirectories, worktreeDiscoveryCandidates, WORKTREE_SCAN_SKIP_DIRECTORIES } from "./worktreeDiscovery";
 
 const SettingsSchema = z.object({
   formatVersion: z.literal(1),
@@ -38,10 +38,7 @@ const RecoverySchema = z.object({
 }).strict();
 
 const MAX_DIRECTORIES = 5_000;
-const MAX_DEPTH = 7;
-const SKIP_DIRECTORIES = new Set([
-  ".git", ".cache", ".config", ".venv", "node_modules", "vendor", "dist", "build", "target"
-]);
+const SKIP_DIRECTORIES = WORKTREE_SCAN_SKIP_DIRECTORIES;
 const ACTIVE_GIT_MARKERS = [
   "MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "REBASE_HEAD", "BISECT_LOG",
   "rebase-merge", "rebase-apply", "sequencer"
@@ -168,7 +165,17 @@ export const createWorktreeService = ({
     const raw = await runner.run(["worktree", "list", "--porcelain", "-z"], {
       cwd: commonDir, timeoutMs: 8_000, maxOutputBytes: 2_000_000, signal
     });
-    return parseWorktreeList(raw.stdout);
+    const entries = parseWorktreeList(raw.stdout);
+    const first = entries[0];
+    // Git can report an absorbed submodule's admin directory as its main tree.
+    if (first && resolve(first.path) === resolve(commonDir) &&
+        !raw.stdout.split("\0\0")[0].split("\0").includes("bare")) {
+      const main = await runner.run(["rev-parse", "--show-toplevel"], {
+        cwd: commonDir, env: { GIT_OPTIONAL_LOCKS: "0" }, timeoutMs: 8_000, maxOutputBytes: 32_000, signal
+      });
+      first.path = await realpath(main.stdout.trim());
+    }
+    return entries;
   };
   const inspect = async (
     runner: GitCommandRunner,
@@ -347,7 +354,7 @@ export const createWorktreeService = ({
         let count = 0;
         const runner = await git();
         controller.signal.throwIfAborted();
-        const queues = scanRoots.map((path) => [{ path, depth: 0 }]);
+        const queues = scanRoots.map((path) => [path]);
         for (const [index, root] of scanRoots.entries()) {
           controller.signal.throwIfAborted();
           try {
@@ -359,7 +366,7 @@ export const createWorktreeService = ({
               const canonical = await realpath(rootPath);
               if (isWithin(canonical, canonicalHome) && !scanRoots.includes(canonical)) {
                 issues.push(`${root}: The repository root is Home or its parent. Add the repository explicitly to include it.`);
-              } else queues[index].push({ path: canonical, depth: 0 });
+              } else queues[index].push(canonical);
             }
           } catch {
             controller.signal.throwIfAborted();
@@ -367,7 +374,6 @@ export const createWorktreeService = ({
           }
         }
         let cursor = 0;
-        let depthLimited = false;
         // Advance each location in turn, preserving breadth-first order within it.
         while (queues.some((queue) => queue.length)) {
           controller.signal.throwIfAborted();
@@ -375,10 +381,10 @@ export const createWorktreeService = ({
           if (!queue.length) continue;
           const current = queue.shift()!;
           try {
-            const canonical = await realpath(current.path);
+            const canonical = await realpath(current);
             if (isWithin(canonicalDataRoot, canonical) || visited.has(canonical)) continue;
             if (++count > MAX_DIRECTORIES) {
-              issues.push("Scan reached the directory limit. Add a narrower location to see more worktrees.");
+              issues.push(`${scanRoots[(cursor - 1) % queues.length]}: Repository discovery reached the directory limit at ${current}. Add a narrower scan location. Registered Worktrees from discovered repositories are already included.`);
               break;
             }
             visited.add(canonical);
@@ -399,22 +405,19 @@ export const createWorktreeService = ({
                   found.add(discoveredKey(commonDir, entry.path));
                 }
               }
-            }
-            if (current.depth >= MAX_DEPTH) {
-              if (!depthLimited && directory.some((child) => child.isDirectory() && !SKIP_DIRECTORIES.has(child.name))) {
-                issues.push("Scan reached the depth limit. Add the specific repository folder to see more worktrees.");
-                depthLimited = true;
-              }
+              const nested = await repositoryDiscoveryDirectories(runner, canonical, controller.signal);
+              issues.push(...nested.issues);
+              queue.push(...nested.paths);
               continue;
             }
             for (const child of directory) {
               if (child.isDirectory() && !SKIP_DIRECTORIES.has(child.name)) {
-                queue.push({ path: join(canonical, child.name), depth: current.depth + 1 });
+                queue.push(join(canonical, child.name));
               }
             }
           } catch (error) {
             controller.signal.throwIfAborted();
-            issues.push(`${current.path}: ${error instanceof Error ? error.message : String(error)}`);
+            issues.push(`${current}: ${error instanceof Error ? error.message : String(error)}`);
           }
         }
         controller.signal.throwIfAborted();
