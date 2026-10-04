@@ -1,7 +1,7 @@
 import { BrowserWindow, dialog } from "electron";
-import type { WorktreeCleanupPreview } from "../../shared/worktrees";
+import type { WorktreeCleanupPreview, WorktreeScanResult } from "../../shared/worktrees";
 import type { IpcRegistrationHandles } from "../ipc/registration";
-import type { WorktreeService } from "./worktreeService";
+import { WorktreeScanCancelledError, type WorktreeService } from "./worktreeService";
 
 export const registerWorktreeIpc = (
   { diagnosticHandle, handleMutation }: Pick<IpcRegistrationHandles, "diagnosticHandle" | "handleMutation">,
@@ -17,7 +17,14 @@ export const registerWorktreeIpc = (
     const result = owner ? await dialog.showOpenDialog(owner, options) : await dialog.showOpenDialog(options);
     return result.canceled ? undefined : result.filePaths[0];
   });
-  diagnosticHandle("worktrees:inventory", () => service.inventory());
+  diagnosticHandle("worktrees:inventory", async (): Promise<WorktreeScanResult> => {
+    try {
+      return await service.inventory();
+    } catch (error) {
+      if (error instanceof WorktreeScanCancelledError) return { cancelled: true };
+      throw error;
+    }
+  });
   diagnosticHandle("worktrees:cancel-scan", () => service.cancelScan());
   diagnosticHandle("worktrees:preview", (_event, commonDir: unknown, path: unknown, allowDirty: unknown) =>
     service.preview(String(commonDir), String(path), allowDirty === true));

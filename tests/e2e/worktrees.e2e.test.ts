@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { delimiter, join } from "node:path";
 import { tmpdir } from "node:os";
 import { promisify } from "node:util";
@@ -22,7 +22,7 @@ afterEach(async () => {
 
 describe("Worktrees desktop workflow", () => {
   it("shows local linked worktrees on a dedicated page at minimum and regular sizes", async () => {
-    root = await mkdtemp(join(tmpdir(), "agentenv-worktrees-e2e-"));
+    root = await realpath(await mkdtemp(join(tmpdir(), "agentenv-worktrees-e2e-")));
     const home = join(root, "home");
     const data = join(root, "data");
     const bin = join(root, "bin");
@@ -54,6 +54,7 @@ describe("Worktrees desktop workflow", () => {
         join(process.cwd(), "out", "main", "main.js")],
       env: {
         ...process.env, AGENTENV_AUTOMATION: "1", AGENTENV_DATA_ROOT: data,
+        AGENTENV_LOG_ROOT: join(root, "logs"),
         AGENTENV_FAKE_HOME: join(root, "fake-home"), AGENTENV_HOME: home,
         AGENTENV_AUTOMATION_TARGET_PATH: `${bin}${delimiter}${process.env.PATH ?? ""}`,
         PATH: `${bin}${delimiter}${process.env.PATH ?? ""}`
@@ -65,6 +66,30 @@ describe("Worktrees desktop workflow", () => {
     await page.getByRole("button", { name: "Worktrees", exact: true }).click();
     const workspace = page.locator(".worktree-workspace");
     await workspace.getByText(linked).waitFor();
+    const scanLifecycle = await page.evaluate(async () => {
+      const [superseded, current] = await Promise.all([
+        window.agentEnv.inventoryWorktrees(), window.agentEnv.inventoryWorktrees()
+      ]);
+      const pending = window.agentEnv.inventoryWorktrees();
+      await window.agentEnv.cancelWorktreeScan();
+      const stopped = await pending;
+      const refreshed = await window.agentEnv.inventoryWorktrees();
+      await window.agentEnv.readLatestDiagnosticIssue();
+      return {
+        superseded, stopped,
+        currentPaths: "cancelled" in current ? [] : current.entries.map((entry) => entry.path),
+        refreshedPaths: "cancelled" in refreshed ? [] : refreshed.entries.map((entry) => entry.path)
+      };
+    });
+    expect(scanLifecycle.superseded).toEqual({ cancelled: true });
+    expect(scanLifecycle.stopped).toEqual({ cancelled: true });
+    expect(scanLifecycle.currentPaths).toContain(linked);
+    expect(scanLifecycle.refreshedPaths).toContain(linked);
+    const runtimeEvents = (await readFile(join(root, "logs", "runtime.jsonl"), "utf8"))
+      .trim().split("\n").map((line) => JSON.parse(line));
+    const scanEvents = runtimeEvents.filter((event) => event.action === "worktrees:inventory");
+    expect(scanEvents.filter((event) => event.outcome === "cancelled")).toHaveLength(2);
+    expect(scanEvents.some((event) => event.error)).toBe(false);
     for (const viewport of [{ width: 920, height: 620 }, { width: 1180, height: 728 }]) {
       await page.setViewportSize(viewport);
       const geometry = await workspace.evaluate((element) => {

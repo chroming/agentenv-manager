@@ -24,6 +24,7 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog" }: {
   const { t, formatDate } = useI18n();
   const dialogRef = useRef<HTMLElement>(null);
   const closeRef = useRef<HTMLButtonElement>(null);
+  const scanRequest = useRef(0);
   const [inventory, setInventory] = useState<WorktreeInventory>();
   const [recovery, setRecovery] = useState<WorktreeRecoveryRecord[]>([]);
   const [recoveryIssues, setRecoveryIssues] = useState<string[]>([]);
@@ -41,22 +42,30 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog" }: {
   useModalDialog({ open: open && presentation === "dialog", dialogRef, initialFocusRef: closeRef, onDismiss: onClose, dismissDisabled: Boolean(busy) && busy !== "scan" });
 
   const refresh = async () => {
+    const request = ++scanRequest.current;
     setBusy("scan");
     setError("");
     setSelected([]);
     try {
-      setInventory(await window.agentEnv.inventoryWorktrees());
+      const result = await window.agentEnv.inventoryWorktrees();
+      if (request !== scanRequest.current) return;
+      if (!("cancelled" in result)) setInventory(result);
     } catch (cause) {
-      setError(cause instanceof Error ? cause.message : String(cause));
+      if (request === scanRequest.current) {
+        setError(cause instanceof Error ? cause.message : String(cause));
+      }
     } finally {
-      setBusy("");
+      if (request === scanRequest.current) setBusy("");
     }
   };
   useEffect(() => {
     if (!open) return;
     setView("list");
     void refresh();
-    return () => { void window.agentEnv.cancelWorktreeScan(); };
+    return () => {
+      ++scanRequest.current;
+      void window.agentEnv.cancelWorktreeScan();
+    };
   }, [open]);
 
   const entriesByRepo = useMemo(() => {

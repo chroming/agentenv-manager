@@ -31,6 +31,16 @@ const createDiagnostics = async (options: { maxLogBytes?: number } = {}) => {
 };
 
 describe("runtime diagnostics", () => {
+  it("records explicit cancellation as a normal terminal outcome", async () => {
+    const diagnostics = await createDiagnostics();
+    await expect(diagnostics.runIpcOperation("worktrees:inventory", [], async () => ({ cancelled: true })))
+      .resolves.toEqual({ cancelled: true });
+    const events = await diagnostics.readRecentEvents();
+    expect(events[1]).toMatchObject({ phase: "completed", outcome: "cancelled", context: { result: { cancelled: true } } });
+    expect(events[1].error).toBeUndefined();
+    expect(await diagnostics.readLatestIssue()).toBeUndefined();
+  });
+
   it("records a complete timeline for a successful fast operation", async () => {
     const diagnostics = await createDiagnostics();
 

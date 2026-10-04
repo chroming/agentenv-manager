@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { StrictMode } from "react";
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { WorktreeDialog, WorktreeWorkspace } from "../../src/renderer/components/WorktreeDialog";
 import type { AgentEnvApi } from "../../src/shared/types";
-import type { WorktreeEntry, WorktreeInventory } from "../../src/shared/worktrees";
+import type { WorktreeEntry, WorktreeInventory, WorktreeScanResult } from "../../src/shared/worktrees";
 
 const clean: WorktreeEntry = {
   path: "/projects/_worktrees/clean", repositoryPath: "/projects/app",
@@ -45,6 +46,72 @@ afterEach(() => {
 });
 
 describe("WorktreeDialog", () => {
+  it("keeps the current scan busy when StrictMode cancels the previous mount", async () => {
+    const api = installApi();
+    let cancelFirst!: () => void;
+    let completeCurrent!: (value: WorktreeInventory) => void;
+    api.inventoryWorktrees
+      .mockImplementationOnce(() => new Promise((_, reject) => {
+        cancelFirst = () => reject(new Error("Worktree scan cancelled"));
+      }))
+      .mockImplementationOnce(() => new Promise((resolve) => { completeCurrent = resolve; }));
+    api.cancelWorktreeScan.mockImplementationOnce(async () => cancelFirst());
+    render(<StrictMode><WorktreeWorkspace /></StrictMode>);
+    await waitFor(() => expect(api.inventoryWorktrees).toHaveBeenCalledTimes(2));
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Stop scanning" })).toBeInTheDocument();
+    await act(async () => completeCurrent(inventory));
+    await screen.findByText("/projects/_worktrees/clean");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Refresh Worktrees" })).toBeInTheDocument();
+  });
+
+  it("retains the complete inventory when the user stops a refresh", async () => {
+    const api = installApi();
+    let finishScan!: (value: WorktreeScanResult) => void;
+    render(<WorktreeWorkspace />);
+    await screen.findByText("/projects/_worktrees/clean");
+    api.inventoryWorktrees.mockImplementationOnce(() => new Promise((resolve) => { finishScan = resolve; }));
+    api.cancelWorktreeScan.mockImplementationOnce(async () => finishScan({ cancelled: true }));
+    fireEvent.click(screen.getByRole("button", { name: "Refresh Worktrees" }));
+    fireEvent.click(screen.getByRole("button", { name: "Stop scanning" }));
+    await screen.findByRole("button", { name: "Refresh Worktrees" });
+    expect(screen.getByText("/projects/_worktrees/clean")).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Refresh Worktrees" }));
+    await screen.findByRole("button", { name: "Refresh Worktrees" });
+    expect(api.inventoryWorktrees).toHaveBeenCalledTimes(3);
+  });
+
+  it("ignores a late inventory from a closed dialog after it is reopened", async () => {
+    const api = installApi();
+    let completeOld!: (value: WorktreeInventory) => void;
+    let completeCurrent!: (value: WorktreeInventory) => void;
+    api.inventoryWorktrees
+      .mockImplementationOnce(() => new Promise((resolve) => { completeOld = resolve; }))
+      .mockImplementationOnce(() => new Promise((resolve) => { completeCurrent = resolve; }));
+    const onClose = vi.fn();
+    const { rerender } = render(<WorktreeDialog open onClose={onClose} />);
+    rerender(<WorktreeDialog open={false} onClose={onClose} />);
+    rerender(<WorktreeDialog open onClose={onClose} />);
+    await act(async () => completeOld(inventory));
+    expect(screen.queryByText("/projects/_worktrees/clean")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Stop scanning" })).toBeInTheDocument();
+    await act(async () => completeCurrent({ ...inventory, entries: [dirty] }));
+    await screen.findByText("/projects/_worktrees/dirty");
+    expect(screen.queryByText("/projects/_worktrees/clean")).not.toBeInTheDocument();
+  });
+
+  it("shows actual scan errors and allows retry", async () => {
+    const api = installApi();
+    api.inventoryWorktrees.mockRejectedValueOnce(new Error("System Git is unavailable"));
+    render(<WorktreeWorkspace />);
+    expect(await screen.findByRole("alert")).toHaveTextContent("System Git is unavailable");
+    fireEvent.click(screen.getByRole("button", { name: "Refresh Worktrees" }));
+    await screen.findByText("/projects/_worktrees/clean");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
   it("keeps common scan locations read-only on the standalone page", async () => {
     const api = installApi();
     api.inventoryWorktrees.mockResolvedValue({

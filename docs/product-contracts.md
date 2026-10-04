@@ -277,6 +277,10 @@ The visible scan scope must distinguish built-in, saved-Workspace, and manually 
 locations. A missing result only means no worktree was found within that scope.
 Git's worktree registration is the source of truth for linked and main worktrees;
 directory names alone are never proof. The inventory reports its scan scope and failures.
+Stopping a scan, leaving Worktrees, or superseding a scan is a normal cancellation,
+recorded as `cancelled` without a diagnostic issue or error notice. Cancelled scans never
+publish partial inventories or cleanup eligibility. The renderer retains its last complete
+inventory and only the current request may update its inventory, error, or busy state.
 Removing a Workspace reference never removes a worktree. A worktree cleanup preview
 identifies the exact directory and retains its branch, repository, and Conversations.
 It warns when any saved local Workspace is inside the directory being removed, including

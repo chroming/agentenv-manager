@@ -99,6 +99,13 @@ const isWithin = (root: string, path: string) => {
   return !difference || (difference !== ".." && !difference.startsWith(`..${sep}`) && !isAbsolute(difference));
 };
 
+export class WorktreeScanCancelledError extends Error {
+  constructor() {
+    super("Worktree scan cancelled");
+    this.name = "WorktreeScanCancelledError";
+  }
+}
+
 export interface WorktreeService {
   inventory(): Promise<WorktreeInventory>;
   addScanRoot(path: string): Promise<void>;
@@ -297,98 +304,109 @@ export const createWorktreeService = ({
       await saveSettings({ ...current, kept });
     },
     inventory: async () => {
-      scanController?.abort();
+      scanController?.abort(new WorktreeScanCancelledError());
       const controller = new AbortController();
       scanController = controller;
       discovered.clear();
-      const settings = await readSettings();
-      const projects = await projectStore.listLocalRootPaths();
-      const issues: string[] = [];
-      const builtinRoots: string[] = [];
-      for (const candidate of builtinCandidates) {
-        try {
-          if ((await stat(candidate)).isDirectory()) builtinRoots.push(await realpath(candidate));
-        } catch (error) {
-          if (!isMissingFileError(error)) issues.push(`${candidate}: ${error instanceof Error ? error.message : String(error)}`);
-        }
-      }
-      const scanRoots = [...new Set([
-        ...settings.scanRoots,
-        ...builtinRoots,
-        ...projects
-      ])];
-      const entries: WorktreeEntry[] = [];
-      const found = new Set<string>();
-      const visited = new Set<string>();
-      const repositories = new Set<string>();
-      let count = 0;
-      const runner = await git();
-      for (const root of scanRoots) {
-        const queue = [{ path: root, depth: 0 }];
-        try {
-          const repository = await runner.run(["rev-parse", "--show-toplevel"], {
-            cwd: root, timeoutMs: 5_000, maxOutputBytes: 32_000, signal: controller.signal
-          });
-          const rootPath = repository.stdout.trim();
-          if (rootPath && resolve(rootPath) !== resolve(root)) {
-            queue.unshift({ path: rootPath, depth: 0 });
-          }
-        } catch {
-          // A scan location can contain repositories without being one itself.
-        }
-        while (queue.length) {
-          if (controller.signal.aborted) throw new Error("Worktree scan cancelled");
-          if (++count > MAX_DIRECTORIES) {
-            issues.push("Scan reached the directory limit. Add a narrower location to see more worktrees.");
-            break;
-          }
-          const current = queue.shift()!;
-          let canonical: string;
+      try {
+        const settings = await readSettings();
+        controller.signal.throwIfAborted();
+        const projects = await projectStore.listLocalRootPaths();
+        controller.signal.throwIfAborted();
+        const issues: string[] = [];
+        const builtinRoots: string[] = [];
+        for (const candidate of builtinCandidates) {
+          controller.signal.throwIfAborted();
           try {
-            canonical = await realpath(current.path);
-            if (isWithin(resolve(appDataRoot), canonical)) continue;
-            if (visited.has(canonical)) continue;
-            visited.add(canonical);
-            const directory = await readdir(canonical, { withFileTypes: true });
-            if (directory.some((entry) => entry.name === ".git")) {
-              const result = await runner.run(["rev-parse", "--git-common-dir"], {
-                cwd: canonical, timeoutMs: 8_000, maxOutputBytes: 32_000, signal: controller.signal
-              });
-              const commonDir = resolve(canonical, result.stdout.trim());
-              if (!repositories.has(commonDir)) {
-                repositories.add(commonDir);
-                const registered = await readRegistration(runner, commonDir, controller.signal);
-                for (const registration of registered) {
-                  controller.signal.throwIfAborted();
-                  const entry = await inspect(runner, commonDir, registration, registered[0].path,
-                    settings.kept[keepKey(commonDir, resolve(registration.path))], controller.signal);
-                  entries.push(entry);
-                  found.add(discoveredKey(commonDir, entry.path));
+            if ((await stat(candidate)).isDirectory()) builtinRoots.push(await realpath(candidate));
+          } catch (error) {
+            if (!isMissingFileError(error)) issues.push(`${candidate}: ${error instanceof Error ? error.message : String(error)}`);
+          }
+        }
+        const scanRoots = [...new Set([
+          ...settings.scanRoots,
+          ...builtinRoots,
+          ...projects
+        ])];
+        const entries: WorktreeEntry[] = [];
+        const found = new Set<string>();
+        const visited = new Set<string>();
+        const repositories = new Set<string>();
+        let count = 0;
+        const runner = await git();
+        controller.signal.throwIfAborted();
+        for (const root of scanRoots) {
+          const queue = [{ path: root, depth: 0 }];
+          try {
+            const repository = await runner.run(["rev-parse", "--show-toplevel"], {
+              cwd: root, timeoutMs: 5_000, maxOutputBytes: 32_000, signal: controller.signal
+            });
+            const rootPath = repository.stdout.trim();
+            if (rootPath && resolve(rootPath) !== resolve(root)) {
+              queue.unshift({ path: rootPath, depth: 0 });
+            }
+          } catch {
+            // A scan location can contain repositories without being one itself.
+          }
+          while (queue.length) {
+            controller.signal.throwIfAborted();
+            if (++count > MAX_DIRECTORIES) {
+              issues.push("Scan reached the directory limit. Add a narrower location to see more worktrees.");
+              break;
+            }
+            const current = queue.shift()!;
+            let canonical: string;
+            try {
+              canonical = await realpath(current.path);
+              if (isWithin(resolve(appDataRoot), canonical)) continue;
+              if (visited.has(canonical)) continue;
+              visited.add(canonical);
+              const directory = await readdir(canonical, { withFileTypes: true });
+              if (directory.some((entry) => entry.name === ".git")) {
+                const result = await runner.run(["rev-parse", "--git-common-dir"], {
+                  cwd: canonical, timeoutMs: 8_000, maxOutputBytes: 32_000, signal: controller.signal
+                });
+                const commonDir = resolve(canonical, result.stdout.trim());
+                if (!repositories.has(commonDir)) {
+                  repositories.add(commonDir);
+                  const registered = await readRegistration(runner, commonDir, controller.signal);
+                  for (const registration of registered) {
+                    controller.signal.throwIfAborted();
+                    const entry = await inspect(runner, commonDir, registration, registered[0].path,
+                      settings.kept[keepKey(commonDir, resolve(registration.path))], controller.signal);
+                    entries.push(entry);
+                    found.add(discoveredKey(commonDir, entry.path));
+                  }
                 }
               }
-            }
-            if (current.depth >= MAX_DEPTH) continue;
-            for (const child of directory) {
-              if (child.isDirectory() && !SKIP_DIRECTORIES.has(child.name)) {
-                queue.push({ path: join(canonical, child.name), depth: current.depth + 1 });
+              if (current.depth >= MAX_DEPTH) continue;
+              for (const child of directory) {
+                if (child.isDirectory() && !SKIP_DIRECTORIES.has(child.name)) {
+                  queue.push({ path: join(canonical, child.name), depth: current.depth + 1 });
+                }
               }
+            } catch (error) {
+              controller.signal.throwIfAborted();
+              issues.push(`${current.path}: ${error instanceof Error ? error.message : String(error)}`);
             }
-          } catch (error) {
-            if (controller.signal.aborted) throw new Error("Worktree scan cancelled");
-            issues.push(`${current.path}: ${error instanceof Error ? error.message : String(error)}`);
           }
         }
+        controller.signal.throwIfAborted();
+        discovered.clear();
+        for (const key of found) discovered.add(key);
+        return {
+          scanRoots, configuredRoots: settings.scanRoots, builtinRoots, entries, issues,
+          incomplete: issues.length > 0,
+          scannedAt: new Date().toISOString()
+        };
+      } catch (error) {
+        controller.signal.throwIfAborted();
+        throw error;
+      } finally {
+        if (scanController === controller) scanController = undefined;
       }
-      if (scanController === controller) scanController = undefined;
-      discovered.clear();
-      for (const key of found) discovered.add(key);
-      return {
-        scanRoots, configuredRoots: settings.scanRoots, builtinRoots, entries, issues,
-        incomplete: issues.length > 0,
-        scannedAt: new Date().toISOString()
-      };
     },
-    cancelScan: () => scanController?.abort(),
+    cancelScan: () => scanController?.abort(new WorktreeScanCancelledError()),
     preview: async (commonDir, path, allowDirty = false) => {
       if (!discovered.has(discoveredKey(commonDir, path))) throw new Error("Refresh Worktrees before cleanup");
       const entry = await findEntry(commonDir, path);

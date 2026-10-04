@@ -3,7 +3,7 @@ import { lstat, mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } fro
 import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createWorktreeService, parseWorktreeList } from "../../src/main/worktrees/worktreeService";
 import { createGitCommandRunner } from "../../src/main/skillSources/gitCommandRunner";
 import { findExecutable } from "../../src/main/executableDiscovery";
@@ -330,6 +330,41 @@ describe("worktree inventory and cleanup", () => {
     service.cancelScan();
     await expect(pending).rejects.toThrow("Worktree scan cancelled");
     await expect(service.preview(previous.commonDir, linked)).rejects.toThrow("Refresh Worktrees");
+  });
+
+  it("does not let a superseded scan clear the latest cleanup eligibility", async () => {
+    const { root, linked, runner } = await fixture();
+    let releaseOld!: () => void;
+    const oldRead = new Promise<void>((resolve) => { releaseOld = resolve; });
+    const listLocalRootPaths = vi.fn()
+      .mockImplementationOnce(async () => { await oldRead; return [root]; })
+      .mockResolvedValue([root]);
+    const service = createWorktreeService({
+      appDataRoot: join(root, "concurrent-data"), homeDir: join(root, "home"),
+      projectStore: { listLocalRootPaths } as unknown as ProjectStore,
+      resolveRunner: async () => runner
+    });
+    const oldScan = service.inventory();
+    const oldOutcome = expect(oldScan).rejects.toThrow("Worktree scan cancelled");
+    await vi.waitFor(() => expect(listLocalRootPaths).toHaveBeenCalledOnce());
+    const current = await service.inventory();
+    releaseOld();
+    await oldOutcome;
+    const entry = current.entries.find((item) => item.path === linked)!;
+    expect((await service.preview(entry.commonDir, linked)).entry.path).toBe(linked);
+  });
+
+  it("cancels a scan even when no scan locations exist and can scan again", async () => {
+    const { root, runner } = await fixture();
+    const service = createWorktreeService({
+      appDataRoot: join(root, "empty-data"), homeDir: join(root, "empty-home"),
+      projectStore: { listLocalRootPaths: async () => [] } as unknown as ProjectStore,
+      resolveRunner: async () => runner
+    });
+    const pending = service.inventory();
+    service.cancelScan();
+    await expect(pending).rejects.toMatchObject({ name: "WorktreeScanCancelledError" });
+    expect((await service.inventory()).entries).toEqual([]);
   });
 
   it("rejects a preview that tries to suppress the required full backup", async () => {

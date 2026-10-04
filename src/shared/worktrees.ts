@@ -38,6 +38,8 @@ export interface WorktreeInventory {
   scannedAt: string;
 }
 
+export type WorktreeScanResult = WorktreeInventory | { cancelled: true };
+
 export interface WorktreeCleanupPreview {
   previewId: string;
   entry: WorktreeEntry;

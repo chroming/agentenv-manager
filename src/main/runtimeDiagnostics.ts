@@ -74,6 +74,7 @@ const resultKeys = new Set([
   "enabled",
   "changed",
   "ok",
+  "cancelled",
   "profile",
   "skill",
   "warnings",
@@ -422,7 +423,8 @@ export const createRuntimeDiagnostics = (options: {
         const completedWrite = appendEvents([
           eventFor(action, "completed", {
             reference,
-            outcome: "completed",
+            outcome: result !== null && typeof result === "object" &&
+              "cancelled" in result && result.cancelled === true ? "cancelled" : "completed",
             durationMs,
             context: context || resultSummary
               ? {
