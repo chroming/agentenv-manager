@@ -16,6 +16,9 @@ import type {
 } from "../../shared/types";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { useI18n } from "../i18n";
+import { useCatalogView } from "../hooks/useCatalogView";
+import { projectInstructions } from "../catalogSort";
+import { CatalogFilters } from "./skillLibrary/CatalogFilters";
 import { InstructionBlockEditorDialog } from "./InstructionBlockEditorDialog";
 import { InstructionDocumentDialog } from "./InstructionDocumentDialog";
 import { InstructionDocumentPreviewList } from "./InstructionDocumentPreviewList";
@@ -36,6 +39,8 @@ import {
   MasterListPane,
   ModalFrame,
   SearchField,
+  SelectControl,
+  SortMenu,
   SelectableListRow,
   ToolbarOverflowMenu,
   focusInitialActionMenuItem
@@ -61,6 +66,7 @@ export const InstructionsWorkspace = ({
   onUpdate
 }: InstructionsWorkspaceProps) => {
   const { t } = useI18n();
+  const [view, updateView] = useCatalogView("instructions", { sort: "name", usageFilter: "all" });
   const [query, setQuery] = useState("");
   const [selectedId, setSelectedId] = useState<string>();
   const [editor, setEditor] = useState<{ block?: InstructionBlock; initial?: InstructionFileSelection }>();
@@ -81,9 +87,9 @@ export const InstructionsWorkspace = ({
   const contextReturnFocusRef = useRef<HTMLElement>(null);
   const visible = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase();
-    return blocks.filter((block) => !normalized || [block.name, block.description, block.content]
+    return projectInstructions(blocks, view).filter((block) => !normalized || [block.name, block.description, block.content]
       .some((value) => value.toLocaleLowerCase().includes(normalized)));
-  }, [blocks, query]);
+  }, [blocks, query, view.sort, view.usageFilter]);
   const selected = blocks.find((block) => block.id === selectedId) ?? visible[0];
   const contextBlock = blocks.find((block) => block.id === contextMenu?.blockId);
 
@@ -179,14 +185,32 @@ export const InstructionsWorkspace = ({
             value={query}
             onChange={(event) => setQuery(event.currentTarget.value)}
           />
+          <div className="instructions-list-toolbar__actions">
+            <SortMenu label={t("Sort Instructions")} value={view.sort} active={view.sort !== "name"}
+              options={[{ value: "name", label: t("Name") }, { value: "modified", label: t("Recently modified") }]}
+              onChange={(sort) => updateView({ sort })} />
+            <CatalogFilters compact count={Number(view.usageFilter !== "all")}>
+              <div className="catalog-filter-fields"><label><span>{t("Usage")}</span>
+                <SelectControl controlWidth="fill" aria-label={t("Instruction usage filter")} value={view.usageFilter}
+                  onChange={(event) => updateView({ usageFilter: event.currentTarget.value as typeof view.usageFilter })}>
+                  <option value="all">{t("All usage")}</option>
+                  <option value="referenced">{t("Referenced")}</option>
+                  <option value="unreferenced">{t("Unreferenced")}</option>
+                </SelectControl></label>
+                <Button disabled={view.usageFilter === "all"} onClick={() => updateView({ usageFilter: "all" })}>{t("Reset")}</Button>
+              </div>
+            </CatalogFilters>
+            <span className="instructions-list-toolbar__spacer" aria-hidden="true" />
             <IconButton label={t("New")} variant={blocks.length === 0 ? "primary" : "secondary"} onClick={() => setEditor({})}><Plus size={15} /></IconButton>
             <ToolbarOverflowMenu label={t("More")} menuLabel={t("Instruction actions")} busy={loading} items={[
               { id: "import", label: t("Import"), icon: <FileInput size={14} />, onSelect: () => void onImport().then((initial) => { if (initial) setEditor({ initial }); }) },
               { id: "refresh", label: t("Refresh"), icon: <RefreshCw size={14} />, disabled: loading, onSelect: () => void onRefresh() }
             ]} />
-
+          </div>
           </div>
           <div className="instructions-list" role="list">
+            {visible.length === 0 && blocks.length > 0 ? <EmptyState title={t("No matching Instructions")}
+              description={t("Try another search or reset the filters.")} /> : null}
             {visible.map((block) => {
               return (
                 <SelectableListRow

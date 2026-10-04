@@ -624,6 +624,10 @@ button.ui-interactive-status.is-interactive:hover:not(:disabled) {
   z-index: var(--z-popover);
 }
 
+.ui-filter-popover__panel--modal {
+  z-index: var(--z-modal-popover);
+}
+
 .ui-switch {
   --switch-width: 38px;
   --switch-height: 22px;

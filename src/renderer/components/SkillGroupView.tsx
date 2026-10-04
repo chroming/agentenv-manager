@@ -11,6 +11,8 @@ import type { SkillUpdateInfo } from "../../shared/types";
 import type { SkillUpdateActivity } from "../skillUpdateActivity";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { useI18n } from "../i18n";
+import { useCatalogView } from "../hooks/useCatalogView";
+import { compareCatalogNames } from "../catalogSort";
 import { LibrarySkillPicker } from "./LibrarySkillPicker";
 import { OverflowTooltip } from "./OverflowTooltip";
 import {
@@ -32,6 +34,7 @@ import {
   ResourceRow,
   SearchField,
   SelectControl,
+  SortMenu,
   TextAction,
   TextField,
   ToolbarOverflowMenu
@@ -86,6 +89,7 @@ export const SkillGroupView = ({
   updates = [], updateActivity, onCheckUpdates, onPreviewUpdate, onPreviewUpdates, filter = "all"
 }: SkillGroupViewProps) => {
   const { t } = useI18n();
+  const [groupView, updateGroupView] = useCatalogView("groups", { sort: "name", filter });
   const [expandedIds, setExpandedIds] = useState<string[]>([]);
   const [draft, setDraft] = useState<GroupDraft>();
   const [deleteCandidate, setDeleteCandidate] = useState<SkillGroup>();
@@ -108,8 +112,15 @@ export const SkillGroupView = ({
     const normalized = query.trim().toLocaleLowerCase();
     return groups.filter((group) => (!normalized || [group.name, group.description, ...group.skillIds]
       .some((value) => value.toLocaleLowerCase().includes(normalized))) &&
-      (filter === "all" || group.skillIds.some((id) => { const skill = skillsById.get(id); return skill && hasUpdate(skill); })));
-  }, [groups, query, filter, skillsById, updates]);
+      (filter === "all" || group.skillIds.some((id) => { const skill = skillsById.get(id); return skill && hasUpdate(skill); })))
+      .sort((a, b) => {
+        const count = (ids: string[]) => new Set(ids.filter((id) => {
+          const skill = skillsById.get(id); return skill && hasUpdate(skill);
+        })).size;
+        return (groupView.sort === "updates" ? count(b.skillIds) - count(a.skillIds) : 0) ||
+          compareCatalogNames(a.name, b.name) || compareCatalogNames(a.id, b.id);
+      });
+  }, [groups, query, filter, skillsById, updates, groupView.sort]);
   const visibleSkillIds = [...new Set(groups.flatMap((group) => group.skillIds))];
   const visibleCheckIds = visibleSkillIds.filter((id) => {
     const skill = skillsById.get(id);
@@ -172,6 +183,9 @@ export const SkillGroupView = ({
           onChange={(event) => setQuery(event.currentTarget.value)}
         />
         <div className="library-toolbar-actions">
+          <SortMenu label={t("Sort groups")} value={groupView.sort} active={groupView.sort !== "name"}
+            options={[{ value: "name", label: t("Name") }, { value: "updates", label: t("Updates") }]}
+            onChange={(sort) => updateGroupView({ sort })} />
           <CatalogFilters count={Number(filter !== "all")} summary={t("Updates")}>
             <div className="catalog-filter-fields"><label><span>{t("Status")}</span>
               <SelectControl controlWidth="fill" aria-label={t("Skill status filters")} value={filter}

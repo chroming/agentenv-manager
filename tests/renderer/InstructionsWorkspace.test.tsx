@@ -20,6 +20,22 @@ const block: InstructionBlock = {
 };
 
 describe("InstructionsWorkspace", () => {
+  it("sorts and filters locally while keeping the selected document and editor actions", () => {
+    const onRefresh = vi.fn();
+    render(<InstructionsWorkspace blocks={[block, { ...block, id: "recent", name: "Recent", updatedAt: "2026-09-01", usedByProfiles: [] }]}
+      loading={false} onCreate={vi.fn()} onImport={vi.fn()} onRefresh={onRefresh} onRemove={vi.fn()} onUpdate={vi.fn()} />);
+    const list = screen.getByRole("list");
+    fireEvent.click(within(list).getByRole("button", { name: "Review rules" }));
+    fireEvent.click(screen.getByRole("button", { name: "Sort Instructions: Name" }));
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "Recently modified" }));
+    expect(within(list).getAllByRole("button")[0]).toHaveAccessibleName("Recent");
+    fireEvent.click(screen.getByRole("button", { name: "Filters" }));
+    fireEvent.change(screen.getByRole("combobox", { name: "Instruction usage filter" }), { target: { value: "unreferenced" } });
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(within(list).queryByText("Review rules")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "More actions for Review rules" })).toBeInTheDocument();
+    expect(onRefresh).not.toHaveBeenCalled();
+  });
   it("shows referenced Profiles and lets users review a cascading delete", () => {
     render(
       <InstructionsWorkspace

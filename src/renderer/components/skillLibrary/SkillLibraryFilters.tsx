@@ -86,16 +86,16 @@ export function SkillLibraryFilters({
         </SelectControl>
       </label>
       <label>
-        <span>{t("Agents")}</span>
+        <span>{t("Management")}</span>
         <SelectControl
           controlWidth="fill"
-          aria-label={t("Skill Agent filter")}
+          aria-label={t("Skill management filter")}
           value={targetFilter}
           onChange={(event) => onChange({
             targetFilter: event.currentTarget.value as typeof targetFilter
           })}
         >
-          <option value="all">{t("All Agents")}</option>
+          <option value="all">{t("All")}</option>
           <option value="managed">{t("Managed")}</option>
           <option value="library">{t("Imported")}</option>
           <option value="outside">{t("Unmanaged")}</option>

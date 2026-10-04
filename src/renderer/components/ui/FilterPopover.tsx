@@ -1,6 +1,7 @@
 import {
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
   type CSSProperties,
@@ -29,6 +30,16 @@ export const FilterPopover = ({
   const panelId = useId();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  const inModal = Boolean(triggerRef.current?.closest('[aria-modal="true"]'));
+
+  useLayoutEffect(() => {
+    if (!open) return;
+    panelRef.current?.querySelector<HTMLElement>('select, input, button')?.focus();
+    const rect = panelRef.current?.getBoundingClientRect();
+    if (rect && rect.bottom > window.innerHeight - 12) {
+      setStyle((current) => ({ ...current, top: Math.max(12, window.innerHeight - rect.height - 12) }));
+    }
+  }, [open]);
 
   const close = (restoreFocus = false) => {
     setOpen(false);
@@ -57,8 +68,17 @@ export const FilterPopover = ({
       ) close();
     };
     const escape = (event: KeyboardEvent) => {
+      if (event.key === "Tab" && panelRef.current?.contains(document.activeElement)) {
+        const controls = Array.from(panelRef.current.querySelectorAll<HTMLElement>('select, input, button:not(:disabled)'));
+        const index = controls.indexOf(document.activeElement as HTMLElement);
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        controls[(index + (event.shiftKey ? -1 : 1) + controls.length) % controls.length]?.focus();
+        return;
+      }
       if (event.key !== "Escape") return;
       event.preventDefault();
+      event.stopImmediatePropagation();
       close(true);
     };
     const dismissForViewportChange = (event: Event) => {
@@ -66,12 +86,12 @@ export const FilterPopover = ({
       close();
     };
     document.addEventListener("mousedown", dismiss);
-    document.addEventListener("keydown", escape);
+    document.addEventListener("keydown", escape, true);
     window.addEventListener("resize", dismissForViewportChange);
     window.addEventListener("scroll", dismissForViewportChange, true);
     return () => {
       document.removeEventListener("mousedown", dismiss);
-      document.removeEventListener("keydown", escape);
+      document.removeEventListener("keydown", escape, true);
       window.removeEventListener("resize", dismissForViewportChange);
       window.removeEventListener("scroll", dismissForViewportChange, true);
     };
@@ -93,7 +113,7 @@ export const FilterPopover = ({
       {open && style ? createPortal(
         <div
           aria-label={label}
-          className="ui-filter-popover__panel"
+          className={`ui-filter-popover__panel${inModal ? " ui-filter-popover__panel--modal" : ""}`}
           id={panelId}
           ref={panelRef}
           role="dialog"

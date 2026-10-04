@@ -128,6 +128,9 @@ import { useAIPreferences } from "../hooks/useAIPreferences";
 import { LocalSkillAnalysis } from "./LocalSkillAnalysis";
 import { SkillLibraryFilters } from "./skillLibrary/SkillLibraryFilters";
 import { CatalogFilters } from "./skillLibrary/CatalogFilters";
+import { useCatalogView } from "../hooks/useCatalogView";
+import { sortLibrarySkills } from "../catalogSort";
+import { SortMenu } from "./ui";
 import { CleanupBucketHeader } from "./CleanupBucketHeader";
 import { BulkSkillUpdateDialog } from "./BulkSkillUpdateDialog";
 import { SkillImportDialog } from "./SkillImportDialog";
@@ -395,15 +398,22 @@ export const SkillLibraryPanel = ({ model, actions, onOpenLocalSkills, onRefresh
     Record<string, RepositorySkillImportInput>
   >({});
   const [githubApiRetryAvailable, setGithubApiRetryAvailable] = useState(false);
-  const { search, sourceFilter, statusFilter, tagFilter, targetFilter, usageFilter } = viewState;
-  const [sourceScopeFilter, setSourceScopeFilter] =
-    useState<SkillSourceScopeFilter>("monitored");
-  const [sourceResultFilter, setSourceResultFilter] =
-    useState<SkillSourceResultFilter>("all");
-  const [groupFilter, setGroupFilter] = useState<"all" | "updates">("all");
+  const { search, scrollTop: ignoredScrollTop, ...viewFilters } = viewState;
+  const [skillPreferences, updateSkillView, hasDevicePreferences] = useCatalogView("skills", { sort: "name", ...viewFilters });
+  const skillView = hasDevicePreferences ? skillPreferences : { ...skillPreferences, ...viewFilters };
+  const { sourceFilter, statusFilter, tagFilter, targetFilter, usageFilter } = skillView;
+  const { sort: skillSort, ...skillFilters } = skillView;
+  const [sourceView, updateSourceView] = useCatalogView("sources", {
+    sort: "name", scopeFilter: "monitored", resultFilter: "all", sourceKindFilter: "all"
+  });
+  const [groupView, updateGroupView] = useCatalogView("groups", { sort: "name", filter: "all" });
   const updateControls = (
     patch: Partial<Omit<SkillLibraryViewState, "scrollTop">>
-  ) => onViewStateChange(updateSkillLibraryControls(viewState, patch));
+  ) => {
+    const { search: ignoredSearch, ...filters } = patch;
+    if (Object.keys(filters).length) updateSkillView(filters);
+    onViewStateChange(updateSkillLibraryControls({ ...viewState, ...skillFilters }, patch));
+  };
   const [openAction, setOpenAction] = useState<{ id: string; left: number; top: number }>();
   const [summaryHistoryId, setSummaryHistoryId] = useState<string>();
   const [addition, setAddition] = useState<{ source: SkillImportPreviewInput; plan: SkillUpdatePlan }>();
@@ -755,7 +765,7 @@ export const SkillLibraryPanel = ({ model, actions, onOpenLocalSkills, onRefresh
     : inventoryScanStatus === "error" || scanIssues.some((issue) => issue.severity !== "info")
       ? t("Scan incomplete. Refresh Local Skills to check Agent copies.")
       : undefined;
-  const filteredSkills = librarySkills.filter((skill) => {
+  const filteredSkills = sortLibrarySkills(librarySkills.filter((skill) => {
     const installs = installsFor(skill.id);
     const usage = skillUsage[skill.id] ?? [];
     const query = search.trim().toLowerCase();
@@ -794,7 +804,7 @@ export const SkillLibraryPanel = ({ model, actions, onOpenLocalSkills, onRefresh
       )) &&
       matchesTarget
     );
-  });
+  }), skillView.sort, skillUsage);
   const toggleActionMenu = (skillId: string, button: HTMLButtonElement) => {
     if (openActionId === skillId) {
       setOpenAction(undefined);
@@ -1771,6 +1781,11 @@ export const SkillLibraryPanel = ({ model, actions, onOpenLocalSkills, onRefresh
               onChange={(event) => updateControls({ search: event.currentTarget.value })}
             />
           <div className="library-toolbar-actions">
+          <SortMenu label={t("Sort Skills")} value={skillView.sort} active={skillView.sort !== "name"}
+            options={[{ value: "name", label: t("Name") },
+              { value: "source-updated", label: t("Source updated") },
+              { value: "references", label: t("Profile references") }]}
+            onChange={(sort) => { updateSkillView({ sort }); onViewStateChange({ ...viewState, scrollTop: 0 }); }} />
           <CatalogFilters count={advancedFilterCount + Number(statusFilter !== "all")}
             summary={statusFilter === "enabled" ? t("Enabled") : statusFilter === "updates" ? t("Updates") : statusFilter === "disabled" ? t("Disabled") : undefined}>
             <SkillLibraryFilters
@@ -2154,16 +2169,16 @@ export const SkillLibraryPanel = ({ model, actions, onOpenLocalSkills, onRefresh
 
       <SkillSourceView
         catalogMenuItems={catalogMenuItems}
-        onScopeFilterChange={setSourceScopeFilter}
+        onScopeFilterChange={(scopeFilter) => updateSourceView({ scopeFilter })}
         active={libraryMode === "sources"}
         updateActivity={updateActivity}
         groups={sourceGroups}
         loading={sourceGroupsLoading}
-        scopeFilter={sourceScopeFilter}
-        sourceKindFilter={sourceFilter}
-        resultFilter={sourceResultFilter}
-        onSourceKindFilterChange={(filter) => updateControls({ sourceFilter: filter })}
-        onResultFilterChange={setSourceResultFilter}
+        scopeFilter={sourceView.scopeFilter}
+        sourceKindFilter={sourceView.sourceKindFilter}
+        resultFilter={sourceView.resultFilter}
+        onSourceKindFilterChange={(sourceKindFilter) => updateSourceView({ sourceKindFilter })}
+        onResultFilterChange={(resultFilter) => updateSourceView({ resultFilter })}
         onCheckGroup={onCheckSourceGroup}
         onCheckMonitored={onCheckMonitoredSourceGroups}
         onRename={onSetSourceName}
@@ -2184,9 +2199,9 @@ export const SkillLibraryPanel = ({ model, actions, onOpenLocalSkills, onRefresh
 
       <SkillGroupView
         catalogMenuItems={catalogMenuItems}
-        onFilterChange={setGroupFilter}
+        onFilterChange={(filter) => updateGroupView({ filter })}
         active={libraryMode === "groups"}
-        filter={groupFilter}
+        filter={groupView.filter}
         updates={skillUpdates}
         updateActivity={updateActivity}
         onCheckUpdates={async (ids) => { await onCheckUpdates(ids); }}

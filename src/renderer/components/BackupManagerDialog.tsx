@@ -1,4 +1,4 @@
-import type { RefObject } from "react";
+import { type RefObject } from "react";
 import {
   ChevronRight,
   Database,
@@ -15,7 +15,10 @@ import type {
 } from "../../shared/types";
 import { useI18n, type TranslationValues } from "../i18n";
 import { FileTypeIcon } from "./FileTypeIcon";
-import { Button, ToolbarOverflowMenu } from "./ui";
+import { Button, SelectControl, SortMenu, ToolbarOverflowMenu } from "./ui";
+import { useCatalogView } from "../hooks/useCatalogView";
+import { projectBackups, compareCatalogNames } from "../catalogSort";
+import { CatalogFilters } from "./skillLibrary/CatalogFilters";
 
 type Translate = (message: string, values?: TranslationValues) => string;
 
@@ -99,6 +102,13 @@ export const BackupManagerDialog = ({
   formatDate
 }: BackupManagerDialogProps) => {
   const { t } = useI18n();
+  const [view, updateView] = useCatalogView("backups", {
+    sort: "newest", kindFilter: "all", statusFilter: "all", targetFilter: "all"
+  });
+  const visibleItems = projectBackups(inventory?.items ?? [], view);
+  const targetIds = [...new Set(inventory?.items.flatMap((item) => item.targetId ? [item.targetId] : []) ?? [])]
+    .sort(compareCatalogNames);
+  const filterCount = [view.kindFilter, view.statusFilter, view.targetFilter].filter((value) => value !== "all").length;
 
   return (
     <div
@@ -250,6 +260,34 @@ export const BackupManagerDialog = ({
                   )}
                 </p>
               </div>
+              <div className="ui-dialog-header__actions">
+              <SortMenu label={t("Sort backups")} value={view.sort} active={view.sort !== "newest"}
+                options={[{ value: "newest", label: t("Newest first") }, { value: "oldest", label: t("Oldest first") },
+                  { value: "size", label: t("Largest first") }]} onChange={(sort) => updateView({ sort })} />
+              <CatalogFilters compact count={filterCount}>
+                <div className="catalog-filter-fields">
+                  <label><span>{t("Type")}</span>
+                    <SelectControl controlWidth="fill" aria-label={t("Backup type filter")} value={view.kindFilter}
+                      onChange={(event) => updateView({ kindFilter: event.currentTarget.value as typeof view.kindFilter })}>
+                      <option value="all">{t("All types")}</option><option value="target-recovery">{t("Agent recovery")}</option>
+                      <option value="skill-cleanup">{t("Skill cleanup")}</option><option value="workspace-sync">{t("Workspace Sync")}</option>
+                    </SelectControl></label>
+                  <label><span>{t("Status")}</span>
+                    <SelectControl controlWidth="fill" aria-label={t("Backup status filter")} value={view.statusFilter}
+                      onChange={(event) => updateView({ statusFilter: event.currentTarget.value as typeof view.statusFilter })}>
+                      <option value="all">{t("All")}</option><option value="eligible">{t("Ready to clean")}</option>
+                      <option value="protected">{t("Protected")}</option>
+                    </SelectControl></label>
+                  <label><span>{t("Agent")}</span>
+                    <SelectControl controlWidth="fill" aria-label={t("Backup Agent filter")} value={view.targetFilter}
+                      onChange={(event) => updateView({ targetFilter: event.currentTarget.value })}>
+                      <option value="all">{t("All Agents")}</option>
+                      {targetIds.map((id) => <option key={id} value={id}>{id}</option>)}
+                    </SelectControl></label>
+                  <Button disabled={!filterCount} onClick={() => updateView({ kindFilter: "all", statusFilter: "all", targetFilter: "all" })}>{t("Reset")}</Button>
+                </div>
+              </CatalogFilters>
+              </div>
             </header>
             {notice ? (
               <div
@@ -262,8 +300,8 @@ export const BackupManagerDialog = ({
             <div className="backup-manager-list" aria-busy={inventoryLoading}>
               {inventoryLoading && !inventory ? (
                 <div className="backup-manager-empty">{t("Calculating storage...")}</div>
-              ) : inventory?.items.length ? (
-                inventory.items.map((item) => (
+              ) : visibleItems.length ? (
+                visibleItems.map((item) => (
                   <article className="backup-manager-row" key={`${item.kind}:${item.id}`}>
                     <button
                       className="backup-row-preview"
@@ -335,9 +373,9 @@ export const BackupManagerDialog = ({
               ) : (
                 <div className="backup-manager-empty">
                   <History size={22} aria-hidden="true" />
-                  <strong>{t("No managed backups")}</strong>
+                  <strong>{t(inventory?.items.length ? "No matching backups" : "No managed backups")}</strong>
                   <span>
-                    {t("Recovery points will appear here after AgentEnv changes local environments.")}
+                    {t(inventory?.items.length ? "Try another search or reset the filters." : "Recovery points will appear here after AgentEnv changes local environments.")}
                   </span>
                 </div>
               )}

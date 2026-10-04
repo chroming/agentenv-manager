@@ -2578,7 +2578,7 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("combobox", { name: "Skill source filter" }).selectOption("local");
     await page.getByRole("combobox", { name: "Skill usage filter" }).selectOption("referenced");
     await page
-      .getByRole("combobox", { name: "Skill Agent filter" })
+      .getByRole("combobox", { name: "Skill management filter" })
       .selectOption("not-installed");
     await expect.poll(() => skillScroller.evaluate((element) => element.scrollTop)).toBe(0);
     await expect
@@ -2601,7 +2601,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(await page.getByRole("combobox", { name: "Skill source filter" }).inputValue()).toBe(
       "local"
     );
-    expect(await page.getByRole("combobox", { name: "Skill Agent filter" }).inputValue()).toBe(
+    expect(await page.getByRole("combobox", { name: "Skill management filter" }).inputValue()).toBe(
       "not-installed"
     );
     expect(await page.getByRole("combobox", { name: "Skill usage filter" }).inputValue()).toBe(
@@ -3011,7 +3011,7 @@ describe("Electron UI profile switching e2e", () => {
       await usageFilter.selectOption("unreferenced");
       await expect.poll(() => allRows.count()).toBe(2);
       await usageFilter.selectOption("all");
-      const targetFilter = page.getByRole("combobox", { name: "Skill Agent filter" });
+      const targetFilter = page.getByRole("combobox", { name: "Skill management filter" });
       await targetFilter.selectOption("managed");
       await expect.poll(() => allRows.count()).toBe(0);
       await targetFilter.selectOption("all");

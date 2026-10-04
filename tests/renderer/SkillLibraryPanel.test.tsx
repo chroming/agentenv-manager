@@ -238,7 +238,7 @@ describe("SkillLibraryPanel", () => {
     fireEvent.keyDown(document, { key: "Escape" });
     expect(screen.getByRole("button", { name: "current" })).toBeInTheDocument();
     dialog = await openTags();
-    await waitFor(() => expect(prepare).toHaveBeenLastCalledWith(["updated", "current", "disabled"], "en"));
+    await waitFor(() => expect(prepare).toHaveBeenLastCalledWith(["current", "disabled", "updated"], "en"));
     expect(within(dialog).getAllByRole("checkbox", { name: /^Select / })).toHaveLength(4);
   });
 

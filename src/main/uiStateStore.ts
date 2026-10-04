@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import type { AgentEnvPaths } from "./paths";
 import { writeAtomic } from "./fileUtils";
+import { mergeCatalogViews } from "../shared/catalogViews";
 import {
   UiStateSchema,
   UiStateUpdateSchema,
@@ -48,6 +49,7 @@ export const createUiStateStore = (paths: AgentEnvPaths): UiStateStore => {
       const next = normalizeUiState(UiStateSchema.parse({
         ...current,
         ...parsed,
+        ...(parsed.catalogViews ? { catalogViews: mergeCatalogViews(current.catalogViews, parsed.catalogViews) } : {}),
         version: 1
       }));
       await writeAtomic(paths.uiStatePath, `${JSON.stringify(next, null, 2)}\n`);

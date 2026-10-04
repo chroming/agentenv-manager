@@ -2744,6 +2744,19 @@ Every release that changes Profile, Library, Target, or Apply behavior MUST veri
 - The Instructions reading workspace keeps description and Profile usage in its header context.
   A single CONTENT.md preview does not repeat a filename header; its expand and edit commands remain
   available in the header. Multi-document previews elsewhere retain individual file headers.
+- Catalog sorting and filters are independent, device-local view preferences in `ui-state.json`.
+  Skills, sources, Groups, Instructions, and Backups reuse SortMenu and FilterPopover. Preference
+  patches merge per view, preserving other filters, selections, and manual object orders. Sorting
+  uses already-read inventory only: it MUST NOT trigger discovery, Git, or network operations.
+  Source-date sorting uses the reported upstream modification time, never import or check time;
+  unavailable dates sort last. Profile reference counts count distinct Profiles. Group update
+  counts exclude disabled Skills and removed/failed sources. Stable name/ID ties prevent jitter.
+- Instructions supports referenced/unreferenced filtering without changing the selected detail.
+  Its narrow list gives search a full-width row instead of compressing input or icon hit areas.
+  Backup type, Agent, and eligibility filters affect visibility only. Automatic/manual retention
+  cleanup continues to use the complete validated inventory; protected recovery records are never
+  made deletable by filtering. Filter menus inside a modal stay above that modal and consume Escape
+  before the parent dismisses. Empty filtered catalogs retain a discoverable reset action.
 - The Profile Target selector uses the selected Target name as its visible label without a redundant `Target:` prefix; its accessible name retains the full command meaning.
 - First and last row menus are topmost and in viewport.
 - Escape, outside click, keyboard focus, focus restoration, and Arrow/Home/End navigation for renderer action menus.

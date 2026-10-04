@@ -27,6 +27,28 @@ const group = (id: string, name: string, skillIds: string[]): SkillGroup => ({
 });
 
 describe("SkillGroupView", () => {
+  it("sorts by eligible update count without checking or changing group members", () => {
+    const onCheckUpdates = vi.fn();
+    const onUpdate = vi.fn();
+    render(<SkillGroupView active
+      groups={[group("alpha", "Alpha", ["disabled", "gone"]), group("zebra", "Zebra", ["online", "online"])]}
+      skills={[{ ...skill("online"), updatePolicy: "tracked" }, { ...skill("disabled"), globallyEnabled: false, updatePolicy: "tracked" }, { ...skill("gone"), updatePolicy: "tracked" }]}
+      updates={[
+        { id: "online", name: "online", sourceType: "git", updateAvailable: true },
+        { id: "disabled", name: "disabled", sourceType: "git", updateAvailable: true },
+        { id: "gone", name: "gone", sourceType: "git", updateAvailable: true, sourceStatus: "removed" }
+      ]}
+      onCheckUpdates={onCheckUpdates} onUpdate={onUpdate} onCreate={vi.fn()} onRemove={vi.fn()} />);
+    expect(screen.getAllByRole("button", { name: /^Toggle / }).map((button) => button.getAttribute("aria-label")))
+      .toEqual(["Toggle Alpha", "Toggle Zebra"]);
+    fireEvent.click(screen.getByRole("button", { name: "Sort groups: Name" }));
+    fireEvent.click(screen.getByRole("menuitemradio", { name: "Updates" }));
+    expect(screen.getAllByRole("button", { name: /^Toggle / }).map((button) => button.getAttribute("aria-label")))
+      .toEqual(["Toggle Zebra", "Toggle Alpha"]);
+    expect(onCheckUpdates).not.toHaveBeenCalled();
+    expect(onUpdate).not.toHaveBeenCalled();
+  });
+
   it("checks only eligible members and opens updates through the shared status", async () => {
     const onCheckUpdates = vi.fn().mockResolvedValue(undefined);
     const onPreviewUpdate = vi.fn().mockResolvedValue(undefined);

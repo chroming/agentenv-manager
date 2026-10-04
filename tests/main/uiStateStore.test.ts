@@ -23,6 +23,22 @@ afterEach(async () => {
 });
 
 describe("uiStateStore", () => {
+  it("merges concurrent per-view catalog preferences without losing other sorts or filters", async () => {
+    const { paths, store } = await createStore();
+    await store.update({ catalogViews: { skills: { sort: "references", statusFilter: "enabled" },
+      sources: { scopeFilter: "manual" } }, profileOrder: ["daily"] });
+    await Promise.all([
+      store.update({ catalogViews: { skills: { tagFilter: "Review" } } }),
+      store.update({ catalogViews: { instructions: { sort: "modified", usageFilter: "referenced" } } })
+    ]);
+    await expect(createUiStateStore(paths).read()).resolves.toMatchObject({ profileOrder: ["daily"], catalogViews: {
+      skills: { sort: "references", statusFilter: "enabled", tagFilter: "Review" },
+      sources: { scopeFilter: "manual" }, instructions: { sort: "modified", usageFilter: "referenced" }
+    } });
+    expect(() => store.update({ catalogViews: { skills: { sort: "invalid" } } } as never)).toThrow();
+    await store.update({ catalogViews: { instructions: { usageFilter: "all" } } });
+    await expect(store.read()).resolves.toMatchObject({ catalogViews: { instructions: { sort: "modified", usageFilter: "all" } } });
+  });
   it("uses one stable reorder contract for drag and keyboard moves", () => {
     expect(reorderPreferenceByDrop(["codex", "claude", "opencode"], "codex", "opencode"))
       .toEqual(["claude", "opencode", "codex"]);

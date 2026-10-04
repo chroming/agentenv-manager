@@ -36,6 +36,8 @@ import type {
   SkillSourceMergeResult
 } from "../../shared/types";
 import { useI18n } from "../i18n";
+import { useCatalogView } from "../hooks/useCatalogView";
+import { sortSourceGroups } from "../catalogSort";
 import type {
   SkillSourceKindFilter,
   SkillSourceResultFilter,
@@ -65,6 +67,7 @@ import {
   ResourcePanelToolbar,
   ToolbarOverflowMenu
 } from "./ui";
+import { SortMenu } from "./ui";
 
 interface SkillSourceViewProps {
   catalogMenuItems?: import("./ui/ToolbarOverflowMenu").ToolbarOverflowMenuItem[];
@@ -156,6 +159,9 @@ export const SkillSourceView = ({
   onCopySource
 }: SkillSourceViewProps) => {
   const { formatDate, t } = useI18n();
+  const [sourceView, updateSourceView] = useCatalogView("sources", {
+    sort: "name", scopeFilter, sourceKindFilter, resultFilter
+  });
   const [search, setSearch] = useState("");
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [checking, setChecking] = useState<Set<string>>(new Set());
@@ -196,7 +202,7 @@ export const SkillSourceView = ({
     (filter) => filter !== "all"
   ).length;
   const visibleGroups = useMemo(() => {
-    return groups.filter((group) => {
+    return sortSourceGroups(groups.filter((group) => {
       const isMonitored = group.automaticChecks !== false;
       const matchesScope =
         scopeFilter === "all" ||
@@ -223,13 +229,14 @@ export const SkillSourceView = ({
           candidate.libraryName?.toLocaleLowerCase().includes(normalizedSearch)
         );
       return matchesScope && matchesKind && matchesResult && matchesSearch;
-    });
+    }), sourceView.sort);
   }, [
     groups,
     normalizedSearch,
     resultFilter,
     scopeFilter,
-    sourceKindFilter
+    sourceKindFilter,
+    sourceView.sort
   ]);
 
   const selectedMergeGroups = useMemo(
@@ -622,6 +629,9 @@ export const SkillSourceView = ({
             onChange={(event) => setSearch(event.currentTarget.value)}
           />
         <div className="library-toolbar-actions">
+        <SortMenu label={t("Sort sources")} value={sourceView.sort} active={sourceView.sort !== "name"}
+          options={[{ value: "name", label: t("Name") }, { value: "changes", label: t("Changes") }]}
+          onChange={(sort) => updateSourceView({ sort })} />
         <CatalogFilters count={activeFilterCount + Number(scopeFilter !== "all")}
           summary={scopeFilter === "monitored" ? t("Monitored") : scopeFilter === "manual" ? t("Manual only") : undefined}>
           <div className="catalog-filter-fields" role="group" aria-label={t("Source filters")}>

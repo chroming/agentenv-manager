@@ -47,6 +47,7 @@ import type {
 import { completeOrder, orderByPreference } from "../shared/uiState";
 import { profileWithoutLocalSkillOverrides } from "../shared/effectiveProfile";
 import { I18nProvider, useI18n } from "./i18n";
+import { CatalogPreferencesProvider } from "./hooks/useCatalogView";
 import { acceptAppliedProfileState } from "./appliedProfileState";
 import { activationPreviewHasWork } from "./activationPreview";
 import { formatDiagnosticIssue, parseDiagnosticErrorMessage } from "./diagnostics";
@@ -3654,7 +3655,7 @@ const AppContent = ({
     onRefreshTargets: refreshTargets
   });
 
-  return (
+  return (<CatalogPreferencesProvider uiState={uiState} onUpdateUiState={persistUiState}>
     <main
       className={appShellClassName(
         activeWorkspace,
@@ -4762,8 +4763,7 @@ const AppContent = ({
         />
       </section>
 
-    </main>
-  );
+    </main></CatalogPreferencesProvider>);
 };
 
 export const App = () => {

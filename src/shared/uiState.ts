@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { SafeIdSchema } from "./schemas";
+import { CatalogViewsSchema } from "./catalogViews";
 
 const uniqueIds = (ids: string[]) => [...new Set(ids)];
 
@@ -16,6 +17,7 @@ export const UiStateSchema = z.object({
   agentOrder: z.array(SafeIdSchema).default([]),
   workspaceOrder: z.array(SafeIdSchema).default([]),
   worktreeSort: WorktreeSortSchema.optional(),
+  catalogViews: CatalogViewsSchema.optional(),
   workspaceAgentSelections: z.record(SafeIdSchema, SafeIdSchema).default({})
 }).strict();
 
