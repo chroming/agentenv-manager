@@ -38,7 +38,7 @@ describe("Worktrees desktop workflow", () => {
     const repo = join(home, "Github", "project");
     const linked = join(home, ".codex", "worktrees", "review-change");
     await Promise.all([mkdir(home), mkdir(data), mkdir(bin)]);
-    await run("git", ["init", repo]);
+    await run("git", ["init", "-b", "main", repo]);
     await writeFile(join(repo, "README.md"), "base\n");
     await run("git", ["-C", repo, "add", "."]);
     await run("git", ["-C", repo, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.com", "commit", "-m", "base"]);
@@ -310,6 +310,21 @@ describe("Worktrees desktop workflow", () => {
     const linkedRow = workspace.locator(".ui-resource-row").filter({ hasText: "review-change" });
     await linkedRow.getByRole("button", { name: "review-change", exact: true }).click();
     const dialog = page.getByRole("dialog");
+    await page.setViewportSize({ width: 920, height: 620 });
+    const target = dialog.getByRole("combobox", { name: t("Integration target"), exact: true });
+    await target.selectOption("refs/heads/main");
+    await expect.poll(() => target.inputValue()).toBe("refs/heads/main");
+    expect(await dialog.getByText(t("Contained in target"), { exact: true }).count()).toBe(1);
+    const savedTarget = JSON.parse(await readFile(join(data, "worktree-locations.json"), "utf8"));
+    expect(Object.values(savedTarget.integrationRefs)).toEqual(["refs/heads/main"]);
+    for (const viewport of [{ width: 920, height: 620 }, { width: 1180, height: 728 }, { width: 1440, height: 900 }]) {
+      await page.setViewportSize(viewport);
+      expect(await target.evaluate((element) => {
+        const box = element.getBoundingClientRect();
+        return box.left >= 0 && box.right <= window.innerWidth && element.scrollWidth <= element.clientWidth + 1;
+      })).toBe(true);
+      if (process.env.AGENTENV_CAPTURE_WORKTREES_DIR) await page.screenshot({ path: join(process.env.AGENTENV_CAPTURE_WORKTREES_DIR, `worktree-target-${locale}-${viewport.width}.png`) });
+    }
     await page.setViewportSize({ width: 920, height: 620 });
     if (process.env.AGENTENV_CAPTURE_WORKTREES_DIR) {
       await page.screenshot({ path: join(process.env.AGENTENV_CAPTURE_WORKTREES_DIR, `worktrees-detail-${locale}-920.png`) });

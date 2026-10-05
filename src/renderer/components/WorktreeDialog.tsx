@@ -25,7 +25,7 @@ const entryKey = (entry: WorktreeEntry) => `${entry.commonDir}\0${entry.path}`;
 const nameFromPath = worktreeName;
 const totalBytes = (values: Array<number | undefined>) =>
   values.some((value) => value === undefined) ? undefined : values.reduce<number>((sum, value) => sum + value!, 0);
-type CleanupResult = { path: string; error?: string; sizeBytes?: number; reclaimedSizeBytes?: number };
+type CleanupResult = { path: string; error?: string; skipped?: boolean; verificationWarnings?: string[]; sizeBytes?: number; reclaimedSizeBytes?: number };
 
 interface WorktreeSortPreference {
   uiState?: Pick<UiState, "worktreeSort">;
@@ -68,6 +68,7 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
       const result = await window.agentEnv.inventoryWorktrees();
       if (request !== scanRequest.current) return;
       if (!("cancelled" in result)) setInventory(result);
+      if (!("cancelled" in result)) return result;
     } catch (cause) {
       if (request === scanRequest.current) {
         setError(cause instanceof Error ? cause.message : String(cause));
@@ -162,17 +163,37 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
     if (failures.length) setError(failures.join("\n"));
     if (ready.length) setView("confirm");
   };
+  const setIntegration = async (entry: WorktreeEntry, ref: string) => {
+    setBusy("integration");
+    setError("");
+    try {
+      await window.agentEnv.setWorktreeIntegrationRef(entry.commonDir, ref || undefined);
+      const latest = await refresh(false);
+      if (latest) setDetail(latest.entries.find((value) => entryKey(value) === entryKey(entry)));
+      setManualConfirm(false);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : String(cause));
+    } finally { setBusy(""); }
+  };
   const clean = async () => {
     setBusy("remove");
     setError("");
     const completed: CleanupResult[] = [];
     setResults([]);
     setView("results");
+    const stoppedRepositories = new Set<string>();
     for (const preview of previews) {
+      if (stoppedRepositories.has(preview.entry.commonDir)) {
+        completed.push({ path: preview.entry.path, skipped: true, sizeBytes: preview.entry.sizeBytes });
+        setResults([...completed]);
+        continue;
+      }
       try {
         const record = await window.agentEnv.removeWorktree(preview);
-        completed.push({ path: preview.entry.path, sizeBytes: record.sourceSizeBytes, reclaimedSizeBytes: record.reclaimedSizeBytes });
+        completed.push({ path: preview.entry.path, sizeBytes: record.sourceSizeBytes, reclaimedSizeBytes: record.reclaimedSizeBytes, verificationWarnings: record.verificationWarnings });
+        if (record.verificationWarnings?.length) stoppedRepositories.add(preview.entry.commonDir);
       } catch (cause) {
+        stoppedRepositories.add(preview.entry.commonDir);
         completed.push({ path: preview.entry.path, sizeBytes: preview.entry.sizeBytes, error: cause instanceof Error ? cause.message : String(cause) });
       }
       setResults([...completed]);
@@ -180,11 +201,14 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
     setSelected([]);
     setView("results");
     // Exact verified removals can leave the list immediately; unrelated repositories need not be rescanned.
-    const removed = new Set(completed.filter((item) => item.error === undefined).map((item) => item.path));
-    const failed = new Set(completed.filter((item) => item.error !== undefined).map((item) => item.path));
+    const removed = new Set(completed.filter((item) => item.error === undefined && !item.skipped).map((item) => item.path));
     setInventory((current) => current && ({ ...current, entries: current.entries
       .filter((entry) => !removed.has(entry.path))
-      .map((entry) => failed.has(entry.path) ? { ...entry, cleanupReviewAvailable: false } : entry) }));
+      .map((entry) => !entry.main && !entry.keptReason &&
+        (entry.state === "candidate" || entry.state === "review") && stoppedRepositories.has(entry.commonDir) ? {
+        ...entry, state: "review", cleanupReviewAvailable: false,
+        reasons: [...entry.reasons, t("Cleanup stopped for this repository. Refresh before continuing.")]
+      } : entry) }));
     setBusy("");
   };
   const showRecovery = async () => {
@@ -218,7 +242,7 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
   };
   if (!open) return null;
   const sizeLabel = (bytes: number | undefined) => bytes === undefined ? t("Unavailable") : formatBytes(bytes);
-  const successful = results.filter((result) => result.error === undefined);
+  const successful = results.filter((result) => result.error === undefined && !result.skipped);
 
   const title = view === "locations" ? t("Scan locations") : view === "detail" && detail
     ? nameFromPath(detail.path) : view === "confirm" ? (previews.length === 1 ? t("Remove this Worktree?") : t("Remove {{count}} Worktrees?", { count: previews.length }))
@@ -329,8 +353,16 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
             { label: t("Branch"), value: detail.branch ?? (detail.detached ? t("Detached HEAD") : t("Unavailable")) },
             { label: "HEAD", value: detail.head ?? t("Unavailable") },
             { label: t("Local files"), value: detail.sizeBytes === undefined ? t("Unavailable") : formatBytes(detail.sizeBytes) },
-            ...(detail.modifiedAt ? [{ label: t("Last modified"), value: formatDate(detail.modifiedAt) }] : [])
+            ...(detail.modifiedAt ? [{ label: t("Last modified"), value: formatDate(detail.modifiedAt) }] : []),
+            ...(detail.integration ? [{ label: t("Integration"), value: detail.integration.merged && detail.integration.ref !== `refs/heads/${detail.branch}` ? t("Contained in target") : t("Not confirmed") }] : [])
           ]} />
+          {detail.integration ? <SelectField label={t("Integration target")} disabled={Boolean(busy)}
+            value={detail.integration.explicit ? detail.integration.ref ?? "" : ""}
+            onChange={(event) => void setIntegration(detail, event.currentTarget.value)}>
+            <option value="">{!detail.integration.explicit && detail.integration.ref ? t("Automatic: {{ref}}", { ref: detail.integration.ref.replace(/^refs\/(heads|remotes)\//, "") }) : t("Automatic")}</option>
+            {[...new Set([...detail.integration.choices, ...(detail.integration.explicit && detail.integration.ref ? [detail.integration.ref] : [])])].map((ref) =>
+              <option key={ref} value={ref}>{ref.replace(/^refs\/(heads|remotes)\//, "")}</option>)}
+          </SelectField> : null}
           {detail.manualReviewAvailable ? <p>{t("Review whether this work is complete. MR status and squash integration are not verified automatically.")}</p> : null}
           {detail.reasons.length ? <Notice tone="warning" icon={<AlertTriangle size={15} />}>{detail.reasons.join(" · ")}</Notice> : <Notice tone="info" icon={<Check size={15} />}>{t("No local file changes found. Review the purpose of this worktree before removing it.")}</Notice>}
           {detail.changes.length ? <section><SectionLabel as="h4" count={detail.changes.length}>{t("Changed and untracked paths")}</SectionLabel><PathListPreview paths={detail.changes} /></section> : null}
@@ -366,14 +398,16 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
           ]} />
           {busy === "remove" ? <OperationStatusBar icon={<LoaderCircle className="is-spinning" size={15} />} label={t("Removing Worktrees...")} detail={`${results.length}/${previews.length}`} /> : null}
           <AlignedResourceList actionTrack="compact" className="worktree-dialog__entries worktree-dialog__results">
-            {results.map((result) => <ResourceRow key={result.path} density="compact" appearance="plain" icon={result.error !== undefined ? <AlertTriangle size={16} /> : <Check size={16} />}
+            {results.map((result) => <ResourceRow key={result.path} density="compact" appearance="plain" icon={result.error !== undefined || result.skipped || result.verificationWarnings?.length ? <AlertTriangle size={16} /> : <Check size={16} />}
               title={nameFromPath(result.path)} description={<span className="selectable">{result.path}</span>}
               metadata={<CatalogSortMetric kind="size" label={t("Size")} value={result.sizeBytes} />}
-              state={<Badge tone={result.error !== undefined ? "warning" : "success"}>{result.error !== undefined ? t("Skipped") : t("Removed")}</Badge>}
+              state={<Badge tone={result.error !== undefined || result.skipped || result.verificationWarnings?.length ? "warning" : "success"}>{result.skipped ? t("Not run") : result.error !== undefined ? t("Failed") : t("Removed")}</Badge>}
               />)}
           </AlignedResourceList>
           {previews.some((preview) => preview.backupRequired && successful.some((result) => result.path === preview.entry.path)) ? <p>{t("Recovery copies are retained. Their size is excluded from estimated space freed.")}</p> : null}
           {results.filter((result) => result.error !== undefined).map((result) => <Notice key={result.path} tone="danger" icon={<AlertTriangle size={15} />}><span className="selectable">{result.path}</span><DiagnosticMessage message={result.error!} /></Notice>)}
+          {results.flatMap((result) => result.verificationWarnings?.map((warning) => <Notice key={`${result.path}:${warning}`} tone="warning" icon={<AlertTriangle size={15} />}><span className="selectable">{result.path}</span><DiagnosticMessage message={warning} /></Notice>) ?? [])}
+          {results.some((result) => result.skipped) ? <Notice tone="warning" icon={<AlertTriangle size={15} />}>{t("Remaining Worktrees in the affected repository were not removed. Refresh and review that repository before continuing.")}</Notice> : null}
         </> : null}
         {view === "recovery" ? <>
           {recoveryIssues.length ? <Notice tone="warning" icon={<AlertTriangle size={15} />}>

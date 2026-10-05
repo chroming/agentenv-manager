@@ -20,18 +20,26 @@ export const readWorktreeAnalysis = async (entry: WorktreeEntry, runner: GitComm
   };
   // Disable Git's user-defined diff commands and text conversion: analysis is read-only.
   const diff = ["diff", "--no-ext-diff", "--no-textconv", "--no-color", "--no-renames", "--submodule=short"];
-  let mainHead: string | undefined;
-  try {
-    const value = (await read(["rev-parse", "--verify", "HEAD"], entry.repositoryPath)).trim();
-    if (!/^[a-f0-9]{40,64}$/.test(value)) throw new Error("Invalid main HEAD");
-    mainHead = value;
-    documents.push({ id: "baseline", label: "Local main tree baseline", content: JSON.stringify({ head: value }) });
-  } catch { partial = true; warnings.push("The local main tree baseline is unavailable; integration cannot be compared."); }
-  if (mainHead && entry.head) {
-    await collect("commits", "Local commits not reachable from the main tree (up to 20)",
-      ["log", "--no-show-signature", "--no-decorate", "--format=%h %s", "-20", `${mainHead}..${entry.head}`, "--"]);
-    await collect("committed-diff", "Committed content compared with the local main tree",
-      [...diff, mainHead, entry.head, "--"]);
+  const target = entry.integration?.head;
+  if (target && entry.head) {
+    documents.push({ id: "baseline", label: "Integration target", content: JSON.stringify({ ref: entry.integration?.ref, head: target, merged: entry.integration?.merged }) });
+    await collect("commits", "Local commits not reachable from the integration target (up to 20)",
+      ["log", "--no-show-signature", "--no-decorate", "--format=%h %s", "-20", `${target}..${entry.head}`, "--"]);
+    try {
+      const count = Number((await read(["rev-list", "--count", `${target}..${entry.head}`, "--"])).trim());
+      if (!Number.isSafeInteger(count) || count > 20) {
+        partial = true;
+        warnings.push("The commit list is incomplete; older commits must be reviewed separately.");
+      }
+      const ancestor = (await read(["merge-base", target, entry.head])).trim();
+      if (!/^[a-f0-9]{40,64}$/.test(ancestor)) throw new Error("Invalid merge base");
+      await collect("committed-diff", "Worktree branch changes since the common ancestor", [...diff, ancestor, entry.head, "--"]);
+      await collect("target-diff", "Integration target changes since the common ancestor", [...diff, ancestor, target, "--"]);
+      await collect("remaining-diff", "Remaining content differences (not necessarily unique Worktree changes)", [...diff, target, entry.head, "--"]);
+    } catch { partial = true; warnings.push("The common ancestor or commit coverage is unavailable; integration cannot be inferred."); }
+  } else {
+    partial = true;
+    warnings.push("No integration target is available. Choose a target branch in Worktree review before comparing committed work.");
   }
   await collect("local-diff", "Tracked changes, including staged and unstaged edits", [...diff, "HEAD", "--"]);
   if (entry.changes.some((path) => path.startsWith("?? ")) || entry.ignored.length || entry.submodules) {

@@ -95,6 +95,7 @@ const api: AgentEnvApi = {
   addWorktreeScanRoot: (path) => ipcRenderer.invoke("worktrees:add-root", path),
   removeWorktreeScanRoot: (path) => ipcRenderer.invoke("worktrees:remove-root", path),
   setWorktreeKeep: (commonDir, path, reason) => ipcRenderer.invoke("worktrees:set-keep", commonDir, path, reason),
+  setWorktreeIntegrationRef: (commonDir, ref) => ipcRenderer.invoke("worktrees:set-integration-ref", commonDir, ref),
   previewWorktreeCleanup: (commonDir, path, allowDirty) => ipcRenderer.invoke("worktrees:preview", commonDir, path, allowDirty),
   removeWorktree: (preview) => ipcRenderer.invoke("worktrees:remove", preview),
   listWorktreeRecovery: () => ipcRenderer.invoke("worktrees:list-recovery"),

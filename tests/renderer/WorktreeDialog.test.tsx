@@ -27,6 +27,7 @@ const installApi = () => {
   const api = {
     inventoryWorktrees: vi.fn().mockResolvedValue(inventory),
     cancelWorktreeScan: vi.fn().mockResolvedValue(undefined),
+    setWorktreeIntegrationRef: vi.fn().mockResolvedValue(undefined),
     selectWorktreeScanRoot: vi.fn().mockResolvedValue(undefined),
     previewWorktreeCleanup: vi.fn().mockResolvedValue({
       previewId: "review-1", entry: clean, fingerprint: "b".repeat(64),
@@ -112,7 +113,8 @@ describe("WorktreeDialog", () => {
       previewId: path, entry: path === clean.path ? clean : second, fingerprint: "b".repeat(64),
       checkedAt: inventory.scannedAt, backupRequired: false, forceRequired: false, savedWorkspace: false
     }));
-    api.removeWorktree.mockRejectedValueOnce(new Error("Changed after review"));
+    api.removeWorktree.mockResolvedValueOnce({ status: "removed", sourceSizeBytes: 1024, reclaimedSizeBytes: 1024 })
+      .mockRejectedValueOnce(new Error("Changed after review"));
     render(<WorktreeWorkspace />);
     fireEvent.click(await screen.findByRole("button", { name: "Select all eligible Worktrees" }));
     fireEvent.click(screen.getByRole("button", { name: "Review selected (2)" }));
@@ -123,9 +125,98 @@ describe("WorktreeDialog", () => {
     await within(result).findByText("Removed");
     expect(result.querySelector(".ui-detail-list")).toHaveTextContent("Removed size1.0 KBEstimated space freed1.0 KB");
     fireEvent.click(within(result).getAllByRole("button", { name: "Close" }).at(-1)!);
-    expect(screen.getByText(clean.path)).toBeInTheDocument();
-    expect(screen.queryByText(second.path)).not.toBeInTheDocument();
+    expect(screen.getByText(second.path)).toBeInTheDocument();
+    expect(screen.queryByText(clean.path)).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Select all eligible Worktrees" })).toBeDisabled();
+  });
+
+  it("stops the failed repository, leaves later entries unexecuted, and continues independent repositories", async () => {
+    const api = installApi();
+    const second = { ...clean, path: "/projects/_worktrees/second" };
+    const other = { ...clean, path: "/other/tree", repositoryPath: "/other/repo", commonDir: "/other/repo/.git" };
+    const entries = [clean, second, other];
+    api.inventoryWorktrees.mockResolvedValue({ ...inventory, entries });
+    api.previewWorktreeCleanup.mockImplementation(async (_commonDir, path) => ({
+      previewId: path, entry: entries.find((entry) => entry.path === path)!, fingerprint: "b".repeat(64),
+      checkedAt: inventory.scannedAt, backupRequired: false, forceRequired: false, savedWorkspace: false
+    }));
+    api.removeWorktree.mockRejectedValueOnce(new Error("Repository needs review"));
+    render(<WorktreeWorkspace />);
+    await screen.findByText(clean.path);
+    for (const button of screen.getAllByRole("button", { name: "Select all eligible Worktrees" })) fireEvent.click(button);
+    fireEvent.click(screen.getByRole("button", { name: "Review selected (3)" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Remove Worktrees" }));
+    const results = await screen.findByRole("dialog", { name: "Cleanup results" });
+    await within(results).findByText("Not run");
+    expect(api.removeWorktree).toHaveBeenCalledTimes(2);
+    expect(api.removeWorktree.mock.calls.map(([preview]) => preview.entry.path)).toEqual([clean.path, other.path]);
+    expect(within(results).getByText("Failed")).toBeInTheDocument();
+    expect(within(results).getByText("Removed")).toBeInTheDocument();
+  });
+
+  it("stops the repository after a completed removal with verification warnings", async () => {
+    const api = installApi();
+    const second = { ...clean, path: "/projects/_worktrees/second" };
+    api.inventoryWorktrees.mockResolvedValue({ ...inventory, entries: [clean, second] });
+    api.previewWorktreeCleanup.mockImplementation(async (_commonDir, path) => ({
+      previewId: path, entry: path === clean.path ? clean : second, fingerprint: "b".repeat(64),
+      checkedAt: inventory.scannedAt, backupRequired: false, forceRequired: false, savedWorkspace: false
+    }));
+    api.removeWorktree.mockResolvedValue({ status: "removed", sourceSizeBytes: 1024, reclaimedSizeBytes: 1024, verificationWarnings: ["Main repository changed"] });
+    render(<WorktreeWorkspace />);
+    fireEvent.click(await screen.findByRole("button", { name: "Select all eligible Worktrees" }));
+    fireEvent.click(screen.getByRole("button", { name: "Review selected (2)" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Remove Worktrees" }));
+    const results = await screen.findByRole("dialog", { name: "Cleanup results" });
+    await within(results).findByText("Not run");
+    expect(api.removeWorktree).toHaveBeenCalledTimes(1);
+    expect(within(results).getByText("Main repository changed")).toBeInTheDocument();
+    expect(results.querySelector(".ui-detail-list")).toHaveTextContent("Removed size1.0 KB");
+  });
+
+  it("preserves kept, locked and unavailable sibling states after cleanup fails", async () => {
+    const api = installApi();
+    const kept = { ...clean, path: "/projects/kept", state: "kept", keptReason: "Keep this work" };
+    const locked = { ...clean, path: "/projects/locked", state: "kept", locked: "Release testing" };
+    const missing = { ...clean, path: "/projects/missing", state: "unavailable", exists: false };
+    api.inventoryWorktrees.mockResolvedValue({ ...inventory, entries: [clean, kept, locked, missing] });
+    api.removeWorktree.mockRejectedValue(new Error("Repository needs review"));
+    render(<WorktreeWorkspace />);
+    fireEvent.click(await screen.findByRole("button", { name: /^clean$/ }));
+    fireEvent.click(screen.getByRole("button", { name: "Review cleanup" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Remove Worktree" }));
+    const results = await screen.findByRole("dialog", { name: "Cleanup results" });
+    await within(results).findByText("Failed");
+    fireEvent.click(within(results).getAllByRole("button", { name: "Close" }).at(-1)!);
+    for (const path of [kept.path, locked.path]) {
+      expect(screen.getByText(path).closest(".ui-resource-row")).toHaveTextContent("Kept");
+    }
+    expect(screen.getByText(missing.path).closest(".ui-resource-row")).toHaveTextContent("Unavailable");
+    expect(screen.getByText(clean.path).closest(".ui-resource-row")).toHaveTextContent("Needs review");
+  });
+
+  it("does not present a Worktree's own branch as proof of integration", async () => {
+    const api = installApi();
+    api.inventoryWorktrees.mockResolvedValue({ ...inventory, entries: [{ ...clean,
+      integration: { ref: "refs/heads/clean", head: clean.head, explicit: true, merged: true, choices: ["refs/heads/clean"] }
+    }] });
+    render(<WorktreeWorkspace />);
+    fireEvent.click(await screen.findByRole("button", { name: /^clean$/ }));
+    const detail = screen.getByRole("dialog", { name: "clean" });
+    expect(within(detail).getByText("Not confirmed")).toBeInTheDocument();
+    expect(within(detail).queryByText("Contained in target")).not.toBeInTheDocument();
+  });
+
+  it("chooses an integration target using the shared selector and refreshes its review state", async () => {
+    const api = installApi();
+    const integrated = { ...clean, integration: { ref: "refs/heads/main", head: "b".repeat(40), explicit: false, merged: true, choices: ["refs/heads/main", "refs/heads/release"] } };
+    api.inventoryWorktrees.mockResolvedValueOnce({ ...inventory, entries: [integrated] })
+      .mockResolvedValue({ ...inventory, entries: [{ ...integrated, integration: { ...integrated.integration, explicit: true, ref: "refs/heads/release" } }] });
+    render(<WorktreeWorkspace />);
+    fireEvent.click(await screen.findByRole("button", { name: /^clean$/ }));
+    fireEvent.change(screen.getByRole("combobox", { name: "Integration target" }), { target: { value: "refs/heads/release" } });
+    await waitFor(() => expect(screen.getByRole("combobox", { name: "Integration target" })).toHaveValue("refs/heads/release"));
+    expect(api.setWorktreeIntegrationRef).toHaveBeenCalledWith(clean.commonDir, "refs/heads/release");
   });
 
   it("shows retained local-file recovery data separately from estimated freed space", async () => {
@@ -406,7 +497,7 @@ describe("WorktreeDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Review cleanup" }));
     fireEvent.click(await screen.findByRole("button", { name: "Remove Worktree" }));
     const modal = await screen.findByRole("dialog", { name: "Cleanup results" });
-    expect(await within(modal).findByText("Skipped")).toBeInTheDocument();
+    expect(await within(modal).findByText("Failed")).toBeInTheDocument();
     expect(within(modal).queryByText("Removed")).not.toBeInTheDocument();
     if (message) {
       fireEvent.click(within(modal).getByRole("button", { name: "Copy details" }));

@@ -347,6 +347,22 @@ a non-force removal. Main, detached, dirty, ignored-content, locked, kept and un
 trees stay excluded. Row checkboxes and repository selection share the same predicate.
 Selection is not removal authorization or proof of code integration. Each tree is
 revalidated during Preview and again during Remove.
+Batch eligibility requires an unchanged clean tree whose HEAD is contained in a named
+integration target. The device-local target defaults to origin/HEAD, then local main/master;
+review can explicitly choose another local or remote branch. The Worktree's own branch,
+unrelated feature branches, tags and recovery refs never implicitly prove integration.
+Unknown, missing, unrelated-history and squash-equivalent targets require individual review;
+checks never fetch or mutate remote refs. Preview binds the target ref and revision, branch,
+HEAD, Git status, index bytes and working-content hash. These are revalidated after Backup,
+immediately before removal; active Git operations and lock files reject cleanup.
+One removal failure or post-removal verification warning stops remaining entries from that
+repository; independent repositories may continue. Not-run entries are not counted as removed.
+After removal, verify the main Git status/index/HEAD and local, remote and tag refs against
+their pre-removal state, excluding AgentEnv's intentional recovery ref. A detected concurrent
+change is reported without overwriting the other writer, and the recovery point is retained.
+Git prune is dry-run only. Existing unrelated dirty main-tree files do not themselves prevent
+cleanup. These checks narrow concurrent-write windows; they do not claim an atomic lock over
+arbitrary external filesystem writers. Users should not edit a directory being removed.
 Cleanup confirmation shows each directory's logical file size and selected total.
 Completion shows only verified removals in the removed total and estimated freed
 space; failures never contribute to reclaimed space. Full recovery copies are retained
@@ -362,8 +378,11 @@ Worktree review offers manually requested AI retention analysis using the existi
 configured service, privacy switches and immutable analysis cache. Preparation only
 reads previously discovered, freshly registered local linked trees; Git commands have
 timeouts and output limits and cannot invoke external diff/textconv tools. Local status,
-up to twenty commits, committed differences from the local main tree HEAD, and tracked
-staged/unstaged differences are evidence, not proof of upstream MR integration.
+up to twenty commits, branch changes and integration-target changes from their common ancestor,
+remaining two-tree differences, and tracked staged/unstaged differences are evidence, not proof
+of upstream MR integration. The target is the same persisted branch used by cleanup review,
+not whichever branch the main checkout happens to use. Older omitted commits, unrelated history
+and unavailable target evidence are explicitly partial.
 Untracked/ignored bodies are excluded; missing evidence is explicit. Results are saved
 only under app-owned ai-analyses. AI never selects trees, approves removal, changes
 keep markers, writes Git data, or weakens Preview/Remove safeguards.

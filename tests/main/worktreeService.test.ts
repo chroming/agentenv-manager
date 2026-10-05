@@ -22,7 +22,7 @@ const fixture = async () => {
   roots.push(root);
   const repo = join(root, "project");
   const linked = join(root, "_worktrees", "feature");
-  await run("git", ["init", repo]);
+  await run("git", ["init", "-b", "main", repo]);
   await writeFile(join(repo, "README.md"), "base\n");
   await run("git", ["-C", repo, "add", "README.md"]);
   await run("git", ["-C", repo, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.com", "commit", "-m", "base"]);
@@ -43,6 +43,181 @@ const fixture = async () => {
 };
 
 describe("worktree inventory and cleanup", () => {
+  it("does not infer integration from a sibling branch, tag or recovery reference", async () => {
+    const { repo, linked, service } = await fixture();
+    await writeFile(join(linked, "README.md"), "unfinished\n");
+    await run("git", ["-C", linked, "add", "."]);
+    await run("git", ["-C", linked, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.com", "commit", "-m", "unfinished"]);
+    await run("git", ["-C", repo, "branch", "sibling", "feature"]);
+    await run("git", ["-C", repo, "tag", "experiment", "feature"]);
+    await run("git", ["-C", repo, "update-ref", "refs/agentenv/worktree-recovery/fixture", "feature"]);
+    const entry = (await service.inventory()).entries.find((item) => item.path === linked)!;
+    expect(entry.state).toBe("review");
+    expect(entry.integration).toMatchObject({ ref: "refs/heads/main", merged: false });
+    expect(entry.cleanupReviewAvailable).toBe(true);
+    const removed = await service.remove(await service.preview(entry.commonDir, linked));
+    expect(removed.status).toBe("removed");
+  });
+
+  it("keeps unknown and missing integration targets individually reviewable, never batch-ready", async () => {
+    const { repo, linked, service } = await fixture();
+    const entry = (await service.inventory()).entries.find((item) => item.path === linked)!;
+    await service.setIntegrationRef(entry.commonDir, "refs/heads/main");
+    await run("git", ["-C", repo, "branch", "-m", "main", "development"]);
+    const stale = (await service.inventory()).entries.find((item) => item.path === linked)!;
+    expect(stale.integration).toMatchObject({ ref: "refs/heads/main", explicit: true });
+    expect(stale.integration?.head).toBeUndefined();
+    expect(stale.state).toBe("review");
+    expect((await service.preview(entry.commonDir, linked)).entry.cleanupReviewAvailable).toBe(true);
+    await service.setIntegrationRef(entry.commonDir);
+    const unknown = (await service.inventory()).entries.find((item) => item.path === linked)!;
+    expect(unknown.integration?.ref).toBeUndefined();
+    expect(unknown.state).toBe("review");
+  });
+
+  it("does not require the unrelated main checkout to be clean", async () => {
+    const { repo, linked, service } = await fixture();
+    await writeFile(join(repo, "README.md"), "unrelated main edits\n");
+    await writeFile(join(repo, "private.txt"), "untracked main note\n");
+    const status = (await run("git", ["-C", repo, "status", "--porcelain=v1"])).stdout;
+    const entry = (await service.inventory()).entries.find((item) => item.path === linked)!;
+    const removed = await service.remove(await service.preview(entry.commonDir, linked));
+    expect(removed.verificationWarnings).toBeUndefined();
+    expect((await run("git", ["-C", repo, "status", "--porcelain=v1"])).stdout).toBe(status);
+    expect(await readFile(join(repo, "README.md"), "utf8")).toBe("unrelated main edits\n");
+    expect(await readFile(join(repo, "private.txt"), "utf8")).toBe("untracked main note\n");
+  });
+
+  it("removes and restores a clean linked Worktree owned by a bare repository", async () => {
+    const { root, repo, runner } = await fixture();
+    const bare = join(root, "bare.git"), linked = join(root, "bare-tree");
+    await run("git", ["clone", "--bare", repo, bare]);
+    await run("git", ["-C", bare, "worktree", "add", "-b", "bare-feature", linked, "main"]);
+    const service = createWorktreeService({
+      appDataRoot: join(root, "bare-data"), homeDir: join(root, "home"),
+      projectStore: { listLocalRootPaths: async () => [] } as unknown as ProjectStore,
+      resolveRunner: async () => runner
+    });
+    await service.addScanRoot(linked);
+    const entry = (await service.inventory()).entries.find((item) => item.path === linked)!;
+    const removed = await service.remove(await service.preview(entry.commonDir, linked));
+    expect(removed.verificationWarnings).toBeUndefined();
+    await service.restore(removed.id);
+    expect(await readFile(join(linked, "README.md"), "utf8")).toBe("base\n");
+  });
+
+  it("rejects a Git lock created after Backup while preserving original files", async () => {
+    const { root, linked, runner } = await fixture();
+    let injected = false;
+    const service = createWorktreeService({
+      appDataRoot: join(root, "lock-data"), homeDir: join(root, "home"),
+      projectStore: { listLocalRootPaths: async () => [] } as unknown as ProjectStore,
+      resolveRunner: async () => ({ ...runner, run: async (args, options) => {
+        const result = await runner.run(args, options);
+        if (!injected && args[0] === "update-ref") {
+          injected = true;
+          const gitDir = (await run("git", ["-C", linked, "rev-parse", "--git-dir"])).stdout.trim();
+          await writeFile(join(resolve(linked, gitDir), "index.lock"), "external lock\n");
+        }
+        return result;
+      } })
+    });
+    await service.addScanRoot(root);
+    const entry = (await service.inventory()).entries.find((item) => item.path === linked)!;
+    await expect(service.remove(await service.preview(entry.commonDir, linked))).rejects.toThrow("Git operation in progress");
+    expect(await readFile(join(linked, "README.md"), "utf8")).toBe("base\n");
+  });
+
+  it("uses and persists an explicit integration target without fetching or changing Git refs", async () => {
+    const { repo, linked, service } = await fixture();
+    await writeFile(join(linked, "README.md"), "release work\n");
+    await run("git", ["-C", linked, "add", "."]);
+    await run("git", ["-C", linked, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.com", "commit", "-m", "release"]);
+    await run("git", ["-C", repo, "branch", "release", "feature"]);
+    const entry = (await service.inventory()).entries.find((item) => item.path === linked)!;
+    await service.setIntegrationRef(entry.commonDir, "refs/heads/release");
+    const updated = (await service.inventory()).entries.find((item) => item.path === linked)!;
+    expect(updated.state).toBe("candidate");
+    expect(updated.integration).toMatchObject({ explicit: true, ref: "refs/heads/release", merged: true });
+    await service.setIntegrationRef(entry.commonDir, "refs/heads/feature");
+    expect((await service.inventory()).entries.find((item) => item.path === linked)?.state).toBe("review");
+    await service.setIntegrationRef(entry.commonDir);
+    expect((await service.inventory()).entries.find((item) => item.path === linked)?.state).toBe("review");
+    await expect(service.setIntegrationRef(entry.commonDir, "refs/heads/nonexistent")).rejects.toThrow("unavailable");
+  });
+
+  it("invalidates review when the integration target changes but Worktree HEAD and files do not", async () => {
+    const { repo, linked, service } = await fixture();
+    const entry = (await service.inventory()).entries.find((item) => item.path === linked)!;
+    const preview = await service.preview(entry.commonDir, linked);
+    await writeFile(join(repo, "README.md"), "main changed\n");
+    await run("git", ["-C", repo, "add", "."]);
+    await run("git", ["-C", repo, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.com", "commit", "-m", "main changed"]);
+    await expect(service.remove(preview)).rejects.toThrow("changed after review");
+    expect(await readFile(join(linked, "README.md"), "utf8")).toBe("base\n");
+  });
+
+  it("rejects an index-only change after Preview even when dirty paths and working bytes are unchanged", async () => {
+    const { linked, service } = await fixture();
+    await writeFile(join(linked, "README.md"), "staged before\n");
+    await run("git", ["-C", linked, "add", "."]);
+    await writeFile(join(linked, "README.md"), "working\n");
+    const entry = (await service.inventory()).entries.find((item) => item.path === linked)!;
+    const preview = await service.preview(entry.commonDir, linked, true);
+    await writeFile(join(linked, "README.md"), "staged after\n");
+    await run("git", ["-C", linked, "add", "."]);
+    await writeFile(join(linked, "README.md"), "working\n");
+    await expect(service.remove(preview)).rejects.toThrow("changed after review");
+    expect((await run("git", ["-C", linked, "show", ":README.md"])).stdout).toBe("staged after\n");
+    expect((await service.listRecovery()).records).toEqual([]);
+  });
+
+  it("rejects staged-state changes after backup without removing the original Worktree", async () => {
+    const { root, linked, runner } = await fixture();
+    await writeFile(join(linked, "README.md"), "staged before\n");
+    await run("git", ["-C", linked, "add", "."]);
+    await writeFile(join(linked, "README.md"), "working\n");
+    let injected = false;
+    const service = createWorktreeService({
+      appDataRoot: join(root, "data"), homeDir: join(root, "home"),
+      projectStore: { listLocalRootPaths: async () => [] } as unknown as ProjectStore,
+      resolveRunner: async () => ({ ...runner, run: async (args, options) => {
+        const result = await runner.run(args, options);
+        if (!injected && args[0] === "update-ref") {
+          injected = true;
+          await writeFile(join(linked, "README.md"), "new index-only value\n");
+          await run("git", ["-C", linked, "add", "."]);
+          await writeFile(join(linked, "README.md"), "working\n");
+        }
+        return result;
+      } })
+    });
+    await service.addScanRoot(root);
+    const entry = (await service.inventory()).entries.find((item) => item.path === linked)!;
+    await expect(service.remove(await service.preview(entry.commonDir, linked, true))).rejects.toThrow("changed after backup");
+    expect(await readFile(join(linked, "README.md"), "utf8")).toBe("working\n");
+    expect((await run("git", ["-C", linked, "show", ":README.md"])).stdout).toBe("new index-only value\n");
+  });
+
+  it("reports post-removal ref changes without losing the completed removal or overwriting another writer", async () => {
+    const { root, repo, linked, runner } = await fixture();
+    const service = createWorktreeService({
+      appDataRoot: join(root, "data"), homeDir: join(root, "home"),
+      projectStore: { listLocalRootPaths: async () => [] } as unknown as ProjectStore,
+      resolveRunner: async () => ({ ...runner, run: async (args, options) => {
+        const result = await runner.run(args, options);
+        if (args.includes("worktree") && args.includes("remove")) await run("git", ["-C", repo, "branch", "new-external-branch"]);
+        return result;
+      } })
+    });
+    await service.addScanRoot(root);
+    const entry = (await service.inventory()).entries.find((item) => item.path === linked)!;
+    const removed = await service.remove(await service.preview(entry.commonDir, linked));
+    expect(removed.status).toBe("removed");
+    expect(removed.verificationWarnings?.[0]).toContain("references changed");
+    expect((await service.listRecovery()).records[0].verificationWarnings).toEqual(removed.verificationWarnings);
+    expect((await run("git", ["-C", repo, "branch", "--list", "new-external-branch"])).stdout).toContain("new-external-branch");
+  });
   it("collects fresh bounded analysis evidence without changing Git or working files", async () => {
     const { repo, linked, service, runner } = await fixture();
     await writeFile(join(linked, "README.md"), "committed implementation\n");

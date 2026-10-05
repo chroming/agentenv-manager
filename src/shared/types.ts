@@ -150,6 +150,7 @@ export interface AgentEnvApi {
   addWorktreeScanRoot(path: string): Promise<void>;
   removeWorktreeScanRoot(path: string): Promise<void>;
   setWorktreeKeep(commonDir: string, path: string, reason?: string): Promise<void>;
+  setWorktreeIntegrationRef(commonDir: string, ref?: string): Promise<void>;
   previewWorktreeCleanup(commonDir: string, path: string, allowDirty?: boolean): Promise<import("./worktrees").WorktreeCleanupPreview>;
   removeWorktree(preview: import("./worktrees").WorktreeCleanupPreview): Promise<import("./worktrees").WorktreeRecoveryRecord>;
   listWorktreeRecovery(): Promise<import("./worktrees").WorktreeRecoveryInventory>;

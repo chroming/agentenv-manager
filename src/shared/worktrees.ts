@@ -4,6 +4,14 @@ export type WorktreeReviewState =
   | "kept"
   | "unavailable";
 
+export interface WorktreeIntegration {
+  ref?: string;
+  head?: string;
+  merged?: boolean;
+  explicit: boolean;
+  choices: string[];
+}
+
 export interface WorktreeEntry {
   path: string;
   repositoryPath: string;
@@ -26,6 +34,7 @@ export interface WorktreeEntry {
   cleanupReviewAvailable: boolean;
   manualReviewAvailable: boolean;
   headNeedsProtection: boolean;
+  integration?: WorktreeIntegration;
 }
 
 export const isBatchCleanupCandidate = (entry: WorktreeEntry): boolean =>
@@ -54,6 +63,7 @@ export interface WorktreeCleanupPreview {
   backupRequired: boolean;
   forceRequired: boolean;
   savedWorkspace: boolean;
+  gitFingerprint?: string;
 }
 
 export interface WorktreeRecoveryRecord {
@@ -71,6 +81,7 @@ export interface WorktreeRecoveryRecord {
   restoreAttemptHash?: string;
   sourceSizeBytes?: number;
   reclaimedSizeBytes?: number;
+  verificationWarnings?: string[];
 }
 
 export interface WorktreeRecoveryInventory {
