@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { cp, lstat, readdir, readlink } from "node:fs/promises";
+import { cp, lstat, readFile, readdir, readlink } from "node:fs/promises";
 import { join, relative, sep } from "node:path";
 import { syncPathTree } from "../filesystemIntegrity";
 
@@ -31,10 +31,16 @@ export const measureWorktreeTree = async (
   return { sizeBytes, modifiedAt: modifiedMs ? new Date(modifiedMs).toISOString() : undefined };
 };
 
-export const hashWorktreeTree = async (root: string, options: { omitGitFile?: boolean } = {}): Promise<string> => {
+export const fingerprintWorktreeTree = async (root: string, options: { omitGitFile?: boolean } = {}) => {
   const hash = createHash("sha256");
+  let sizeBytes = 0;
+  let modifiedMs = 0;
   const walk = async (path: string): Promise<void> => {
     const info = await lstat(path);
+    if (!info.isDirectory() && relative(root, path) !== ".git") {
+      sizeBytes += info.size;
+      modifiedMs = Math.max(modifiedMs, info.mtimeMs);
+    }
     hash.update(relative(root, path).split(sep).join("/") || ".");
     hash.update("\0");
     hash.update(String(info.mode & 0o777));
@@ -51,15 +57,20 @@ export const hashWorktreeTree = async (root: string, options: { omitGitFile?: bo
       }
     } else if (info.isFile()) {
       hash.update("file\0");
-      for await (const part of createReadStream(path)) hash.update(part);
+      // Avoid constructing a stream for every small source file; keep large files bounded.
+      if (info.size <= 64 * 1024) hash.update(await readFile(path));
+      else for await (const part of createReadStream(path)) hash.update(part);
       hash.update("\0");
     } else {
       throw new Error(`Unsupported filesystem entry in worktree: ${path}`);
     }
   };
   await walk(root);
-  return hash.digest("hex");
+  return { hash: hash.digest("hex"), sizeBytes, modifiedAt: modifiedMs ? new Date(modifiedMs).toISOString() : undefined };
 };
+
+export const hashWorktreeTree = async (root: string, options: { omitGitFile?: boolean } = {}): Promise<string> =>
+  (await fingerprintWorktreeTree(root, options)).hash;
 
 export const copyWorktreeVerified = async (source: string, destination: string): Promise<string> => {
   const before = await hashWorktreeTree(source);

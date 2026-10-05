@@ -196,6 +196,17 @@ describe("Worktrees desktop workflow", () => {
     }).locator(".ui-resource-row__identity > span").textContent()).toBe(selectedPath);
     await expectCatalogToolbar(workspace.locator(".ui-catalog-toolbar"), "wide");
     await workspace.getByRole("checkbox", { name: t("Select Worktree for review") }).first().uncheck();
+    const group = workspace.locator(".worktree-dialog__group").first();
+    await group.getByRole("button", { name: t("Select all eligible Worktrees"), exact: true }).click();
+    expect(await group.getByRole("checkbox", { checked: true }).count()).toBe(9);
+    expect(await group.locator(".ui-resource-row").filter({ hasText: "locked-worktree" }).getByRole("checkbox").count()).toBe(0);
+    expect(await group.locator(".ui-resource-row").filter({ hasText: "long-name-with-uncommitted-work" }).getByRole("checkbox").count()).toBe(0);
+    await workspace.getByRole("button", { name: `${t("Review selected")} (9)`, exact: true }).click();
+    const batchDialog = page.getByRole("dialog");
+    await batchDialog.getByText(t("Selected size"), { exact: true }).waitFor();
+    expect(await batchDialog.locator(".ui-resource-row__state .ui-catalog-sort-metric").count()).toBe(9);
+    await batchDialog.getByRole("button", { name: t("Cancel"), exact: true }).click();
+    await group.getByRole("button", { name: t("Clear Worktree selection"), exact: true }).click();
     await workspace.getByRole("button", { name: t("Scan locations") }).click();
     const scope = page.getByRole("dialog", { name: t("Scan locations") });
     await scope.getByText(join(home, ".codex", "worktrees"), { exact: true }).waitFor();
@@ -244,11 +255,34 @@ describe("Worktrees desktop workflow", () => {
     await linkedRow.getByRole("button", { name: "review-change", exact: true }).click();
     await dialog.getByRole("button", { name: t("Review cleanup") }).click();
     await dialog.getByRole("button", { name: t("Remove Worktree"), exact: true }).waitFor();
+    expect(await dialog.locator(".ui-resource-row__state .ui-catalog-sort-metric").textContent()).toBe("5 B");
+    await dialog.getByText(t("Estimated space freed"), { exact: true }).waitFor();
+    for (const width of [920, 1180, 1440]) {
+      await page.setViewportSize({ width, height: width === 920 ? 620 : 900 });
+      expect(await dialog.evaluate((element) => {
+        const box = element.getBoundingClientRect();
+        const body = element.querySelector<HTMLElement>(".ui-dialog-body")!;
+        return box.left >= 0 && box.right <= window.innerWidth && box.top >= 0 && box.bottom <= window.innerHeight && body.scrollWidth <= body.clientWidth + 1;
+      })).toBe(true);
+      if (process.env.AGENTENV_CAPTURE_WORKTREES_DIR) await page.screenshot({ path: join(process.env.AGENTENV_CAPTURE_WORKTREES_DIR, `worktrees-confirm-size-${locale}-${width}.png`) });
+    }
+    await page.setViewportSize({ width: 920, height: 620 });
     if (process.env.AGENTENV_CAPTURE_WORKTREES_DIR) {
       await page.screenshot({ path: join(process.env.AGENTENV_CAPTURE_WORKTREES_DIR, `worktrees-confirm-${locale}-920.png`) });
     }
     await dialog.getByRole("button", { name: t("Remove Worktree"), exact: true }).click();
     await dialog.getByText(t("Removed"), { exact: true }).waitFor();
+    expect(await dialog.locator(".ui-detail-list").textContent()).toContain(`${t("Estimated space freed")}5 B`);
+    expect(await workspace.getByText(linked, { exact: true }).count()).toBe(0);
+    for (const width of [920, 1180, 1440]) {
+      await page.setViewportSize({ width, height: width === 920 ? 620 : 900 });
+      expect(await dialog.locator(".ui-dialog-body").evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+      expect(await dialog.locator(".ui-resource-row__metadata .ui-catalog-sort-metric").evaluateAll((elements) =>
+        elements.length === 1 && elements.every((element) => element.getBoundingClientRect().width > 0 && element.scrollWidth <= element.clientWidth + 1)
+      )).toBe(true);
+      if (process.env.AGENTENV_CAPTURE_WORKTREES_DIR) await page.screenshot({ path: join(process.env.AGENTENV_CAPTURE_WORKTREES_DIR, `worktrees-results-size-${locale}-${width}.png`) });
+    }
+    await page.setViewportSize({ width: 920, height: 620 });
     await dialog.getByRole("button", { name: t("Close"), exact: true }).last().click();
     await workspace.getByRole("button", { name: t("Worktree recovery") }).click();
     await dialog.getByText(t("Removed"), { exact: true }).waitFor();

@@ -14,7 +14,7 @@ import { copyPathVerified, hashRequiredPathEntry } from "../filesystemIntegrity"
 import { isMissingFileError, writeAtomic } from "../fileUtils";
 import type { ProjectStore } from "../projects/projectStore";
 import type { GitCommandRunOptions, GitCommandRunner } from "../skillSources/gitCommandRunner";
-import { copyWorktreeVerified, hashWorktreeTree, measureWorktreeTree } from "./worktreeSnapshot";
+import { copyWorktreeVerified, fingerprintWorktreeTree, hashWorktreeTree, measureWorktreeTree } from "./worktreeSnapshot";
 import { findRepositoryAncestor, repositoryDiscoveryDirectories, repositoryDiscoveryIssue, worktreeDiscoveryCandidates, WORKTREE_SCAN_SKIP_DIRECTORIES } from "./worktreeDiscovery";
 
 const SettingsSchema = z.object({
@@ -34,7 +34,9 @@ const RecoverySchema = z.object({
   backupHash: z.string().length(64).optional(),
   indexHash: z.string().length(64).optional(),
   sourceHash: z.string().length(64).optional(),
-  restoreAttemptHash: z.string().length(64).optional()
+  restoreAttemptHash: z.string().length(64).optional(),
+  sourceSizeBytes: z.number().int().nonnegative().optional(),
+  reclaimedSizeBytes: z.number().int().nonnegative().optional()
 }).strict();
 
 const MAX_DIRECTORIES = 5_000;
@@ -189,7 +191,8 @@ export const createWorktreeService = ({
     registration: GitWorktree,
     mainPath: string,
     keptReason?: string,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    measure = true
   ): Promise<WorktreeEntry> => {
     const path = resolve(registration.path);
     const reasons: string[] = [];
@@ -240,7 +243,7 @@ export const createWorktreeService = ({
           reasons.push("Contains a nested repository");
           unsafeLocalState = true;
         }
-        measurement = await measureWorktreeTree(path, signal);
+        if (measure) measurement = await measureWorktreeTree(path, signal);
         const unique = await readGit(runner, ["for-each-ref", "--format=%(refname)", "--contains", registration.head ?? "HEAD"], {
           cwd: path, timeoutMs: 8_000, maxOutputBytes: 1_000_000, signal
         });
@@ -285,7 +288,7 @@ export const createWorktreeService = ({
     if (!target) throw new Error("This worktree is no longer registered. Refresh the inventory.");
     const settings = await readSettings();
     return inspect(runner, commonDir, target, entries[0].path,
-      settings.kept[keepKey(commonDir, resolve(path))]);
+      settings.kept[keepKey(commonDir, resolve(path))], undefined, false);
   };
 
   return {
@@ -470,7 +473,10 @@ export const createWorktreeService = ({
           (forceRequired && !allowDirty) || entry.keptReason || !entry.head) {
         throw new Error(`Review this worktree before cleanup: ${entry.reasons.join("; ") || entry.state}`);
       }
-      const contentHash = await hashWorktreeTree(entry.path);
+      const fingerprint = await fingerprintWorktreeTree(entry.path);
+      entry.sizeBytes = fingerprint.sizeBytes;
+      entry.modifiedAt = fingerprint.modifiedAt;
+      const contentHash = fingerprint.hash;
       const savedRoots = await projectStore.listLocalRootPaths();
       const savedWorkspace = (await Promise.all(savedRoots.map(async (root) => {
         const canonical = await realpath(root).catch((error) => {
@@ -506,14 +512,17 @@ export const createWorktreeService = ({
           Boolean(fresh.changes.length || fresh.ignored.length) !== preview.forceRequired ||
           fresh.headNeedsProtection !== preview.entry.headNeedsProtection ||
           fresh.head !== preview.entry.head ||
-          fresh.branch !== preview.entry.branch || fresh.repositoryPath !== preview.entry.repositoryPath ||
-          await hashWorktreeTree(fresh.path) !== preview.fingerprint) {
+          fresh.branch !== preview.entry.branch || fresh.repositoryPath !== preview.entry.repositoryPath) {
+        throw new Error("Worktree changed after review. Refresh and review it again.");
+      }
+      const fingerprint = await fingerprintWorktreeTree(fresh.path);
+      if (fingerprint.hash !== preview.fingerprint) {
         throw new Error("Worktree changed after review. Refresh and review it again.");
       }
       const record: WorktreeRecoveryRecord = {
         id: randomUUID(), path: fresh.path, repositoryPath: fresh.repositoryPath,
         head: fresh.head!, branch: fresh.branch, createdAt: new Date().toISOString(),
-        status: "prepared", sourceHash: preview.fingerprint
+        status: "prepared", sourceHash: preview.fingerprint, sourceSizeBytes: fingerprint.sizeBytes
       };
       const backup = backupPath(record.id);
       const runner = await git();
@@ -541,7 +550,7 @@ export const createWorktreeService = ({
         throw new Error("Worktree changed after backup. Refresh and review it again.");
       }
       try {
-        await runner.run(["worktree", "remove", ...(preview.forceRequired ? ["--force"] : []), "--", fresh.path], {
+        await runner.run(["-c", "core.fsmonitor=false", "worktree", "remove", ...(preview.forceRequired ? ["--force"] : []), "--", fresh.path], {
           cwd: fresh.repositoryPath, timeoutMs: 60_000, maxOutputBytes: 1_000_000
         });
       } catch (error) {
@@ -568,7 +577,7 @@ export const createWorktreeService = ({
           await lstat(fresh.path).then(() => true, (error) => !isMissingFileError(error))) {
         throw new Error("Worktree removal needs recovery: verify the directory and Git registration");
       }
-      const completed = { ...record, status: "removed" as const };
+      const completed = { ...record, status: "removed" as const, reclaimedSizeBytes: record.backupHash ? 0 : record.sourceSizeBytes };
       await saveRecovery(completed);
       return completed;
     },
@@ -591,7 +600,7 @@ export const createWorktreeService = ({
               const registered = registration.some((item) => resolve(item.path) === record.path);
               const exists = await pathExists(record.path);
               if (!registered && !exists) {
-                record = { ...record, status: "removed" };
+                record = { ...record, status: "removed", reclaimedSizeBytes: record.backupHash ? 0 : record.sourceSizeBytes };
                 await saveRecovery(record);
               } else if (registered && exists && record.sourceHash &&
                          await hashWorktreeTree(record.path) === record.sourceHash) {

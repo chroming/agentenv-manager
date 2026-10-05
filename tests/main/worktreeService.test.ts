@@ -8,10 +8,12 @@ import { createWorktreeService, parseWorktreeList } from "../../src/main/worktre
 import { createGitCommandRunner } from "../../src/main/skillSources/gitCommandRunner";
 import { findExecutable } from "../../src/main/executableDiscovery";
 import type { ProjectStore } from "../../src/main/projects/projectStore";
+import * as snapshot from "../../src/main/worktrees/worktreeSnapshot";
 
 const run = promisify(execFile);
 const roots: string[] = [];
 afterEach(async () => {
+  vi.restoreAllMocks();
   for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
 });
 
@@ -41,6 +43,35 @@ const fixture = async () => {
 };
 
 describe("worktree inventory and cleanup", () => {
+  it("measures cleanup sizes in the fingerprint pass without repeating inventory measurements", async () => {
+    const { linked, service } = await fixture();
+    const measurements = vi.spyOn(snapshot, "measureWorktreeTree");
+    const inventory = await service.inventory();
+    const entry = inventory.entries.find((item) => item.path === linked)!;
+    measurements.mockClear();
+    const preview = await service.preview(entry.commonDir, linked);
+    expect(preview.entry.sizeBytes).toBe(5);
+    const removed = await service.remove(preview);
+    expect(measurements).not.toHaveBeenCalled();
+    expect(removed.sourceSizeBytes).toBe(5);
+    expect(removed.reclaimedSizeBytes).toBe(5);
+    expect((await service.listRecovery()).records[0].reclaimedSizeBytes).toBe(5);
+  });
+
+  it("does not count retained recovery copies as freed space", async () => {
+    const { linked, service } = await fixture();
+    await writeFile(join(linked, "notes.txt"), "unsaved\n");
+    const entry = (await service.inventory()).entries.find((item) => item.path === linked)!;
+    const preview = await service.preview(entry.commonDir, linked, true);
+    const removed = await service.remove(preview);
+    expect(preview.entry.sizeBytes).toBe(13);
+    expect(removed.sourceSizeBytes).toBe(13);
+    expect(removed.reclaimedSizeBytes).toBe(0);
+    expect(await readFile(join(linked, "notes.txt"), "utf8").catch(() => "removed")).toBe("removed");
+    await service.restore(removed.id);
+    expect(await readFile(join(linked, "notes.txt"), "utf8")).toBe("unsaved\n");
+  });
+
   it("does not launch failed Git probes for ordinary scan containers", async () => {
     const { repo, linked, runner, service } = await fixture();
     const commands = vi.spyOn(runner, "run");
@@ -569,7 +600,7 @@ describe("worktree inventory and cleanup", () => {
       projectStore: { listLocalRootPaths: async () => [] } as unknown as ProjectStore,
       resolveRunner: async () => ({ ...runner, run: async (args, options) => {
         const result = await runner.run(args, options);
-        if (!interrupted && args[0] === "worktree" && args[1] === "remove") {
+        if (!interrupted && args.includes("worktree") && args.includes("remove")) {
           interrupted = true;
           throw new Error("Simulated interruption after removal");
         }

@@ -1,7 +1,7 @@
 import {
   AlertTriangle, ArrowLeft, Check, CircleStop, Copy, FolderGit2, GitBranch,
   FolderSearch, History, LoaderCircle, LockKeyhole, Maximize2, Minimize2, Plus,
-  RotateCcw, Trash2, X
+  RotateCcw, SquareCheck, Trash2, X
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type {
@@ -21,6 +21,9 @@ import {
 
 const entryKey = (entry: WorktreeEntry) => `${entry.commonDir}\0${entry.path}`;
 const nameFromPath = worktreeName;
+const totalBytes = (values: Array<number | undefined>) =>
+  values.some((value) => value === undefined) ? undefined : values.reduce<number>((sum, value) => sum + value!, 0);
+type CleanupResult = { path: string; error?: string; sizeBytes?: number; reclaimedSizeBytes?: number };
 
 interface WorktreeSortPreference {
   uiState?: Pick<UiState, "worktreeSort">;
@@ -42,7 +45,7 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
   const [manualConfirm, setManualConfirm] = useState(false);
   const [previews, setPreviews] = useState<WorktreeCleanupPreview[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
-  const [results, setResults] = useState<Array<{ path: string; error?: string }>>([]);
+  const [results, setResults] = useState<CleanupResult[]>([]);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [maximized, setMaximized] = useState(false);
@@ -158,21 +161,26 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
   const clean = async () => {
     setBusy("remove");
     setError("");
-    const completed: Array<{ path: string; error?: string }> = [];
+    const completed: CleanupResult[] = [];
     setResults([]);
     setView("results");
     for (const preview of previews) {
       try {
-        await window.agentEnv.removeWorktree(preview);
-        completed.push({ path: preview.entry.path });
+        const record = await window.agentEnv.removeWorktree(preview);
+        completed.push({ path: preview.entry.path, sizeBytes: record.sourceSizeBytes, reclaimedSizeBytes: record.reclaimedSizeBytes });
       } catch (cause) {
-        completed.push({ path: preview.entry.path, error: cause instanceof Error ? cause.message : String(cause) });
+        completed.push({ path: preview.entry.path, sizeBytes: preview.entry.sizeBytes, error: cause instanceof Error ? cause.message : String(cause) });
       }
       setResults([...completed]);
     }
     setSelected([]);
     setView("results");
-    await refresh(false);
+    // Exact verified removals can leave the list immediately; unrelated repositories need not be rescanned.
+    const removed = new Set(completed.filter((item) => item.error === undefined).map((item) => item.path));
+    const failed = new Set(completed.filter((item) => item.error !== undefined).map((item) => item.path));
+    setInventory((current) => current && ({ ...current, entries: current.entries
+      .filter((entry) => !removed.has(entry.path))
+      .map((entry) => failed.has(entry.path) ? { ...entry, cleanupReviewAvailable: false } : entry) }));
     setBusy("");
   };
   const showRecovery = async () => {
@@ -205,6 +213,8 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
     }
   };
   if (!open) return null;
+  const sizeLabel = (bytes: number | undefined) => bytes === undefined ? t("Unavailable") : formatBytes(bytes);
+  const successful = results.filter((result) => result.error === undefined);
 
   const title = view === "locations" ? t("Scan locations") : view === "detail" && detail
     ? nameFromPath(detail.path) : view === "confirm" ? (previews.length === 1 ? t("Remove this Worktree?") : t("Remove {{count}} Worktrees?", { count: previews.length }))
@@ -257,11 +267,22 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
           {entriesByRepo.length === 0 && busy !== "scan" ? <EmptyState icon={<FolderGit2 size={25} />}
             title={filter === "all" ? t("No Worktrees found") : filter === "review" ? t("No Worktrees to review") : t("No kept Worktrees")}
             description={filter === "all" ? t("Add a scan location to look for local Git working directories.") : undefined} /> : null}
-          {entriesByRepo.map(([commonDir, entries]) => <section className="worktree-dialog__group" key={commonDir}>
+          {entriesByRepo.map(([commonDir, entries]) => {
+            const eligible = entries.filter((entry) => entry.cleanupReviewAvailable && !entry.keptReason && !entry.main);
+            const allSelected = eligible.length > 0 && eligible.every((entry) => selected.includes(entryKey(entry)));
+            return <section className="worktree-dialog__group" key={commonDir}>
             <div className="worktree-dialog__group-header">
             <SectionLabel className="worktree-dialog__group-title" tone="muted" icon={<GitBranch size={15} />} count={entries.length}><span className="selectable" title={entries[0].repositoryPath}>{nameFromPath(entries[0].repositoryPath)}</span></SectionLabel>
-            {sort === "size-desc" ? <CatalogSortMetric kind="size" label={t("Total size")} value={worktreeGroupMetric(entries, sort)} />
-              : sort === "modified-desc" || sort === "modified-asc" ? <CatalogSortMetric kind="date" label={sort === "modified-asc" ? t("Oldest modified") : t("Last modified")} value={worktreeGroupMetric(entries, sort)} /> : null}
+            <ControlGroup>
+              {sort === "size-desc" ? <CatalogSortMetric kind="size" label={t("Total size")} value={worktreeGroupMetric(entries, sort)} />
+                : sort === "modified-desc" || sort === "modified-asc" ? <CatalogSortMetric kind="date" label={sort === "modified-asc" ? t("Oldest modified") : t("Last modified")} value={worktreeGroupMetric(entries, sort)} /> : null}
+              <IconButton label={allSelected ? t("Clear Worktree selection") : t("Select all eligible Worktrees")}
+                variant="ghost" size="compact" disabled={Boolean(busy) || !eligible.length} aria-pressed={allSelected}
+                onClick={() => setSelected((current) => {
+                  const keys = new Set(eligible.map(entryKey));
+                  return allSelected ? current.filter((key) => !keys.has(key)) : [...new Set([...current, ...keys])];
+                })}><SquareCheck size={15} /></IconButton>
+            </ControlGroup>
             </div>
             <AlignedResourceList actionTrack="compact" className="worktree-dialog__entries">
             {entries.map((entry) => <ResourceRow
@@ -283,7 +304,7 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
               </ControlGroup>}
             />)}
             </AlignedResourceList>
-          </section>)}
+          </section>; })}
         </>;
   const reviewBody = <div className="worktree-dialog__detail">
         {failure}
@@ -316,6 +337,10 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
           </label> : null}
         </> : null}
         {view === "confirm" ? <>
+          <DetailList items={[
+            { label: t("Selected size"), value: sizeLabel(totalBytes(previews.map((preview) => preview.entry.sizeBytes))) },
+            { label: t("Estimated space freed"), value: sizeLabel(totalBytes(previews.map((preview) => preview.backupRequired ? 0 : preview.entry.sizeBytes))) }
+          ]} />
           <p>{t("Only working directories are removed. Git commits are retained; local-only files receive a verified recovery copy first.")}</p>
           <p>{t("Confirm each selected task is finished; code integration is not inferred from commit IDs.")}</p>
           {previews.some((preview) => preview.savedWorkspace) ? <Notice tone="warning" icon={<AlertTriangle size={15} />}>
@@ -326,18 +351,24 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
             <br />{t("Recovery copies of local-only files remain in AgentEnv data and may still use disk space.")}
           </Notice> : null}
           <AlignedResourceList actionTrack="compact" className="worktree-dialog__entries">
-            {previews.map((preview) => <ResourceRow key={entryKey(preview.entry)} density="compact" appearance="plain" icon={<FolderGit2 size={16} />} title={nameFromPath(preview.entry.path)} description={<span className="selectable">{preview.entry.path}</span>} metadata={<span title={preview.entry.branch}>{preview.entry.branch ?? preview.entry.head?.slice(0, 8)}</span>} />)}
+            {previews.map((preview) => <ResourceRow key={entryKey(preview.entry)} density="compact" appearance="plain" icon={<FolderGit2 size={16} />} title={nameFromPath(preview.entry.path)} description={<span className="selectable">{preview.entry.path}</span>} metadata={<span title={preview.entry.branch}>{preview.entry.branch ?? preview.entry.head?.slice(0, 8)}</span>} state={<CatalogSortMetric kind="size" label={t("Size")} value={preview.entry.sizeBytes} />} />)}
           </AlignedResourceList>
         </> : null}
         {view === "results" ? <>
+          <DetailList items={[
+            { label: t("Removed size"), value: sizeLabel(totalBytes(successful.map((result) => result.sizeBytes))) },
+            { label: t("Estimated space freed"), value: sizeLabel(totalBytes(successful.map((result) => result.reclaimedSizeBytes))) }
+          ]} />
           {busy === "remove" ? <OperationStatusBar icon={<LoaderCircle className="is-spinning" size={15} />} label={t("Removing Worktrees...")} detail={`${results.length}/${previews.length}`} /> : null}
-          <AlignedResourceList actionTrack="compact" className="worktree-dialog__results">
-            {results.map((result) => <ResourceRow key={result.path} density="compact" appearance="plain" icon={result.error ? <AlertTriangle size={16} /> : <Check size={16} />}
+          <AlignedResourceList actionTrack="compact" className="worktree-dialog__entries worktree-dialog__results">
+            {results.map((result) => <ResourceRow key={result.path} density="compact" appearance="plain" icon={result.error !== undefined ? <AlertTriangle size={16} /> : <Check size={16} />}
               title={nameFromPath(result.path)} description={<span className="selectable">{result.path}</span>}
-              state={<Badge tone={result.error ? "warning" : "success"}>{result.error ? t("Skipped") : t("Removed")}</Badge>}
+              metadata={<CatalogSortMetric kind="size" label={t("Size")} value={result.sizeBytes} />}
+              state={<Badge tone={result.error !== undefined ? "warning" : "success"}>{result.error !== undefined ? t("Skipped") : t("Removed")}</Badge>}
               />)}
           </AlignedResourceList>
-          {results.filter((result) => result.error).map((result) => <Notice key={result.path} tone="danger" icon={<AlertTriangle size={15} />}><span className="selectable">{result.path}</span><DiagnosticMessage message={result.error!} /></Notice>)}
+          {previews.some((preview) => preview.backupRequired && successful.some((result) => result.path === preview.entry.path)) ? <p>{t("Recovery copies are retained. Their size is excluded from estimated space freed.")}</p> : null}
+          {results.filter((result) => result.error !== undefined).map((result) => <Notice key={result.path} tone="danger" icon={<AlertTriangle size={15} />}><span className="selectable">{result.path}</span><DiagnosticMessage message={result.error!} /></Notice>)}
         </> : null}
         {view === "recovery" ? <>
           {recoveryIssues.length ? <Notice tone="warning" icon={<AlertTriangle size={15} />}>

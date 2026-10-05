@@ -340,6 +340,21 @@ selection. Main, locked, missing, and submodule worktrees are not cleanup candid
 Detached commits without another ref receive a recovery ref before removal.
 An operation cannot claim success until the directory and Git registration are both
 verified absent. Recovery must not overwrite a path created after cleanup.
+Each repository offers selection of all currently visible cleanup-review-eligible
+trees; main, dirty, ignored-content, locked, kept and unsafe trees stay excluded.
+Selection is not removal authorization or proof of code integration. Each tree is
+revalidated during Preview and again during Remove.
+Cleanup confirmation shows each directory's logical file size and selected total.
+Completion shows only verified removals in the removed total and estimated freed
+space; failures never contribute to reclaimed space. Full recovery copies are retained
+and excluded from freed estimates. Logical sizes exclude the root Git administration
+file and are not exact physical disk allocation or APFS shared-block measurements.
+Cleanup fingerprints measure size in the same verified traversal instead of repeating
+inventory-only size scans. Hash serialization remains compatible with existing recovery
+records. Final pre-remove hashing, recovery verification and Git registration checks
+remain mandatory. Git removal disables fsmonitor; verified results immediately reconcile
+the visible inventory without holding the cleanup UI open for an unrelated global scan.
+Failed rows lose batch selection eligibility until refreshed or individually reviewed.
 Interrupted cleanup records are reconciled against the original directory and Git
 registration before Restore is offered. An interrupted restore can continue only when
 the partially restored directory still matches the recorded attempt; otherwise the

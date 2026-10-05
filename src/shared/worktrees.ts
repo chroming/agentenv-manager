@@ -63,6 +63,8 @@ export interface WorktreeRecoveryRecord {
   indexHash?: string;
   sourceHash?: string;
   restoreAttemptHash?: string;
+  sourceSizeBytes?: number;
+  reclaimedSizeBytes?: number;
 }
 
 export interface WorktreeRecoveryInventory {
