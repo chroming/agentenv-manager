@@ -9,12 +9,57 @@
     "generatedAt": "2026-09-23T01:53:55.510Z"
   },
   "review": {
-    "scenarios": 91,
+    "scenarios": 100,
     "method": "All contract screenshots visually inspected; affected layouts also inspected at native size and checked with runtime containment assertions",
     "scope": "Mock Electron workflows on macOS; no real Agent resources or model requests",
     "thresholdsChanged": false
   },
   "files": [
+    {
+      "file": "worktree-analysis-en-1180x728.png",
+      "sha256": "c414e3351c591fb5c33799339ccc4e8355e70ebea2c825c212b6a33ee3273c1e",
+      "reviewReason": "Manual retention advice stays separate from cleanup authorization; three locales and three sizes verified in isolated Electron."
+    },
+    {
+      "file": "worktree-analysis-en-1440x900.png",
+      "sha256": "36740a7bb8183cf50622849a50e3fa54a8be928cb43ab390c91f249e31c76338",
+      "reviewReason": "Manual retention advice stays separate from cleanup authorization; three locales and three sizes verified in isolated Electron."
+    },
+    {
+      "file": "worktree-analysis-en-920x620.png",
+      "sha256": "b22ceb28d91bf1607b6e829a3d185729bb98cccc051715914fdc6c470da15a19",
+      "reviewReason": "Manual retention advice stays separate from cleanup authorization; three locales and three sizes verified in isolated Electron."
+    },
+    {
+      "file": "worktree-analysis-zh_CN-1180x728.png",
+      "sha256": "d8b1b6d6acceaf8af9e9463185a899482e089fc481334ee113ed473036ad2e1d",
+      "reviewReason": "Manual retention advice stays separate from cleanup authorization; three locales and three sizes verified in isolated Electron."
+    },
+    {
+      "file": "worktree-analysis-zh_CN-1440x900.png",
+      "sha256": "99839913afbd1a1543659bbb2eb82ecca5447b7ecb14e58e02dc101e5e42fa28",
+      "reviewReason": "Manual retention advice stays separate from cleanup authorization; three locales and three sizes verified in isolated Electron."
+    },
+    {
+      "file": "worktree-analysis-zh_CN-920x620.png",
+      "sha256": "46cbf834e17e5c11d607250444414a707a24a933e202921c4a57a6de94fb2430",
+      "reviewReason": "Manual retention advice stays separate from cleanup authorization; three locales and three sizes verified in isolated Electron."
+    },
+    {
+      "file": "worktree-analysis-zh_TW-1180x728.png",
+      "sha256": "ec3117ab7b7214800c0cde30248f77381204a31baf15dcbfb33bd2a5d8cd1f3e",
+      "reviewReason": "Manual retention advice stays separate from cleanup authorization; three locales and three sizes verified in isolated Electron."
+    },
+    {
+      "file": "worktree-analysis-zh_TW-1440x900.png",
+      "sha256": "941cba6e2861234d62c20b2768c0ca20c4cb84b33ab2a3743d67a2b4108855cb",
+      "reviewReason": "Manual retention advice stays separate from cleanup authorization; three locales and three sizes verified in isolated Electron."
+    },
+    {
+      "file": "worktree-analysis-zh_TW-920x620.png",
+      "sha256": "96ecba61ba177d7fc2ba7896e703a2c5cc4b5dcc2cdfe15813b974e55070919a",
+      "reviewReason": "Manual retention advice stays separate from cleanup authorization; three locales and three sizes verified in isolated Electron."
+    },
     {
       "file": "skill-invocation-920.png",
       "sha256": "239de61f5b347c79a2b348ed9c74572d9c13a1d4006ebb917531fe3375ebeac2",
@@ -67,8 +112,8 @@
     },
     {
       "file": "settings-ai-920x620.png",
-      "sha256": "8a69c03af6b18d9c8b03aca5d64ea8ee77d606a6bf59fd3b01b64fc5ee84ffa2",
-      "reviewReason": "Current Settings categories and shared controls"
+      "sha256": "a2595bc2cb3f4d5c9aba328cc2d99ecfb7e6853a76aa6401e7095db20987fb3e",
+      "reviewReason": "Worktree retention joins existing AI switches without changing their geometry; inspected at 920x620."
     },
     {
       "file": "agents-first-run-920x620.png",
@@ -469,6 +514,16 @@
       "file": "startup-failure-920x620.png",
       "sha256": "fe987f620e118e0139c05d5df5e9871194b25ef4d36553849b63d019142fad8c",
       "reviewReason": "Existing reviewed layout retained with current mock runtime rendering"
+    }
+  ],
+  "incrementalReviews": [
+    {
+      "reviewedAt": "2026-10-05",
+      "sourceFingerprint": "f40b851b47134d5e3342dcc5ede5c15d4a75c2ce4b9a8167fddb8eb422b17069",
+      "artifactFingerprint": "1130841943b1b3a713618840b13ab9b19e3e7652dd277181a1ae39f271085bd9",
+      "scope": "Nine Worktree retention screenshots across en/zh_CN/zh_TW and 920/1180/1440; AI settings at 920. Other reviewed images remain unchanged.",
+      "method": "Isolated Electron, real temporary Git fixtures, mock AI, alignment and containment assertions, rendered pixel inspection.",
+      "thresholdsChanged": false
     }
   ],
   "independentVerification": {

@@ -10,11 +10,13 @@ import type { InstructionLibraryStore } from "../instructionLibraryStore";
 import { SafeIdSchema } from "../../shared/schemas";
 import { profileResourceMode, materializeTargetResourcePolicy } from "../../shared/profileResources";
 import { createTargetRegistry } from "../targets/registry";
+import type { WorktreeService } from "../worktrees/worktreeService";
 
 const documentSchema = z.object({ id: z.string().min(1).max(256), label: z.string().max(300), content: z.string().max(2_000_000) });
 export const AnalysisSubjectSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("profile"), profileId: SafeIdSchema, targetId: z.string().min(1).max(200) }),
   z.object({ kind: z.literal("comparison"), runId: z.string().uuid() }),
+  z.object({ kind: z.literal("worktree"), commonDir: z.string().min(1).max(4096), path: z.string().min(1).max(4096) }),
   z.object({ kind: z.literal("duplicates"), objectId: z.string().max(1000).optional(), documents: z.array(documentSchema).min(2).max(10000) })
 ]);
 export interface AnalysisDependencies {
@@ -22,12 +24,16 @@ export interface AnalysisDependencies {
   library: Pick<SkillLibraryStore, "listSkills">;
   evaluationService: Pick<EvaluationService, "read">;
   instructions: Pick<InstructionLibraryStore, "read">;
+  worktrees?: Pick<WorktreeService, "readAnalysis">;
 }
 export const createAnalysisInputs = (deps: AnalysisDependencies) => async (raw: AIAnalysisSubject) => {
   const subject = AnalysisSubjectSchema.parse(raw);
   const documents: AIAnalysisDocument[] = [];
   const warnings: string[] = [];
-  if (subject.kind === "duplicates") {
+  if (subject.kind === "worktree") {
+    if (!deps.worktrees) throw new Error("Worktree analysis is unavailable.");
+    return deps.worktrees.readAnalysis(subject.commonDir, subject.path);
+  } else if (subject.kind === "duplicates") {
     documents.push(...subject.documents);
     warnings.push("Only the selected version preview is analyzed; no version is selected automatically.");
   } else if (subject.kind === "comparison") {

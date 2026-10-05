@@ -46,7 +46,7 @@
 }
 
 .worktree-dialog__group-title {
-  padding: var(--space-2) var(--space-3);
+  min-width: 0;
 }
 
 .worktree-dialog__group-header {
@@ -55,12 +55,11 @@
   gap: var(--space-2);
   justify-content: space-between;
   min-width: 0;
+  padding: var(--space-2) var(--space-3);
 }
 
-.worktree-dialog__group-header > .ui-catalog-sort-metric {
+.worktree-dialog__group-header > .ui-control-group {
   flex-shrink: 0;
-  margin-right: var(--space-3);
-  max-width: 160px;
 }
 
 .worktree-dialog__detail {

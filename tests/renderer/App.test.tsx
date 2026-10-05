@@ -322,7 +322,7 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
   const api: AgentEnvApi = {
     conversationHistoryStatus: vi.fn().mockResolvedValue({ config: { version: 1, enabled: false, paused: false, sources: [] }, needsConsent: true, running: false, sources: [], availableSources: [] }),
     configureConversationHistory: vi.fn(),
-    readAIPreferences: vi.fn().mockResolvedValue({ enabled: true, features: { summaries: true, tags: true, comparison: true, duplicates: true, profile: true } }),
+    readAIPreferences: vi.fn().mockResolvedValue({ enabled: true, features: { summaries: true, tags: true, comparison: true, duplicates: true, profile: true, worktree: true } }),
     saveAIPreferences: vi.fn().mockImplementation(async (value) => value),
     onAIPreferencesChanged: vi.fn().mockReturnValue(() => undefined),
     prepareAIAnalysis: vi.fn().mockResolvedValue({ key: "fixture", documents: [], warnings: [], partial: false }),

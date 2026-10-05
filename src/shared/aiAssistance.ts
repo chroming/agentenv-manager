@@ -1,13 +1,14 @@
-export const aiFeatures = ["summaries", "tags", "comparison", "duplicates", "profile"] as const;
+export const aiFeatures = ["summaries", "tags", "comparison", "duplicates", "profile", "worktree"] as const;
 export type AIFeature = typeof aiFeatures[number];
-export type AIAnalysisKind = "comparison" | "duplicates" | "profile";
+export type AIAnalysisKind = "comparison" | "duplicates" | "profile" | "worktree";
 export interface AIPreferences { enabled: boolean; features: Record<AIFeature, boolean> }
 export const defaultAIPreferences = (): AIPreferences => ({ enabled: true,
-  features: { summaries: true, tags: true, comparison: true, duplicates: true, profile: true } });
+  features: { summaries: true, tags: true, comparison: true, duplicates: true, profile: true, worktree: true } });
 export interface AIAnalysisDocument { id: string; label: string; content: string }
 export type AIAnalysisSubject =
   | { kind: "profile"; profileId: string; targetId: string }
   | { kind: "comparison"; runId: string }
+  | { kind: "worktree"; commonDir: string; path: string }
   | { kind: "duplicates"; objectId?: string; documents: AIAnalysisDocument[] };
 export interface AIAnalysisCoverage { total: number; included: number; truncated: number; omitted: number }
 export interface AIAnalysisRecord {

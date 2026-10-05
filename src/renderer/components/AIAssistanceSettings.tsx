@@ -11,7 +11,7 @@ export const AIAssistanceSettings = () => {
   const state = useAIPreferences();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const names = { summaries: t("Update summaries"), tags: t("Tag suggestions"), comparison: t("Compare interpretation"), duplicates: t("Duplicate Skill analysis"), profile: t("Profile analysis") };
+  const names = { summaries: t("Update summaries"), tags: t("Tag suggestions"), comparison: t("Compare interpretation"), duplicates: t("Duplicate Skill analysis"), profile: t("Profile analysis"), worktree: t("Worktree retention analysis") };
   const save = async (next: AIPreferences) => {
     setBusy(true); setError("");
     try { state.setPreferences(await window.agentEnv.saveAIPreferences(next)); }

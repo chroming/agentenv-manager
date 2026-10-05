@@ -5591,6 +5591,14 @@ Object.assign(zhCN, {
   "Local files": "本地文件", "Last modified": "最近修改", "Total size": "总占用空间",
   "Selected size": "选中目录大小", "Removed size": "已移除目录大小", "Estimated space freed": "预计释放空间",
   "Select all eligible Worktrees": "全选可清理的工作树", "Clear Worktree selection": "取消工作树选择",
+  "Select clean": "选择可清理项", "Clear selection": "取消选择",
+  "This Worktree now needs individual review. Refresh and review it separately.": "这个工作树已发生变化，需要单独检查。请刷新后查看。",
+  "Analyze retention": "分析保留价值", "Worktree retention analysis": "工作树保留价值分析",
+  "Partial analysis: some local evidence is unavailable or omitted. Check the scope before deciding.": "分析范围不完整：部分本地证据无法读取或已省略。请结合分析范围决定是否保留。",
+  "Only local Git evidence is analyzed. MR status, squash integration and the task's purpose are not verified.": "仅分析本地 Git 证据，未核实 MR 状态、squash 合入情况或任务是否完成。",
+  "Untracked, ignored and submodule file contents are not sent. Their value cannot be determined from paths alone.": "未发送未跟踪、已忽略及子模块文件的内容，仅凭路径无法判断其价值。",
+  "Binary file bodies and older commits are not included. Missing evidence is not proof that removal is safe.": "不包含二进制文件正文及更早的提交。缺少证据不代表可以安全删除。",
+  "The local main tree baseline is unavailable; integration cannot be compared.": "无法读取本地主工作目录的基准，不能对比合入情况。",
   "Recovery copies are retained. Their size is excluded from estimated space freed.": "恢复副本仍保留，其大小不计入预计释放空间。"
 });
 Object.assign(zhTW, {
@@ -5629,5 +5637,13 @@ Object.assign(zhTW, {
   "Local files": "本機檔案", "Last modified": "最近修改", "Total size": "總佔用空間",
   "Selected size": "所選目錄大小", "Removed size": "已移除目錄大小", "Estimated space freed": "預計釋放空間",
   "Select all eligible Worktrees": "全選可清理的工作樹", "Clear Worktree selection": "取消工作樹選擇",
+  "Select clean": "選擇可清理項目", "Clear selection": "取消選擇",
+  "This Worktree now needs individual review. Refresh and review it separately.": "這個工作樹已發生變化，需要單獨檢查。請重新整理後查看。",
+  "Analyze retention": "分析保留價值", "Worktree retention analysis": "工作樹保留價值分析",
+  "Partial analysis: some local evidence is unavailable or omitted. Check the scope before deciding.": "分析範圍不完整：部分本機證據無法讀取或已省略。請結合分析範圍決定是否保留。",
+  "Only local Git evidence is analyzed. MR status, squash integration and the task's purpose are not verified.": "僅分析本機 Git 證據，未核實 MR 狀態、squash 合入情況或任務是否完成。",
+  "Untracked, ignored and submodule file contents are not sent. Their value cannot be determined from paths alone.": "未傳送未追蹤、已忽略及子模組檔案的內容，僅憑路徑無法判斷其價值。",
+  "Binary file bodies and older commits are not included. Missing evidence is not proof that removal is safe.": "不包含二進位檔案正文及更早的提交。缺少證據不代表可以安全刪除。",
+  "The local main tree baseline is unavailable; integration cannot be compared.": "無法讀取本機主要工作目錄的基準，不能對比合入情況。",
   "Recovery copies are retained. Their size is excluded from estimated space freed.": "復原副本仍保留，其大小不計入預計釋放空間。"
 });

@@ -28,6 +28,12 @@ export interface WorktreeEntry {
   headNeedsProtection: boolean;
 }
 
+export const isBatchCleanupCandidate = (entry: WorktreeEntry): boolean =>
+  entry.state === "candidate" && entry.cleanupReviewAvailable && entry.exists &&
+  !entry.main && !entry.keptReason && !entry.locked && !entry.prunable &&
+  !entry.detached && !entry.headNeedsProtection && !entry.submodules &&
+  entry.reasons.length === 0 && entry.changes.length === 0 && entry.ignored.length === 0;
+
 export interface WorktreeInventory {
   scanRoots: string[];
   configuredRoots: string[];

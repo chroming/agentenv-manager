@@ -5,7 +5,7 @@ import { writeAtomic } from "../fileUtils";
 import { aiFeatures, defaultAIPreferences, type AIFeature, type AIPreferences } from "../../shared/aiAssistance";
 
 export const AIPreferencesSchema = z.object({ enabled: z.boolean(), features: z.object({
-  summaries: z.boolean(), tags: z.boolean(), comparison: z.boolean(), duplicates: z.boolean(), profile: z.boolean()
+  summaries: z.boolean(), tags: z.boolean(), comparison: z.boolean(), duplicates: z.boolean(), profile: z.boolean(), worktree: z.boolean().default(true)
 }) });
 export const createAIPreferences = (root: string) => {
   const path = join(root, "ai-preferences.json");

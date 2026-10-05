@@ -383,6 +383,10 @@
   min-width: 0;
 }
 
+.ui-choice-input--flush {
+  margin: 0;
+}
+
 .ui-control-group--compact {
   min-height: var(--control-height-compact);
 }

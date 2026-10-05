@@ -340,8 +340,11 @@ selection. Main, locked, missing, and submodule worktrees are not cleanup candid
 Detached commits without another ref receive a recovery ref before removal.
 An operation cannot claim success until the directory and Git registration are both
 verified absent. Recovery must not overwrite a path created after cleanup.
-Each repository offers selection of all currently visible cleanup-review-eligible
-trees; main, dirty, ignored-content, locked, kept and unsafe trees stay excluded.
+Each repository offers selection of all currently visible Clean (`candidate`)
+trees. Cleanup-preview capability alone is not batch eligibility: trees with
+unconfirmed branch work (`review`) require individual review even when Git permits
+a non-force removal. Main, detached, dirty, ignored-content, locked, kept and unsafe
+trees stay excluded. Row checkboxes and repository selection share the same predicate.
 Selection is not removal authorization or proof of code integration. Each tree is
 revalidated during Preview and again during Remove.
 Cleanup confirmation shows each directory's logical file size and selected total.
@@ -355,6 +358,15 @@ records. Final pre-remove hashing, recovery verification and Git registration ch
 remain mandatory. Git removal disables fsmonitor; verified results immediately reconcile
 the visible inventory without holding the cleanup UI open for an unrelated global scan.
 Failed rows lose batch selection eligibility until refreshed or individually reviewed.
+Worktree review offers manually requested AI retention analysis using the existing
+configured service, privacy switches and immutable analysis cache. Preparation only
+reads previously discovered, freshly registered local linked trees; Git commands have
+timeouts and output limits and cannot invoke external diff/textconv tools. Local status,
+up to twenty commits, committed differences from the local main tree HEAD, and tracked
+staged/unstaged differences are evidence, not proof of upstream MR integration.
+Untracked/ignored bodies are excluded; missing evidence is explicit. Results are saved
+only under app-owned ai-analyses. AI never selects trees, approves removal, changes
+keep markers, writes Git data, or weakens Preview/Remove safeguards.
 Interrupted cleanup records are reconciled against the original directory and Git
 registration before Restore is offered. An interrupted restore can continue only when
 the partially restored directory still matches the recorded attempt; otherwise the

@@ -2,6 +2,31 @@
   "formatVersion": 1,
   "features": [
     {
+      "id": "manual-worktree-retention-analysis",
+      "summary": "Review bounded local Git evidence before deciding whether a Worktree deserves retention; AI never authorizes cleanup.",
+      "contract": { "path": "docs/product-audit/2026-10-05-worktree-selection-analysis.md", "anchor": "## Feature Admission: Worktree Retention Analysis" },
+      "support": { "opencode": "not-applicable", "claude-code": "not-applicable", "codex": "not-applicable", "antigravity": "not-applicable", "antigravity-app": "not-applicable", "trae-cli": "not-applicable", "pi": "not-applicable", "workbuddy": "not-applicable" },
+      "states": {
+        "idle": "Opening reads bounded evidence and cache, never sends a model request.",
+        "working": "Manual generation uses the existing local progress and Stop controls.",
+        "success": "A concise retention recommendation links to supplied Git evidence.",
+        "error": "Inline failures retain previous analysis and do not alter cleanup safety.",
+        "cancelled": "Closing or disabling cancels active generation.",
+        "noOp": "Matching evidence and locale reuse cached results without network calls.",
+        "stale": "Generation rechecks current registered Worktree evidence.",
+        "partial": "Untracked bodies, omitted diffs and unverified integration are disclosed.",
+        "persisted": "Results and settings remain under device-local AgentEnv data.",
+        "rollback": "Failed requests preserve previous cache; analysis never writes original worktrees or Git metadata."
+      },
+      "evidence": {
+        "domain": ["tests/main/worktreeAnalysis.test.ts", "tests/main/worktreeService.test.ts", "tests/main/aiAssistance.test.ts"],
+        "renderer": ["tests/renderer/WorktreeDialog.test.tsx", "tests/renderer/AIAssistance.test.tsx", "tests/renderer/uiPrimitives.test.tsx"],
+        "desktop": ["tests/e2e/worktrees.e2e.test.ts"],
+        "persistence": ["tests/e2e/worktrees.e2e.test.ts", "tests/main/aiAssistance.test.ts"],
+        "visual": ["worktree-analysis-en-920x620.png", "worktree-analysis-en-1180x728.png", "worktree-analysis-en-1440x900.png", "worktree-analysis-zh_CN-920x620.png", "worktree-analysis-zh_CN-1180x728.png", "worktree-analysis-zh_CN-1440x900.png", "worktree-analysis-zh_TW-920x620.png", "worktree-analysis-zh_TW-1180x728.png", "worktree-analysis-zh_TW-1440x900.png"]
+      }
+    },
+    {
       "id": "profile-skill-invocation",
       "summary": "Profile-scoped native manual invocation through private deployment copies; Library content remains unchanged.",
       "contract": { "path": "docs/skill-invocation.md", "anchor": "## Contract" },

@@ -9,13 +9,13 @@ import type { WorktreeEntry, WorktreeInventory, WorktreeScanResult } from "../..
 const clean: WorktreeEntry = {
   path: "/projects/_worktrees/clean", repositoryPath: "/projects/app",
   commonDir: "/projects/app/.git", head: "a".repeat(40), branch: "clean",
-  main: false, detached: false, exists: true, state: "review", reasons: [],
+  main: false, detached: false, exists: true, state: "candidate", reasons: [],
   changes: [], ignored: [], submodules: false, cleanupReviewAvailable: true,
   manualReviewAvailable: true, headNeedsProtection: false, sizeBytes: 1024
 };
 const dirty: WorktreeEntry = {
   ...clean, path: "/projects/_worktrees/dirty", branch: "dirty",
-  changes: [" M README.md"], reasons: ["1 changed or untracked paths"],
+  state: "review", changes: [" M README.md"], reasons: ["1 changed or untracked paths"],
   cleanupReviewAvailable: false
 };
 const inventory: WorktreeInventory = {
@@ -48,6 +48,28 @@ afterEach(() => {
 });
 
 describe("WorktreeDialog", () => {
+  it("excludes a freshly changed review-needed tree from batch confirmation", async () => {
+    const api = installApi();
+    api.previewWorktreeCleanup.mockResolvedValue({ previewId: "changed", entry: { ...clean, state: "review", reasons: ["New work"] }, fingerprint: "b".repeat(64), checkedAt: inventory.scannedAt, backupRequired: false, forceRequired: false, savedWorkspace: false });
+    render(<WorktreeWorkspace />);
+    fireEvent.click(await screen.findByRole("button", { name: "Select all eligible Worktrees" }));
+    fireEvent.click(screen.getByRole("button", { name: "Review selected (1)" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("now needs individual review");
+    expect(screen.queryByRole("button", { name: "Remove Worktree" })).not.toBeInTheDocument();
+    expect(api.removeWorktree).not.toHaveBeenCalled();
+  });
+  it("never batch-selects a review-needed tree even when Git allows a cleanup preview", async () => {
+    const api = installApi();
+    const reviewed = { ...clean, state: "review", reasons: ["Branch tip is not reachable from another ref; confirm the task is finished"] };
+    api.inventoryWorktrees.mockResolvedValue({ ...inventory, entries: [
+      { ...clean, path: "/projects/_worktrees/safe", state: "candidate" }, reviewed
+    ] });
+    render(<WorktreeWorkspace />);
+    fireEvent.click(await screen.findByRole("button", { name: "Select all eligible Worktrees" }));
+    const checked = [...document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')].filter((input) => input.checked);
+    expect(checked).toHaveLength(1);
+    expect(checked[0].closest(".ui-resource-row")).not.toHaveTextContent(clean.path);
+  });
   it("selects only eligible visible trees in one repository and can clear that selection", async () => {
     const api = installApi();
     const other = { ...clean, path: "/elsewhere/other", repositoryPath: "/elsewhere/repo", commonDir: "/elsewhere/repo/.git" };

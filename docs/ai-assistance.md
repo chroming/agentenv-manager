@@ -2,13 +2,15 @@
 
 ## 功能准入
 
-目标：解释已经选定的资源和运行结果，不替用户选择、修改或 Apply。五项能力共享设备本地总开关与分项开关。全部手动触发，不执行外部内容，不自动重试，不同步开关、凭据或分析缓存。
+目标：解释已经选定的资源和运行结果，不替用户选择、修改或 Apply。各项能力共享设备本地总开关与分项开关。全部手动触发，不执行外部内容，不自动重试，不同步开关、凭据或分析缓存。
 
 所有 Agent 可分析 Profile 意图；Compare 仅分析已完成或不完整的已保存报告，不增加 Runner 能力。重复版本仅分析当前明确选中的版本预览，不读取任意来源路径。
 
 Local Skills 的版本决策同时支持 Library 与本地版本、以及尚未导入的多个本地版本。通过现有只读导入预览获取内容，按内容哈希去重；无需先导入才能分析。提供 SKILL.md、版本、哈希、修改时间，已有文件差异一并提供；没有提供的文件不作完整性推断。任一读取失败留在当前区域重试，不自动选择或写入版本。
 
-组件映射：开关 -> Switch；设置行 -> SettingsPreferenceRow；动作 -> Button / ActionMenuItem；分析 -> Notice / ResourcePanelToolbar；详情 -> SyntaxCodePreview；窗口 -> ModalFrame / DialogHeader / DialogBody / DialogFooter / useModalDialog。页面只新增内容排列，不定义另一套控件。五项能力位于 Settings 的 AI 辅助页签，不混入 Skills 设置。额度说明复用 InfoTip。
+组件映射：开关 -> Switch；设置行 -> SettingsPreferenceRow；动作 -> Button / ActionMenuItem；分析 -> AIAnalysisReview / AIReviewHeading / AIReviewFindings；详情 -> SyntaxCodePreview；窗口 -> ModalFrame / DialogHeader / DialogBody / DialogFooter / useModalDialog。页面只新增内容排列，不定义另一套控件。各项能力位于 Settings 的 AI 辅助页签，不混入 Skills 设置。额度说明复用 InfoTip。
+
+工作树检查弹窗可手动分析保留价值：只读取已扫描且仍登记在 Git 中的本地 linked worktree，提供本地状态、最多 20 条独有提交、相对本地主工作目录 HEAD 的内容差异及已跟踪文件的暂存/未暂存改动。不查询远端 MR，不执行外部 diff/textconv，不发送未跟踪/已忽略文件正文；证据不足或超限时明确说明。分析不选中工作树、不勾选删除确认、不改变保留标记；删除仍走原有人工检查、恢复备份及新鲜度校验。相同证据复用缓存，变化后需手动重新分析。
 
 ## 状态与边界
 

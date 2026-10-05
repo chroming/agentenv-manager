@@ -24,6 +24,25 @@ const install = (cached = false, prefs = defaultAIPreferences()) => {
   return api;
 };
 describe("AI assistance surfaces", () => {
+  it("offers manual Worktree analysis, cancels on close and keeps another tree's result out", async () => {
+    const api = install();
+    const first = { kind: "worktree" as const, commonDir: "/repo/.git", path: "/tree" };
+    const view = render(<AIAnalysisReview subject={first} />);
+    const analyze = await screen.findByRole("button", { name: "Analyze retention" });
+    expect(api.generateAIAnalysis).not.toHaveBeenCalled();
+    fireEvent.click(analyze);
+    await screen.findByText("Adds a test");
+    api.prepareAIAnalysis.mockRejectedValueOnce(new Error("Unavailable new tree"));
+    view.rerender(<AIAnalysisReview subject={{ ...first, path: "/other" }} />);
+    expect(screen.queryByText("Adds a test")).not.toBeInTheDocument();
+    await screen.findByText("Error: Unavailable new tree");
+    api.generateAIAnalysis.mockImplementationOnce(() => new Promise(() => {}));
+    fireEvent.click(screen.getByRole("button", { name: "Analyze retention" }));
+    await screen.findByRole("button", { name: "Stop" });
+    expect(screen.getByRole("button", { name: "Analyze retention" })).toHaveAttribute("aria-busy", "true");
+    view.unmount();
+    expect(api.cancelAIAnalysis).toHaveBeenCalled();
+  });
   it.each(["duplicates", "comparison"] as const)("keeps %s concise without hiding concrete risks", async (kind) => {
     const api = install();
     api.prepareAIAnalysis.mockResolvedValue({ key: "key", documents: record.documents, warnings: [], partial: false, cached: {

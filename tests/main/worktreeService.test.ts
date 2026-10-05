@@ -43,6 +43,40 @@ const fixture = async () => {
 };
 
 describe("worktree inventory and cleanup", () => {
+  it("collects fresh bounded analysis evidence without changing Git or working files", async () => {
+    const { repo, linked, service, runner } = await fixture();
+    await writeFile(join(linked, "README.md"), "committed implementation\n");
+    await run("git", ["-C", linked, "add", "."]);
+    await run("git", ["-C", linked, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.com", "commit", "-m", "Useful implementation"]);
+    await writeFile(join(linked, "README.md"), "unfinished fix\n");
+    await writeFile(join(linked, "private.txt"), "must not send untracked body\n");
+    const entry = (await service.inventory()).entries.find((value) => value.path === linked)!;
+    const before = await run("git", ["-C", linked, "status", "--porcelain"]);
+    const calls = vi.spyOn(runner, "run");
+    const input = await service.readAnalysis(entry.commonDir, linked);
+    expect(input.documents.find((doc) => doc.id === "commits")?.content).toContain("Useful implementation");
+    expect(input.documents.find((doc) => doc.id === "committed-diff")?.content).toContain("committed implementation");
+    expect(input.documents.find((doc) => doc.id === "local-diff")?.content).toContain("unfinished fix");
+    expect(JSON.stringify(input)).not.toContain("must not send untracked body");
+    expect(JSON.stringify(input)).not.toContain(repo);
+    expect(input.partial).toBe(true);
+    expect(calls.mock.calls.filter(([args]) => args.includes("diff")).every(([args]) => args.includes("--no-ext-diff") && args.includes("--no-textconv"))).toBe(true);
+    expect((await run("git", ["-C", linked, "status", "--porcelain"])).stdout).toBe(before.stdout);
+    expect(await readFile(join(linked, "private.txt"), "utf8")).toBe("must not send untracked body\n");
+    await writeFile(join(linked, "README.md"), "changed again\n");
+    expect((await service.readAnalysis(entry.commonDir, linked)).documents.find((doc) => doc.id === "local-diff")?.content).toContain("changed again");
+  });
+
+  it("rejects undiscovered, main and removed trees before exposing analysis data", async () => {
+    const { repo, linked, service } = await fixture();
+    await expect(service.readAnalysis(join(repo, ".git"), linked)).rejects.toThrow("Refresh Worktrees");
+    const entries = (await service.inventory()).entries;
+    const main = entries.find((value) => value.main)!;
+    await expect(service.readAnalysis(main.commonDir, main.path)).rejects.toThrow("unavailable for analysis");
+    const entry = entries.find((value) => value.path === linked)!;
+    await run("git", ["-C", repo, "worktree", "remove", linked]);
+    await expect(service.readAnalysis(entry.commonDir, linked)).rejects.toThrow("no longer registered");
+  });
   it("measures cleanup sizes in the fingerprint pass without repeating inventory measurements", async () => {
     const { linked, service } = await fixture();
     const measurements = vi.spyOn(snapshot, "measureWorktreeTree");

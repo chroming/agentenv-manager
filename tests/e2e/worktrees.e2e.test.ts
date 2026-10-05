@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import { createServer, type Server } from "node:http";
 import { chmod, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { delimiter, join } from "node:path";
 import { tmpdir } from "node:os";
@@ -15,11 +16,14 @@ import { readInterfaceTypography } from "../../scripts/interface-typography.mjs"
 const run = promisify(execFile);
 let root = "";
 let app: ElectronApplication | undefined;
+let server: Server | undefined;
 requireCurrentElectronBuild();
 
 afterEach(async () => {
   await app?.close().catch(() => undefined);
   app = undefined;
+  await new Promise<void>((resolve) => server ? server.close(() => resolve()) : resolve());
+  server = undefined;
   if (root) await rm(root, { recursive: true, force: true, maxRetries: 4, retryDelay: 50 });
   root = "";
 }, 30_000);
@@ -46,9 +50,25 @@ describe("Worktrees desktop workflow", () => {
     for (let index = 0; index < 20; index++) await writeFile(join(dirty, `experiment-${index}.txt`), "keep this experiment\n");
     await run("git", ["-C", repo, "worktree", "add", "-b", "locked", locked]);
     await run("git", ["-C", repo, "worktree", "lock", "--reason", "keep this test scene", locked]);
+    const unique = join(home, ".codex", "worktrees", "needs-review");
+    await run("git", ["-C", repo, "worktree", "add", "-b", "unfinished-task", unique]);
+    await writeFile(join(unique, "README.md"), "committed work needing review\n");
+    await run("git", ["-C", unique, "add", "."]);
+    await run("git", ["-C", unique, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.com", "commit", "-m", "Unfinished implementation"]);
     for (let index = 0; index < 8; index++) {
       await run("git", ["-C", repo, "worktree", "add", "-b", `task-${index}`, join(home, ".codex", "worktrees", `task-${index}`)]);
     }
+    let calls = 0;
+    server = createServer((request, response) => {
+      calls++; request.resume(); response.setHeader("Content-Type", "application/json");
+      response.end(JSON.stringify({ choices: [{ finish_reason: "stop", message: { content: JSON.stringify({
+        overview: "Keep the local experiments until their purpose is confirmed.",
+        findings: [{ category: "risk", title: "Untracked experiments need review", detail: "Untracked files may contain work that is not in Git history.", suggestion: "Inspect or extract those files before cleanup.", evidence: ["state"] }],
+        limitations: ["Untracked file contents are not available in this analysis."]
+      }) } }] }));
+    });
+    await new Promise<void>((resolve) => server!.listen(0, "127.0.0.1", resolve));
+    const port = (server.address() as { port: number }).port;
     await writeFile(join(data, "agentenv-data.json"), '{"formatVersion":2}\n');
     await writeFile(join(data, "worktree-locations.json"), `${JSON.stringify({ formatVersion: 1, scanRoots: [], kept: {} })}\n`);
     await writeFile(join(data, "settings.json"), `${JSON.stringify({
@@ -77,6 +97,8 @@ describe("Worktrees desktop workflow", () => {
     };
     app = await electron.launch(launchOptions);
     const page = await app.firstWindow();
+    await page.getByRole("button", { name: t("Worktrees"), exact: true }).waitFor();
+    await page.evaluate((port) => window.agentEnv.saveSkillSummaryConfig({ endpoint: `http://127.0.0.1:${port}/v1`, model: "fixture" }), port);
     const notNow = page.getByRole("button", { name: t("Not now"), exact: true });
     if (await notNow.isVisible().catch(() => false)) await notNow.click();
     await page.getByRole("button", { name: t("Worktrees"), exact: true }).click();
@@ -124,6 +146,12 @@ describe("Worktrees desktop workflow", () => {
             const frame = row.getBoundingClientRect();
             const status = state.getBoundingClientRect();
             return state.scrollWidth <= state.clientWidth + 1 && Math.abs(frame.top + frame.height / 2 - status.top - status.height / 2) <= 1;
+          }),
+          groupActions: [...element.querySelectorAll<HTMLElement>(".worktree-dialog__group")].map((group) => {
+            const action = group.querySelector(".worktree-dialog__group-header button")!.getBoundingClientRect();
+            const checkbox = group.querySelector('input[type="checkbox"]')!.getBoundingClientRect();
+            const title = group.querySelector(".worktree-dialog__group-title")!.getBoundingClientRect();
+            return { rightDelta: action.right - checkbox.right, centerDelta: title.top + title.height / 2 - action.top - action.height / 2 };
           })
         };
       });
@@ -131,6 +159,7 @@ describe("Worktrees desktop workflow", () => {
       expect(geometry.bodyFits).toBe(true);
       expect(geometry.aligned).toBe(true);
       expect(geometry.stateFits).toBe(true);
+      expect(geometry.groupActions).toEqual(geometry.groupActions.map(() => ({ rightDelta: 0, centerDelta: 0 })));
       const typography = await readInterfaceTypography(page);
       expect(typography.violations).toEqual([]);
       expect(typography.headings.length).toBeGreaterThan(0);
@@ -201,6 +230,7 @@ describe("Worktrees desktop workflow", () => {
     expect(await group.getByRole("checkbox", { checked: true }).count()).toBe(9);
     expect(await group.locator(".ui-resource-row").filter({ hasText: "locked-worktree" }).getByRole("checkbox").count()).toBe(0);
     expect(await group.locator(".ui-resource-row").filter({ hasText: "long-name-with-uncommitted-work" }).getByRole("checkbox").count()).toBe(0);
+    expect(await group.locator(".ui-resource-row").filter({ hasText: "needs-review" }).getByRole("checkbox").count()).toBe(0);
     await workspace.getByRole("button", { name: `${t("Review selected")} (9)`, exact: true }).click();
     const batchDialog = page.getByRole("dialog");
     await batchDialog.getByText(t("Selected size"), { exact: true }).waitFor();
@@ -217,6 +247,44 @@ describe("Worktrees desktop workflow", () => {
     await page.keyboard.press("Escape");
     await workspace.getByRole("button", { name: "long-name-with-uncommitted-work", exact: true }).click();
     const dirtyDialog = page.getByRole("dialog");
+    const analyze = dirtyDialog.getByRole("button", { name: t("Analyze retention"), exact: true });
+    await analyze.waitFor();
+    expect(calls).toBe(0);
+    expect(await dirtyDialog.getByRole("checkbox").isChecked()).toBe(false);
+    await analyze.click();
+    await dirtyDialog.getByText("Keep the local experiments until their purpose is confirmed.", { exact: true }).waitFor();
+    expect(calls).toBe(1);
+    expect(await dirtyDialog.getByRole("checkbox").isChecked()).toBe(false);
+    for (const [width, height] of [[920, 620], [1180, 728], [1440, 900]]) {
+      await page.setViewportSize({ width, height });
+      const review = dirtyDialog.locator(".skill-summary-review");
+      await review.scrollIntoViewIfNeeded();
+      expect(await dirtyDialog.evaluate((element) => {
+        const box = element.getBoundingClientRect();
+        return box.left >= 0 && box.right <= window.innerWidth && element.scrollWidth <= element.clientWidth + 1;
+      })).toBe(true);
+      expect(await review.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+      if (process.env.AGENTENV_CAPTURE_WORKTREES_DIR) {
+        // Keep critical pixels stable without exposing temporary or developer paths.
+        await page.evaluate((root) => {
+          const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+          let node: Node | null;
+          while ((node = walker.nextNode())) if (node.textContent?.includes(root)) {
+            const text = node as Text;
+            text.textContent = text.textContent!.split(root).join("/Users/demo/AgentEnv-Fixture");
+          }
+        }, root);
+        await page.screenshot({ path: join(process.env.AGENTENV_CAPTURE_WORKTREES_DIR, `worktree-analysis-${locale}-${width}x${height}.png`), animations: "disabled" });
+        await page.evaluate((root) => {
+          const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+          let node: Node | null;
+          while ((node = walker.nextNode())) if (node.textContent?.includes("/Users/demo/AgentEnv-Fixture")) {
+            node.textContent = node.textContent!.split("/Users/demo/AgentEnv-Fixture").join(root);
+          }
+        }, root);
+      }
+    }
+    await page.setViewportSize({ width: 920, height: 620 });
     const typography = await readInterfaceTypography(page);
     expect(typography.violations).toEqual([]);
     expect(typography.paths.length).toBeGreaterThan(0);
@@ -302,5 +370,8 @@ describe("Worktrees desktop workflow", () => {
       name: `${t("Sort Worktrees")}: ${t("Largest size")}`, exact: true
     }).waitFor();
     await reopened.locator(".worktree-workspace").getByText(dirty, { exact: true }).waitFor();
+    await reopened.getByRole("button", { name: "long-name-with-uncommitted-work", exact: true }).click();
+    await reopened.getByText("Keep the local experiments until their purpose is confirmed.", { exact: true }).waitFor();
+    expect(calls).toBe(1);
   }, 90_000);
 });

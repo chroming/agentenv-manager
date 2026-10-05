@@ -902,7 +902,7 @@ export const registerIpcHandlers = ({
   );
   registerSkillUpdateIpc({ diagnosticHandle, handleMutation }, skillLibraryStore, waitForAutomationBackgroundDelay);
   registerSkillSummaryIpc({ diagnosticHandle, handleMutation, handleWorkspaceSyncMutation }, paths.appDataRoot, skillLibraryStore,
-    { profileStore, evaluationService, instructions: instructionLibraryStore });
+    { profileStore, evaluationService, instructions: instructionLibraryStore, worktrees: worktreeService });
   registerSettingsIpc(
     { diagnosticHandle, handleMutation, handleWorkspaceSyncMutation },
     {

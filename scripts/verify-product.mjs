@@ -89,13 +89,15 @@ await run(
     "vitest",
     "run",
     "tests/e2e/projects.e2e.test.ts",
+    "tests/e2e/worktrees.e2e.test.ts",
     "--maxWorkers=1",
     "--no-file-parallelism"
   ],
   {
     env: {
       ...process.env,
-      AGENTENV_CAPTURE_PROJECTS_DIR: captureRoot
+      AGENTENV_CAPTURE_PROJECTS_DIR: captureRoot,
+      AGENTENV_CAPTURE_WORKTREES_DIR: captureRoot
     }
   }
 );

@@ -5,7 +5,7 @@ import { AI_INPUT_BYTES } from "./aiJsonClient";
 export const analysisPayload = (documents: AIAnalysisDocument[], warnings: string[], partial: boolean) =>
   JSON.stringify({ documents, limitations: warnings, partial });
 
-export const planAnalysisBudget = (input: { documents: AIAnalysisDocument[]; warnings: string[] }) => {
+export const planAnalysisBudget = (input: { documents: AIAnalysisDocument[]; warnings: string[]; partial?: boolean }) => {
   const warnings = input.warnings.map(redactSensitiveValues);
   const documents: AIAnalysisDocument[] = [];
   let truncated = 0;
@@ -39,6 +39,6 @@ export const planAnalysisBudget = (input: { documents: AIAnalysisDocument[]; war
     if (low < text.length || prefix.length < original.content.length) truncated += 1;
     documents.push(doc);
   }
-  return { documents, warnings, partial: truncated > 0 || omitted > 0,
+  return { documents, warnings, partial: Boolean(input.partial) || truncated > 0 || omitted > 0,
     coverage: { total: input.documents.length, included: documents.length, truncated, omitted } };
 };

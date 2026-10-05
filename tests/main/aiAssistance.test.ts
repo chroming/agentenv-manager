@@ -30,6 +30,17 @@ const fixture = async () => {
   return { dir, config, input, readInput, request, service, args };
 };
 describe("AI assistance privacy gates", () => {
+  it("loads existing preferences without reenabling the master switch or older features", async () => {
+    const dir = await root();
+    const prefs = defaultAIPreferences();
+    const { worktree: _newFeature, ...features } = prefs.features;
+    await writeFile(join(dir, "ai-preferences.json"), JSON.stringify({ enabled: false, features: { ...features, profile: false } }));
+    const stored = await createAIPreferences(dir).read();
+    expect(stored.enabled).toBe(false);
+    expect(stored.features.profile).toBe(false);
+    expect(stored.features.worktree).toBe(true);
+    await expect(createAIPreferences(dir).run("worktree", vi.fn())).rejects.toThrow("turned off");
+  });
   it.each(aiFeatures)("disables %s without disturbing the other preferences or calling the operation", async (feature) => {
     const dir = await root(); const store = createAIPreferences(dir);
     const next = defaultAIPreferences(); next.features[feature] = false;
@@ -53,6 +64,20 @@ describe("AI assistance privacy gates", () => {
   });
 });
 describe("immutable AI analyses", () => {
+  it("caches worktree advice against evidence and never treats it as cleanup authorization", async () => {
+    const f = await fixture();
+    const worktree = { kind: "worktree" as const, commonDir: "/repo/.git", path: "/tree" };
+    const preview = await f.service.prepare(worktree, "en");
+    const args = { ...f.args, subject: worktree, expectedKey: preview.key };
+    const record = await f.service.generate(args);
+    expect(f.request.mock.calls[0][0].system).toContain("Never declare removal safe");
+    expect((await f.service.prepare(worktree, "en")).cached).toEqual(record);
+    await f.service.generate({ ...args, requestId: randomUUID() });
+    expect(f.request).toHaveBeenCalledTimes(1);
+    f.input.documents[0].content = "New local edits";
+    await expect(f.service.generate({ ...args, requestId: randomUUID() })).rejects.toThrow("inputs changed");
+    expect(f.request).toHaveBeenCalledTimes(1);
+  });
   it.each(["duplicates", "comparison"] as const)("requests a concise decision brief for %s without changing cached results", async (kind) => {
     const f = await fixture();
     const selected: AIAnalysisSubject = kind === "duplicates" ? subject : { kind, runId: "fixture" };

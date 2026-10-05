@@ -17,7 +17,7 @@ export const AIAnalysisReview = ({ subject, standalone = false, onClose, closeRe
   const allowed = prefs.enabled(subject.kind);
   const [preview, setPreview] = useState<AIAnalysisPreview>();
   const objectIdentity = JSON.stringify(subject.kind === "profile" ? [subject.kind, subject.profileId, subject.targetId]
-    : subject.kind === "comparison" ? [subject.kind, subject.runId] : [subject.kind, subject.objectId ?? subject.documents]);
+    : subject.kind === "comparison" ? [subject.kind, subject.runId] : subject.kind === "worktree" ? [subject.kind, subject.commonDir, subject.path] : [subject.kind, subject.objectId ?? subject.documents]);
   const [result, setResult] = useState<{ owner: string; value: AIAnalysisRecord }>();
   const record = result?.owner === objectIdentity ? result.value : undefined;
   const setRecord = (value: AIAnalysisRecord | undefined) => {
@@ -62,8 +62,9 @@ export const AIAnalysisReview = ({ subject, standalone = false, onClose, closeRe
     } catch (error) { if (active.current && currentIdentity.current === identity) setError(String(error)); }
     finally { if (active.current && currentIdentity.current === identity) setBusy(undefined); }
   };
-  const action = subject.kind === "comparison" ? "Analyze results" : subject.kind === "duplicates" ? "Analyze differences" : "Analyze Profile";
-  const heading = subject.kind === "duplicates" ? "Duplicate Skill analysis" : "AI analysis";
+  const action = subject.kind === "comparison" ? "Analyze results" : subject.kind === "duplicates" ? "Analyze differences" : subject.kind === "worktree" ? "Analyze retention" : "Analyze Profile";
+  const heading = subject.kind === "duplicates" ? "Duplicate Skill analysis" : subject.kind === "worktree" ? "Worktree retention analysis" : "AI analysis";
+  const partialMessage = subject.kind === "worktree" ? "Partial analysis: some local evidence is unavailable or omitted. Check the scope before deciding." : "Partial analysis: long content is truncated. Only the displayed scope is analyzed.";
   const shownDocument = record?.documents.find((doc) => doc.id === evidence);
   const priority = { risk: 0, suggestion: 1, observation: 2 };
   const findings = [...(record?.findings ?? [])].sort((a, b) => priority[a.category] - priority[b.category])
@@ -87,7 +88,7 @@ export const AIAnalysisReview = ({ subject, standalone = false, onClose, closeRe
       {(!preview || record.key !== preview.key) ? <Notice tone="warning">{t("Inputs changed. This is the previous analysis; regenerate to analyze the current content.")}</Notice> : null}
       {standalone ? <AIReviewHeading title={t("AI analysis")} actions={actions} /> : null}
       <p className="ai-review-overview">{record.overview}</p>
-      {record.partial ? <Notice tone="warning">{t("Partial analysis: long content is truncated. Only the displayed scope is analyzed.")}</Notice> : null}
+      {record.partial ? <Notice tone="warning">{t(partialMessage)}</Notice> : null}
       <AIReviewFindings items={visibleFindings} />
       <details className="ai-review-details"><summary>{remainingFindings.length ? t("More findings ({{count}})", { count: remainingFindings.length }) : t("Evidence and scope")}</summary><div className="skill-summary-content">
       <AIReviewFindings items={remainingFindings} />

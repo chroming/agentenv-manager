@@ -16,6 +16,7 @@ import type { ProjectStore } from "../projects/projectStore";
 import type { GitCommandRunOptions, GitCommandRunner } from "../skillSources/gitCommandRunner";
 import { copyWorktreeVerified, fingerprintWorktreeTree, hashWorktreeTree, measureWorktreeTree } from "./worktreeSnapshot";
 import { findRepositoryAncestor, repositoryDiscoveryDirectories, repositoryDiscoveryIssue, worktreeDiscoveryCandidates, WORKTREE_SCAN_SKIP_DIRECTORIES } from "./worktreeDiscovery";
+import { readWorktreeAnalysis } from "./worktreeAnalysis";
 
 const SettingsSchema = z.object({
   formatVersion: z.literal(1),
@@ -122,6 +123,7 @@ export interface WorktreeService {
   listRecovery(): Promise<WorktreeRecoveryInventory>;
   restore(id: string): Promise<WorktreeRecoveryRecord>;
   cancelScan(): void;
+  readAnalysis(commonDir: string, path: string): Promise<Awaited<ReturnType<typeof readWorktreeAnalysis>>>;
 }
 
 export const createWorktreeService = ({
@@ -292,6 +294,12 @@ export const createWorktreeService = ({
   };
 
   return {
+    readAnalysis: async (commonDir, path) => {
+      if (!discovered.has(discoveredKey(commonDir, path))) throw new Error("Refresh Worktrees before analyzing this directory.");
+      const entry = await findEntry(commonDir, path);
+      if (entry.main || !entry.exists || !entry.head) throw new Error("This linked Worktree is unavailable for analysis. Refresh the inventory.");
+      return readWorktreeAnalysis(entry, await git());
+    },
     addScanRoot: async (path) => {
       if (!isAbsolute(path)) throw new Error("Scan location must be absolute");
       const canonical = await realpath(path);

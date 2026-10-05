@@ -9,6 +9,7 @@ import {
   AlignedResourceList,
   Badge,
   Button,
+  ChoiceInput,
   ControlGroup,
   DetailList,
   DialogBody,
@@ -45,6 +46,14 @@ import { alignedResourceRowFixtures } from "../fixtures/alignedResourceRows";
 import { OverflowTooltip } from "../../src/renderer/components/OverflowTooltip";
 import { InfoTip } from "../../src/renderer/components/InfoTip";
 import { useModalDialog } from "../../src/renderer/hooks/useModalDialog";
+
+it("opts aligned selection lanes into flush margins without changing native inputs", () => {
+  render(<><ChoiceInput type="checkbox" aria-label="Native" /><ChoiceInput type="checkbox" alignment="flush" aria-label="Aligned" /></>);
+  expect(screen.getByRole("checkbox", { name: "Native" })).not.toHaveClass("ui-choice-input--flush");
+  const aligned = screen.getByRole("checkbox", { name: "Aligned" });
+  expect(aligned).toHaveClass("ui-choice-input--flush");
+  expect(aligned).not.toHaveAttribute("alignment");
+});
 
 it("keeps compact headings semantic and renders path previews as selectable plain text", () => {
   const { container } = render(<>
