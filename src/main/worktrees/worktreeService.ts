@@ -13,9 +13,9 @@ import type {
 import { copyPathVerified, hashRequiredPathEntry } from "../filesystemIntegrity";
 import { isMissingFileError, writeAtomic } from "../fileUtils";
 import type { ProjectStore } from "../projects/projectStore";
-import type { GitCommandRunner } from "../skillSources/gitCommandRunner";
+import type { GitCommandRunOptions, GitCommandRunner } from "../skillSources/gitCommandRunner";
 import { copyWorktreeVerified, hashWorktreeTree, measureWorktreeTree } from "./worktreeSnapshot";
-import { repositoryDiscoveryDirectories, worktreeDiscoveryCandidates, WORKTREE_SCAN_SKIP_DIRECTORIES } from "./worktreeDiscovery";
+import { findRepositoryAncestor, repositoryDiscoveryDirectories, repositoryDiscoveryIssue, worktreeDiscoveryCandidates, WORKTREE_SCAN_SKIP_DIRECTORIES } from "./worktreeDiscovery";
 
 const SettingsSchema = z.object({
   formatVersion: z.literal(1),
@@ -38,6 +38,7 @@ const RecoverySchema = z.object({
 }).strict();
 
 const MAX_DIRECTORIES = 5_000;
+const INSPECTION_CONCURRENCY = 4;
 const SKIP_DIRECTORIES = WORKTREE_SCAN_SKIP_DIRECTORIES;
 const ACTIVE_GIT_MARKERS = [
   "MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "REBASE_HEAD", "BISECT_LOG",
@@ -70,6 +71,11 @@ const hasNestedRepository = async (root: string, signal?: AbortSignal): Promise<
 };
 
 type GitWorktree = Pick<WorktreeEntry, "path" | "head" | "branch" | "detached" | "locked" | "prunable">;
+
+const readGit = (runner: GitCommandRunner, args: string[], options: GitCommandRunOptions) =>
+  runner.run(["-c", "core.fsmonitor=false", ...args], {
+    ...options, env: { ...options.env, GIT_OPTIONAL_LOCKS: "0" }
+  });
 
 export const parseWorktreeList = (output: string): GitWorktree[] => output
   .split("\0\0")
@@ -162,7 +168,7 @@ export const createWorktreeService = ({
     return runner;
   };
   const readRegistration = async (runner: GitCommandRunner, commonDir: string, signal?: AbortSignal) => {
-    const raw = await runner.run(["worktree", "list", "--porcelain", "-z"], {
+    const raw = await readGit(runner, ["worktree", "list", "--porcelain", "-z"], {
       cwd: commonDir, timeoutMs: 8_000, maxOutputBytes: 2_000_000, signal
     });
     const entries = parseWorktreeList(raw.stdout);
@@ -170,7 +176,7 @@ export const createWorktreeService = ({
     // Git can report an absorbed submodule's admin directory as its main tree.
     if (first && resolve(first.path) === resolve(commonDir) &&
         !raw.stdout.split("\0\0")[0].split("\0").includes("bare")) {
-      const main = await runner.run(["rev-parse", "--show-toplevel"], {
+      const main = await readGit(runner, ["rev-parse", "--show-toplevel"], {
         cwd: commonDir, env: { GIT_OPTIONAL_LOCKS: "0" }, timeoutMs: 8_000, maxOutputBytes: 32_000, signal
       });
       first.path = await realpath(main.stdout.trim());
@@ -206,7 +212,7 @@ export const createWorktreeService = ({
     if (!exists) reasons.push("Directory is unavailable");
     if (exists && !main) {
       try {
-        const status = await runner.run(
+        const status = await readGit(runner,
           ["status", "--porcelain=v1", "-z", "--ignored=matching", "--untracked-files=all"],
           { cwd: path, env: { GIT_OPTIONAL_LOCKS: "0" }, timeoutMs: 12_000, maxOutputBytes: 4_000_000, signal }
         );
@@ -216,12 +222,13 @@ export const createWorktreeService = ({
         }
         if (changes.length) reasons.push(`${changes.length} changed or untracked paths`);
         if (ignored.length) reasons.push(`${ignored.length} ignored paths`);
-        const modules = await runner.run(["submodule", "status", "--recursive"], {
-          cwd: path, timeoutMs: 12_000, maxOutputBytes: 1_000_000, signal
+        // Gitlinks protect initialized and missing submodules without launching git-submodule.
+        const modules = await readGit(runner, ["ls-files", "--stage", "-z"], {
+          cwd: path, timeoutMs: 8_000, maxOutputBytes: 4_000_000, signal
         });
-        submodules = Boolean(modules.stdout.trim());
+        submodules = modules.stdout.split("\0").some((record) => record.startsWith("160000 "));
         if (submodules) reasons.push("Contains submodules");
-        const gitDirResult = await runner.run(["rev-parse", "--git-dir"], {
+        const gitDirResult = await readGit(runner, ["rev-parse", "--git-dir"], {
           cwd: path, timeoutMs: 8_000, maxOutputBytes: 32_000, signal
         });
         const gitDir = resolve(path, gitDirResult.stdout.trim());
@@ -234,7 +241,7 @@ export const createWorktreeService = ({
           unsafeLocalState = true;
         }
         measurement = await measureWorktreeTree(path, signal);
-        const unique = await runner.run(["for-each-ref", "--format=%(refname)", "--contains", registration.head ?? "HEAD"], {
+        const unique = await readGit(runner, ["for-each-ref", "--format=%(refname)", "--contains", registration.head ?? "HEAD"], {
           cwd: path, timeoutMs: 8_000, maxOutputBytes: 1_000_000, signal
         });
         const containing = unique.stdout.trim().split("\n").filter(Boolean);
@@ -247,7 +254,7 @@ export const createWorktreeService = ({
         }
       } catch (error) {
         signal?.throwIfAborted();
-        reasons.push(`Git check failed: ${error instanceof Error ? error.message : String(error)}`);
+        reasons.push(`Git check failed: ${repositoryDiscoveryIssue(path, error)}`);
       }
     }
     const state = keptReason || registration.locked ? "kept"
@@ -348,6 +355,7 @@ export const createWorktreeService = ({
         });
         controller.signal.throwIfAborted();
         const entries: WorktreeEntry[] = [];
+        const inspections: Array<{ commonDir: string; registration: GitWorktree; mainPath: string }> = [];
         const found = new Set<string>();
         const visited = new Set<string>();
         const repositories = new Set<string>();
@@ -358,19 +366,16 @@ export const createWorktreeService = ({
         for (const [index, root] of scanRoots.entries()) {
           controller.signal.throwIfAborted();
           try {
-            const repository = await runner.run(["rev-parse", "--show-toplevel"], {
-              cwd: root, timeoutMs: 5_000, maxOutputBytes: 32_000, signal: controller.signal
-            });
-            const rootPath = repository.stdout.trim();
+            const rootPath = await findRepositoryAncestor(root, controller.signal);
             if (rootPath && resolve(rootPath) !== resolve(root)) {
               const canonical = await realpath(rootPath);
               if (isWithin(canonical, canonicalHome) && !scanRoots.includes(canonical)) {
                 issues.push(`${root}: The repository root is Home or its parent. Add the repository explicitly to include it.`);
               } else queues[index].push(canonical);
             }
-          } catch {
+          } catch (error) {
             controller.signal.throwIfAborted();
-            // A scan location can contain repositories without being one itself.
+            issues.push(repositoryDiscoveryIssue(root, error));
           }
         }
         let cursor = 0;
@@ -390,25 +395,27 @@ export const createWorktreeService = ({
             visited.add(canonical);
             const directory = await readdir(canonical, { withFileTypes: true });
             if (directory.some((entry) => entry.name === ".git")) {
-              const result = await runner.run(["rev-parse", "--git-common-dir"], {
-                cwd: canonical, timeoutMs: 8_000, maxOutputBytes: 32_000, signal: controller.signal
-              });
-              const commonDir = await realpath(resolve(canonical, result.stdout.trim()));
-              if (!repositories.has(commonDir)) {
-                repositories.add(commonDir);
-                const registered = await readRegistration(runner, commonDir, controller.signal);
-                for (const registration of registered) {
-                  controller.signal.throwIfAborted();
-                  const entry = await inspect(runner, commonDir, registration, registered[0].path,
-                    settings.kept[keepKey(commonDir, resolve(registration.path))], controller.signal);
-                  entries.push(entry);
-                  found.add(discoveredKey(commonDir, entry.path));
+              try {
+                const result = await readGit(runner, ["rev-parse", "--git-common-dir"], {
+                  cwd: canonical, timeoutMs: 8_000, maxOutputBytes: 32_000, signal: controller.signal
+                });
+                const commonDir = await realpath(resolve(canonical, result.stdout.trim()));
+                if (!repositories.has(commonDir)) {
+                  const registered = await readRegistration(runner, commonDir, controller.signal);
+                  repositories.add(commonDir);
+                  for (const registration of registered) {
+                    controller.signal.throwIfAborted();
+                    inspections.push({ commonDir, registration, mainPath: registered[0].path });
+                  }
                 }
+                const nested = await repositoryDiscoveryDirectories(runner, canonical, controller.signal);
+                issues.push(...nested.issues);
+                queue.push(...nested.paths);
+                continue;
+              } catch (error) {
+                controller.signal.throwIfAborted();
+                issues.push(repositoryDiscoveryIssue(current, error));
               }
-              const nested = await repositoryDiscoveryDirectories(runner, canonical, controller.signal);
-              issues.push(...nested.issues);
-              queue.push(...nested.paths);
-              continue;
             }
             for (const child of directory) {
               if (child.isDirectory() && !SKIP_DIRECTORIES.has(child.name)) {
@@ -420,6 +427,22 @@ export const createWorktreeService = ({
             issues.push(`${current}: ${error instanceof Error ? error.message : String(error)}`);
           }
         }
+        controller.signal.throwIfAborted();
+        let nextInspection = 0;
+        const completed = await Promise.allSettled(Array.from(
+          { length: Math.min(INSPECTION_CONCURRENCY, inspections.length) }, async () => {
+            while (nextInspection < inspections.length) {
+              controller.signal.throwIfAborted();
+              const index = nextInspection++;
+              const { commonDir, registration, mainPath } = inspections[index];
+              const entry = await inspect(runner, commonDir, registration, mainPath,
+                settings.kept[keepKey(commonDir, resolve(registration.path))], controller.signal);
+              entries[index] = entry;
+              found.add(discoveredKey(commonDir, entry.path));
+            }
+          }
+        ));
+        for (const result of completed) if (result.status === "rejected") throw result.reason;
         controller.signal.throwIfAborted();
         discovered.clear();
         for (const key of found) discovered.add(key);

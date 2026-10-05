@@ -298,7 +298,15 @@ Automatic aliases resolving to Home or its parent are excluded and reported.
 Descendant directory links are not recursively followed; explicitly added locations
 and Git-registered worktree paths can resolve links without unbounded traversal.
 Passive status checks disable optional Git locks so discovery does not refresh
-worktree index files.
+worktree index files, and disable fsmonitor hooks for the read-only inventory.
+Ordinary containers are checked for ancestor Git markers before launching Git;
+absence of a repository is not a scan warning. Invalid Git markers report the exact
+affected path with a repair action, mark discovery incomplete, and do not stop
+discovery of valid repositories below or beside them. Independent registered-tree
+inspections run with at most four workers and preserve registration order. Cancelled
+inventories wait for those workers and do not publish partial results. Submodule
+protection comes from Git index gitlinks, including missing declarations/checkouts;
+inventory does not launch recursive git-submodule commands just to identify them.
 The toolbar owns scanning feedback without moving an existing list. Scope, review,
 confirmation and recovery use shared modal shells; branch, state and action lanes
 are aligned across all inventory rows. Scan-location editing never deletes folders.

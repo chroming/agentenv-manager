@@ -1,12 +1,35 @@
 import { lstat } from "node:fs/promises";
-import { isAbsolute, join, relative, resolve, sep } from "node:path";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { isMissingFileError } from "../fileUtils";
-import type { GitCommandRunner } from "../skillSources/gitCommandRunner";
+import { GitCommandError, type GitCommandRunner } from "../skillSources/gitCommandRunner";
 
 export const WORKTREE_SCAN_SKIP_DIRECTORIES = new Set([
   ".git", ".cache", ".config", ".venv", "node_modules", "vendor", "dist", "build", "target"
 ]);
 const REPOSITORY_WORKTREE_CONTAINERS = ["_worktrees", ".worktrees", "worktrees", "Worktrees"];
+
+export const findRepositoryAncestor = async (root: string, signal?: AbortSignal): Promise<string | undefined> => {
+  let path = resolve(root);
+  while (true) {
+    signal?.throwIfAborted();
+    try {
+      await lstat(join(path, ".git"));
+      return path;
+    } catch (error) {
+      if (!isMissingFileError(error)) throw error;
+    }
+    const parent = dirname(path);
+    if (parent === path) return undefined;
+    path = parent;
+  }
+};
+
+export const repositoryDiscoveryIssue = (path: string, error: unknown): string => {
+  if (error instanceof GitCommandError && /not a git repository|invalid gitfile format|not a \.git file/i.test(error.stderr)) {
+    return `${path}: Git metadata is unavailable. Check this folder's .git file or directory, or remove this scan location. Other folders will still be scanned.`;
+  }
+  return `${path}: ${error instanceof Error ? error.message : String(error)}`;
+};
 
 export const repositoryDiscoveryDirectories = async (
   runner: GitCommandRunner, root: string, signal?: AbortSignal

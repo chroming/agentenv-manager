@@ -41,6 +41,128 @@ const fixture = async () => {
 };
 
 describe("worktree inventory and cleanup", () => {
+  it("does not launch failed Git probes for ordinary scan containers", async () => {
+    const { repo, linked, runner, service } = await fixture();
+    const commands = vi.spyOn(runner, "run");
+    const inventory = await service.inventory();
+    expect(inventory.entries.map((entry) => entry.path)).toEqual([repo, linked]);
+    expect(inventory.issues).toEqual([]);
+    expect(commands.mock.calls.filter(([args, options]) => args.includes("rev-parse") &&
+      options?.cwd && ![repo, linked, join(repo, ".git")].includes(options.cwd))).toEqual([]);
+  });
+
+  it("keeps scanning below an invalid Git marker and explains the affected location", async () => {
+    const { root, repo, runner } = await fixture();
+    const location = join(root, "stale-container");
+    await mkdir(join(location, ".git"), { recursive: true });
+    const nested = join(location, "valid-project");
+    await run("git", ["clone", "--local", repo, nested]);
+    const service = createWorktreeService({
+      appDataRoot: join(root, "invalid-marker-data"), homeDir: join(root, "home"),
+      projectStore: { listLocalRootPaths: async () => [location] } as unknown as ProjectStore,
+      resolveRunner: async () => runner
+    });
+    const inventory = await service.inventory();
+    expect(inventory.entries.map((entry) => entry.path)).toContain(nested);
+    expect(inventory.issues).toEqual([expect.stringContaining(`${location}: Git metadata is unavailable`)]);
+    expect(inventory.issues.join("\n")).not.toMatch(/fatal: not a git repository/i);
+    expect(inventory.incomplete).toBe(true);
+  });
+
+  it("avoids submodule process startup when the worktree has no submodule declarations", async () => {
+    const { runner, service } = await fixture();
+    const commands = vi.spyOn(runner, "run");
+    const inventory = await service.inventory();
+    expect(inventory.entries.every((entry) => !entry.submodules)).toBe(true);
+    expect(commands.mock.calls.filter(([args]) => args.includes("submodule"))).toEqual([]);
+  });
+
+  it("inspects independent worktrees concurrently with a bounded process count", async () => {
+    const { repo, runner, service } = await fixture();
+    for (let index = 0; index < 5; index++) {
+      await run("git", ["-C", repo, "worktree", "add", "-b", `parallel-${index}`, join(repo, "..", `parallel-${index}`)]);
+    }
+    const original = runner.run.bind(runner);
+    let active = 0;
+    let maximum = 0;
+    vi.spyOn(runner, "run").mockImplementation(async (args, options) => {
+      active++;
+      maximum = Math.max(maximum, active);
+      try {
+        if (args.includes("status")) await new Promise((resolve) => setTimeout(resolve, 20));
+        return await original(args, options);
+      } finally { active--; }
+    });
+    const started = performance.now();
+    const inventory = await service.inventory();
+    console.info(`WORKTREE_SCAN_FIXTURE=${JSON.stringify({ durationMs: Math.round(performance.now() - started), entries: inventory.entries.length, maximumGitProcesses: maximum })}`);
+    expect(inventory.entries).toHaveLength(7);
+    expect(inventory.incomplete).toBe(false);
+    expect(maximum).toBeGreaterThan(1);
+    expect(maximum).toBeLessThanOrEqual(4);
+  });
+
+  it("includes an explicitly selected repository subfolder without probing unrelated containers", async () => {
+    const { root, repo, linked, runner } = await fixture();
+    const source = join(repo, "src", "nested");
+    await mkdir(source, { recursive: true });
+    const commands = vi.spyOn(runner, "run");
+    const service = createWorktreeService({
+      appDataRoot: join(root, "subfolder-data"), homeDir: join(root, "home"),
+      projectStore: { listLocalRootPaths: async () => [source] } as unknown as ProjectStore,
+      resolveRunner: async () => runner
+    });
+    const inventory = await service.inventory();
+    expect(inventory.entries.map((entry) => entry.path)).toEqual([repo, linked]);
+    expect(inventory.incomplete).toBe(false);
+    expect(commands.mock.calls.some(([, options]) => options?.cwd === source)).toBe(false);
+  });
+
+  it("protects index submodules even if their declarations and checkout are missing", async () => {
+    const { root, repo, linked, service } = await fixture();
+    const head = (await run("git", ["-C", repo, "rev-parse", "HEAD"])).stdout.trim();
+    await run("git", ["-C", linked, "update-index", "--add", "--cacheinfo", `160000,${head},missing-module`]);
+    const inventory = await service.inventory();
+    const entry = inventory.entries.find((item) => item.path === linked)!;
+    expect(entry.submodules).toBe(true);
+    expect(entry.manualReviewAvailable).toBe(false);
+    expect(entry.reasons).toContain("Contains submodules");
+    await expect(service.preview(entry.commonDir, entry.path, true)).rejects.toThrow("Contains submodules");
+    expect(await readFile(join(root, "project", "README.md"), "utf8")).toBe("base\n");
+  });
+
+  it("waits for cancelled inspection workers and never starts queued Git checks", async () => {
+    const { repo, runner, service } = await fixture();
+    for (let index = 0; index < 5; index++) {
+      await run("git", ["-C", repo, "worktree", "add", "-b", `cancel-${index}`, join(repo, "..", `cancel-${index}`)]);
+    }
+    const original = runner.run.bind(runner);
+    let ready!: () => void;
+    let release!: () => void;
+    const started = new Promise<void>((resolve) => { ready = resolve; });
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    let active = 0;
+    let statuses = 0;
+    vi.spyOn(runner, "run").mockImplementation(async (args, options) => {
+      active++;
+      try {
+        if (args.includes("status")) {
+          if (++statuses === 4) ready();
+          await gate;
+        }
+        return await original(args, options);
+      } finally { active--; }
+    });
+    const pending = service.inventory();
+    const cancelled = expect(pending).rejects.toThrow("Worktree scan cancelled");
+    await started;
+    service.cancelScan();
+    release();
+    await cancelled;
+    expect(statuses).toBe(4);
+    expect(active).toBe(0);
+  });
+
   it("parses Git's stable NUL-separated format", () => {
     expect(parseWorktreeList("worktree /tmp/main\0HEAD abc\0branch refs/heads/main\0\0worktree /tmp/other\0HEAD def\0detached\0locked testing\0\0"))
       .toEqual([
@@ -166,7 +288,7 @@ describe("worktree inventory and cleanup", () => {
     expect(inventory.scanRoots).toEqual([repo]);
     expect(inventory.configuredRoots).toEqual([repo]);
     expect(inventory.entries.map((entry) => entry.path)).toEqual([repo, linked]);
-    expect(runGit.mock.calls.filter(([args]) => args[0] === "worktree")).toHaveLength(1);
+    expect(runGit.mock.calls.filter(([args]) => args.includes("worktree"))).toHaveLength(1);
   });
 
   it("visits later roots before an earlier container can consume the directory budget", async () => {
@@ -273,7 +395,7 @@ describe("worktree inventory and cleanup", () => {
     expect(inventory.entries.map((entry) => entry.path)).toEqual([repo, linked]);
     expect(inventory.incomplete).toBe(false);
     expect(inventory.issues).toEqual([]);
-    expect(commands.mock.calls.filter(([args]) => args[0] === "worktree" && args[1] === "list")).toHaveLength(1);
+    expect(commands.mock.calls.filter(([args]) => args.includes("worktree") && args.includes("list"))).toHaveLength(1);
   });
 
   it("finds ignored nested repositories and their deeply located registered trees", async () => {
@@ -348,7 +470,8 @@ describe("worktree inventory and cleanup", () => {
     await service.inventory();
     expect(await readFile(index)).toEqual(original);
     expect((await lstat(index)).mtimeMs).toBe(timestamp);
-    expect(runGit.mock.calls.find(([args]) => args[0] === "status")?.[1]?.env).toEqual({ GIT_OPTIONAL_LOCKS: "0" });
+    expect(runGit.mock.calls.find(([args]) => args.includes("status"))?.[1]?.env).toEqual({ GIT_OPTIONAL_LOCKS: "0" });
+    expect(runGit.mock.calls.filter(([args]) => args.includes("status")).every(([args]) => args.includes("core.fsmonitor=false"))).toBe(true);
   });
 
   it("never treats a user-kept tree as a cleanup candidate", async () => {
@@ -474,7 +597,7 @@ describe("worktree inventory and cleanup", () => {
       appDataRoot: join(root, "data"), homeDir: join(root, "home"),
       projectStore: { listLocalRootPaths: async () => [] } as unknown as ProjectStore,
       resolveRunner: async () => ({ ...runner, run: async (args, options) => {
-        if (!interrupted && args[0] === "rev-parse" && args[1] === "--git-dir" && options?.cwd === linked) {
+        if (!interrupted && args.includes("rev-parse") && args.includes("--git-dir") && options?.cwd === linked) {
           interrupted = true;
           throw new Error("Simulated interruption before index copy");
         }
