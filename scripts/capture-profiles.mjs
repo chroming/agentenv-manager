@@ -998,6 +998,16 @@ try {
     workspaceSyncRemote
   } = await prepareFixture(fixtureRoot);
   if (readmeOnly) {
+    const worktreeRepo = join(homeDir, "Github", "release-console");
+    await mkdir(worktreeRepo, { recursive: true });
+    await writeFile(join(worktreeRepo, "README.md"), "# Release Console\n\nDemo worktree project.\n");
+    await execFile("git", ["init", "-b", "main", worktreeRepo]);
+    await execFile("git", ["-C", worktreeRepo, "add", "."]);
+    await execFile("git", ["-C", worktreeRepo, "-c", "user.name=Demo", "-c", "user.email=demo@example.com", "commit", "-m", "Demo project"]);
+    for (const branch of ["release-review", "docs-preview", "interface-check"]) {
+      await execFile("git", ["-C", worktreeRepo, "worktree", "add", "-b", branch, join(homeDir, ".codex", "worktrees", branch)]);
+    }
+    await writeFile(join(homeDir, ".codex", "worktrees", "interface-check", "notes.md"), "Uncommitted demo notes.\n");
     const devicesPath = join(appDataRoot, "remote-devices.json");
     const devices = JSON.parse(await readFile(devicesPath, "utf8"));
     devices.devices = devices.devices.filter((device) => device.host !== "offline-fixture");

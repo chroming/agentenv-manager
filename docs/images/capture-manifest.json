@@ -1,9 +1,9 @@
 {
-  "generatedAt": "2026-09-22T13:39:36.799Z",
+  "generatedAt": "2026-10-05T06:11:26.057Z",
   "build": {
-    "sourceFingerprint": "a1b159c324a5211d61d11f6c484f12f03503d462db6ee38407fa4f037b0063b5",
-    "artifactFingerprint": "f66bc5683c2928f730ac1927dafb7950c73144c4b2171582cec81cfa069a1b83",
-    "generatedAt": "2026-09-22T13:38:39.397Z"
+    "sourceFingerprint": "f728555cd8c48ba59ddd64789b2d6434c0757c007d78f58b093c2fe0977a5390",
+    "artifactFingerprint": "e3c8a1c1097194cdf3e49a6d8c91b2924d4221c7e47fbef4209030e1c0fba070",
+    "generatedAt": "2026-10-05T06:05:51.523Z"
   },
   "viewports": [
     "1180x728"
@@ -11,58 +11,66 @@
   "files": [
     {
       "file": "agents.png",
-      "bytes": 66320,
-      "sha256": "551433b5adf82a4443c4e11659921d15571a1801e4f226f8d2324e7922688b4d",
+      "bytes": 68214,
+      "sha256": "aeff7ccdab1818447d6fcca6f6e2d79cf5a1bc499a209775d24bb3f34609de11",
       "width": 1180,
       "height": 728
     },
     {
       "file": "conversations.png",
-      "bytes": 74721,
-      "sha256": "28e24146f3916ecaaae77e4703ca7f8234dff682b8602c38771502f3907579f1",
+      "bytes": 75468,
+      "sha256": "6c8c4cf324894408c223c150ab0298b4dd951ff86cd9066a3c74178f02d02685",
       "width": 1180,
       "height": 728
     },
     {
       "file": "instructions.png",
-      "bytes": 79102,
-      "sha256": "938c1774dc1c8cde81e945d642d622572b6212b373a8ce6c5b6c90a5357d61f7",
+      "bytes": 81990,
+      "sha256": "686741c12349eb96991b24d5cdf3d0fc33561f32859ff40ba8fe278a2c93710f",
       "width": 1180,
       "height": 728
     },
     {
       "file": "profiles.png",
-      "bytes": 60447,
-      "sha256": "b2d399595c95f06e7a9d28607a75c4603a0c8b74cfccb0de32fb979371a50694",
+      "bytes": 62239,
+      "sha256": "5d1cc238b9fc85b39cba5c2de9e198424579a4fb26d49ce291287509e7f99853",
       "width": 1180,
       "height": 728
     },
     {
       "file": "skills-by-source.png",
-      "bytes": 55617,
-      "sha256": "d94dc7c0c2fea20df72060fd7e8642f2bbfe95f5da11d8762ba43bd7cf129b9f",
+      "bytes": 56730,
+      "sha256": "4a0488d882cabc7593fd75e18670b8ed88f1b6dfa910ecf97b66e9d06e0b195e",
       "width": 1180,
       "height": 728
     },
     {
       "file": "skills-list.png",
-      "bytes": 74650,
-      "sha256": "0628ac781372b948660363bdb05df92ff8884caa86f7cefb95c46e5d1b17ad7a",
+      "bytes": 76278,
+      "sha256": "cdc0174eb2a312cb9de8babea2abfad6a00859783851addf36a52775d20ee95b",
       "width": 1180,
       "height": 728
     },
     {
       "file": "workspaces.png",
-      "bytes": 42511,
-      "sha256": "f62a8f62f741134dae2f1b20bedcd3ef605643198e64d36be0dd3abc66349a1a",
+      "bytes": 44969,
+      "sha256": "b8c69cf72339bbda99c07f29c1872e858fc3330f5af09ed1fb4b4cf6cda068ee",
+      "width": 1180,
+      "height": 728
+    },
+    {
+      "file": "worktrees.png",
+      "bytes": 63990,
+      "sha256": "5bbd7e966546c34ae82469d8bc26023bac805b318c8bb2e08a1e746d1d604615",
       "width": 1180,
       "height": 728
     },
     {
       "file": "profile-compare.png",
+      "bytes": 62907,
+      "sha256": "9b6b3d06dfe2ae64c2f57ba5d2a0ca75a0fc54dde23534d2a0d7632350971b80",
       "width": 920,
-      "height": 620,
-      "sha256": "2c770752b158def0751f78b735fc8d4d7e2591bb657e542e3c1ff56bb111b438"
+      "height": 620
     }
   ],
   "mode": "mock-data",

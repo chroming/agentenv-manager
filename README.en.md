@@ -12,6 +12,7 @@ AgentEnv Manager keeps coding agent environments in one place. Its main features
 - **Instructions management:** Save reusable instruction blocks and compose them in order into each Agent's instruction file.
 - **Skills management:** Import Skills from local folders, ZIP archives, GitHub, or Git repositories, add tags and groups, and keep checking their sources for updates.
 - **Project environments:** Save local or SSH Linux project folders, manage their Instructions and Skills, and open an Agent or copy its launch command.
+- **Worktree cleanup:** See local Git worktree branches, uncommitted changes, and disk usage, then preview and remove worktrees you no longer need.
 - **Conversation search:** Search Agent histories on this computer and SSH devices from one place, with messages and full project paths. Reopen local sessions in their original Agent or hand them off to another.
 - **Try before Apply:** Preview Profile changes and run the same task with the current setup and a proposed Profile before deciding whether to apply it.
 - **AI assistance:** Summarize Skill updates, suggest tags, or analyze Profiles and comparison results. Your configured AI service is called only when you ask.
@@ -83,6 +84,14 @@ The folder remains the source of truth. A Workspace is not bound to a Profile, d
 
 Open local folders with an installed Agent. For remote folders, supported integrations offer a remote editor entry point or a copyable SSH launch command.
 
+## Worktrees
+
+Scan common repository and worktree folders without first adding a Workspace, including common Codex, Claude Code, and Superpowers locations. Add your own scan folders when needed. Entries are grouped by repository, searchable by path or branch, and sortable by name, modification time, or size. Sort choices are remembered, and the matching information is shown in the list.
+
+![Git worktrees](docs/images/worktrees.png)
+
+Select all worktrees eligible for batch cleanup within a repository. Before removal, review paths, uncommitted content, size, and estimated freed space. Git removes the working directory, not local branches or remote history. Main repositories cannot be removed; dirty, locked, and other review-required entries need separate attention. Cleanup that retains a file backup does not count that space as freed, and recovery remains available in Worktrees.
+
 ## Skill Library
 
 The Library keeps one reusable copy of each Skill. Import from a local folder, ZIP archive, GitHub path, or regular Git repository, then install Skills into Agent-specific directories through Profiles. Tags help filter Skills by task. Manual Skill Groups can add a reusable set to several Profiles and keep those Profiles aligned when group membership changes.
@@ -90,6 +99,8 @@ The Library keeps one reusable copy of each Skill. Import from a local folder, Z
 ![Skill list and tags](docs/images/skills-list.png)
 
 Use Skill list to filter by tag or status, click a name to browse files, or click an update status to preview changes. Switch to By source when you want to inspect the whole source folder.
+
+Skills, sources, Groups, Instructions, and Conversations share search, filter, and sort controls. Lists show the modification time, size, or count used by the active sort.
 
 ![Skills grouped by source](docs/images/skills-by-source.png)
 

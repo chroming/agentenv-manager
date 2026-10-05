@@ -13,8 +13,9 @@ export const captureReadmePages = async ({ page, windowHandle, outputDir, fixtur
   await page.reload();
   await setWindowSize(page, windowHandle, 1180, 728);
   const capture = async (name) => {
-    const heading = name.startsWith("settings") ? "Settings" : { agents: "Agents", profiles: "Profiles", workspaces: "Workspaces", instructions: "Instructions", "skills-list": "Skills", "skills-by-source": "Skills", conversations: "Conversations" }[name];
+    const heading = name.startsWith("settings") ? "Settings" : { agents: "Agents", profiles: "Profiles", workspaces: "Workspaces", worktrees: "Worktrees", instructions: "Instructions", "skills-list": "Skills", "skills-by-source": "Skills", conversations: "Conversations" }[name];
     if (heading === "Settings") await page.locator(".settings-page").waitFor();
+    else if (heading === "Worktrees") await page.getByRole("region", { name: heading, exact: true }).waitFor();
     else await page.getByRole("heading", { name: heading, exact: true }).waitFor();
     await page.waitForTimeout(550);
     await page.mouse.move(1, 1);
@@ -30,7 +31,9 @@ export const captureReadmePages = async ({ page, windowHandle, outputDir, fixtur
       const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
       let node;
       while ((node = walker.nextNode())) {
-        if (node.textContent?.includes(root)) node.textContent = node.textContent.replaceAll(root, "/Users/demo/AgentEnv");
+        if (node.textContent?.includes(root)) node.textContent = node.textContent
+          .replaceAll(`/private${root}`, "/Users/demo/AgentEnv")
+          .replaceAll(root, "/Users/demo/AgentEnv");
       }
     }, fixtureRoot);
     await capturePage(page, join(outputDir, `${name}.png`));
@@ -45,8 +48,9 @@ export const captureReadmePages = async ({ page, windowHandle, outputDir, fixtur
     }
   };
   const open = async (name) => {
-    await page.getByRole("button", { name, exact: true }).click();
+    await page.locator(".workspace-button").filter({ has: page.getByText(name, { exact: true }) }).click();
     if (name === "Settings") await page.locator(".settings-page").waitFor();
+    else if (name === "Worktrees") await page.getByRole("region", { name, exact: true }).waitFor();
     else await page.getByRole("heading", { name, exact: true }).waitFor();
   };
   await page.locator(".target-list[aria-busy='false']").waitFor();
@@ -66,6 +70,13 @@ export const captureReadmePages = async ({ page, windowHandle, outputDir, fixtur
   await page.getByRole("heading", { name: "Release Console", exact: true }).waitFor();
   await page.getByRole("button", { name: "Expand Skills", exact: true }).click();
   await capture("workspaces");
+
+  await open("Worktrees");
+  await page.locator(".worktree-workspace").getByText(/release-review/).first().waitFor();
+  await page.locator('.worktree-workspace [aria-busy="true"]').waitFor({ state: "hidden" });
+  await page.getByRole("button", { name: "Sort Worktrees: Name", exact: true }).click();
+  await page.getByRole("menuitemradio", { name: "Largest size", exact: true }).click();
+  await capture("worktrees");
 
   await open("Instructions");
   await capture("instructions");

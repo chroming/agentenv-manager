@@ -15,7 +15,8 @@ output directory. Keep the published image provenance in this directory's
 `capture-manifest.json` up to date.
 
 The README includes both `skills-list.png` (tags and per-Skill updates) and
-`skills-by-source.png` (source scope and updates). The README fixture excludes
+`skills-by-source.png` (source scope and updates), plus `worktrees.png` with
+synthetic Git worktrees sorted by disk usage. The README fixture excludes
 the offline-device failure case, waits for transient success notices to dismiss,
 and checks updates against its synthetic Git repository before capture.
 

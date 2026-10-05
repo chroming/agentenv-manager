@@ -12,6 +12,7 @@ AgentEnv Manager 用来统一管理多个 coding agent 的工作环境，主要�
 - **Instructions 管理**：把常用规则保存成可复用的内容块，在不同 Profile 中按顺序组合成 Agent 的指令文件。
 - **Skills 管理**：从本地、ZIP、GitHub 或 Git 仓库导入 Skills，添加标签和分组，并持续检查来源更新。
 - **项目环境**：保存常用本地或 SSH Linux 项目目录，管理项目自己的 Instructions 和 Skills，并打开 Agent 或复制启动命令。
+- **Worktree 整理**：查看本机 Git worktrees 的分支、未提交修改和占用空间，预览后清理不再需要的工作目录。
 - **对话搜索**：在一个入口搜索本机和 SSH 设备上的 Agent 历史，查看消息和完整项目路径。本地对话可以回到原 Agent，或交给另一个 Agent 续接。
 - **应用前试用**：预览 Profile 会带来的变化，用同一个任务对比当前环境和新 Profile，再决定是否应用。
 - **AI 辅助**：看 Skill 更新摘要、生成标签建议，或分析 Profile 和运行对比结果；只在手动点击时调用你配置的 AI 服务。
@@ -83,6 +84,14 @@ Workspaces 保存常用本地或 SSH Linux 目录，并展示所选 Agent 在该
 
 本地目录可用已安装的 Agent 打开；远程目录按 Agent 能力提供远程编辑器入口或可复制的 SSH 启动命令。
 
+## Worktrees
+
+不必先添加 Workspace，就能扫描常用仓库和 worktree 目录，包括 Codex、Claude Code 和 Superpowers 的常用位置，也可以添加自己的扫描目录。列表按仓库分组，可搜索路径和分支，按名称、更新时间或大小排序；排序选择会保留，列表也会显示对应信息。
+
+![Git worktrees](docs/images/worktrees.png)
+
+每个仓库可以一键选中符合批量清理条件的 worktrees。清理前会展示具体路径、未提交内容、大小和预计释放空间，再交给 Git 删除工作目录，不会删除分支或远程历史。主仓库不允许清理；脏目录、锁定目录和其他需要确认的情况单独处理。需要保留文件备份的清理不会算作已释放空间，恢复入口也会保留在 Worktrees 中。
+
 ## Skill Library
 
 Library 为每个 Skill 保存一份可复用内容。可以从本地目录、ZIP、GitHub 路径或普通 Git 仓库导入，再通过 Profile 安装到各 Agent 的专属目录。标签可以按任务筛选 Skills；手动 Skill Group 可以把常用组合加入多个 Profile，并在 Group 成员变化时同步更新这些 Profile 的有效成员。
@@ -90,6 +99,8 @@ Library 为每个 Skill 保存一份可复用内容。可以从本地目录、ZI
 ![Skill list and tags](docs/images/skills-list.png)
 
 日常在 Skill list 中按标签和状态筛选，点击名称查看文件，点击更新状态预览变化。想查看整个来源目录时，再切到 By source。
+
+Skills、来源、Groups、Instructions 和 Conversations 使用统一的搜索、筛选和排序入口；列表会显示当前排序对应的更新时间、大小或数量。
 
 ![Skills grouped by source](docs/images/skills-by-source.png)
 
