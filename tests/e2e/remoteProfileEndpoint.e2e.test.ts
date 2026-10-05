@@ -132,6 +132,7 @@ HOME="$AGENTENV_REMOTE_HOME" PATH="$AGENTENV_REMOTE_BIN:/usr/bin:/bin" /bin/sh -
         };
       };
       return {
+        bodyLineHeight: getComputedStyle(document.body).lineHeight,
         remoteAgent: style(remoteAgentName),
         remoteDevice: style(remoteDeviceName),
         remoteHost: style(remoteDeviceHost)
@@ -140,7 +141,7 @@ HOME="$AGENTENV_REMOTE_HOME" PATH="$AGENTENV_REMOTE_BIN:/usr/bin:/bin" /bin/sh -
     expect(typography.remoteAgent).toEqual({
       fontSize: "13px",
       fontWeight: "500",
-      lineHeight: "normal"
+      lineHeight: typography.bodyLineHeight
     });
     expect(typography.remoteDevice).toEqual({
       fontSize: "12px",

@@ -1783,7 +1783,7 @@ describe("Electron UI profile switching e2e", () => {
         await page.keyboard.press("Escape");
         expect(await filter.count()).toBe(0);
         expect(await toolbar.boundingBox()).toEqual(before);
-        await toolbar.locator('[aria-haspopup="menu"]').click();
+        await toolbar.locator('.ui-toolbar-overflow-menu__trigger').click();
         expect(await page.getByRole("menuitem").count()).toBeGreaterThanOrEqual(2);
         await page.keyboard.press("Escape");
       }
@@ -2093,6 +2093,7 @@ describe("Electron UI profile switching e2e", () => {
       "targets",
       "profiles",
       "projects",
+      "worktrees",
       "conversations",
       "library",
       "instructions",
@@ -5914,7 +5915,7 @@ describe("Electron UI profile switching e2e", () => {
     await enableFixtureHistory(page);
     await navigation.getByRole("button", { name: "Conversations", exact: true }).click();
     await page.getByRole("button", { name: "Filter conversations" }).click();
-    const conversationFilters = await readBoxes(page.locator(".conversation-filter-fields select"));
+    const conversationFilters = await readBoxes(page.getByRole("dialog", { name: "Filter conversations" }).locator("select"));
     expect(conversationFilters.length).toBe(5);
     expect(new Set(conversationFilters.map(({ height }) => height))).toEqual(new Set([32]));
     expect(new Set(conversationFilters.map(({ borderRadius }) => borderRadius)))
@@ -9552,14 +9553,16 @@ describe("Electron UI profile switching e2e", () => {
       const measurements = [];
       for (const name of ["Skill list", "By source", "Groups"]) {
         await page.getByRole("tab", { name, exact: true }).click();
-        const toolbar = page.locator(".ui-resource-panel-toolbar--catalog:visible");
+        const toolbar = page.locator(".skill-library-panel .ui-catalog-toolbar:visible");
         await toolbar.waitFor({ state: "visible" });
         await openSkillCatalogAction(page, "Refresh");
         if (name !== "Groups") {
           const filters = toolbar.getByRole("button", { name: /^Filters/ });
           expect(await filters.textContent()).toBe("");
           await hoverUntilVisible(page, filters, page.getByRole("tooltip"));
-          await expect.poll(() => page.getByRole("tooltip").textContent()).toBe(await filters.getAttribute("aria-label"));
+          await expect.poll(() => page.getByRole("tooltip").textContent()).toBe(
+            name === "Skill list" ? "Filters: Enabled" : "Filters: Monitored"
+          );
           expect(await page.getByRole("tooltip").evaluate((node) => getComputedStyle(node).pointerEvents)).toBe("none");
           await filters.click();
           expect(await filters.getAttribute("aria-expanded")).toBe("true");
@@ -9956,6 +9959,12 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("menuitem", { name: "Delete backup" }).click();
     await manager.getByRole("button", { name: "Delete backup", exact: true }).click();
     await expect.poll(() => fileExists(manualDeleteDir)).toBe(false);
+    await expect.poll(() => manager.textContent()).toContain("2 backups");
+    await expect.poll(() => manager.getByRole("button", { name: "Close", exact: true }).isEnabled()).toBe(true);
+    if (process.env.AGENTENV_CAPTURE_BACKUP_PERF_DIR) {
+      await mkdir(process.env.AGENTENV_CAPTURE_BACKUP_PERF_DIR, { recursive: true });
+      await page.screenshot({ path: join(process.env.AGENTENV_CAPTURE_BACKUP_PERF_DIR, "backups-after-delete-920.png") });
+    }
 
     await manager.getByRole("button", { name: "Clean up now" }).click();
     await manager.getByRole("button", { name: "Clean up 1 backup" }).click();
@@ -11795,7 +11804,9 @@ describe("Electron UI profile switching e2e", () => {
     await expect
       .poll(() => libraryRow.evaluate((row) => getComputedStyle(row).boxShadow))
       .toBe("none");
-    expect(await page.getByRole("button", { name: /^Filters/ }).getAttribute("title")).toBe("Filters: Disabled");
+    await hoverUntilVisible(page, page.getByRole("button", { name: /^Filters/ }), page.getByRole("tooltip"));
+    await expect.poll(() => page.getByRole("tooltip").textContent()).toBe("Filters: Disabled");
+    await page.mouse.move(8, 8);
     expect(await page.getByRole("group", { name: /^Library item / }).count()).toBe(1);
     await setSkillCatalogStatus(page, "updates");
     expect(await page.getByRole("group", { name: "Library item layout-skill-1" }).count()).toBe(0);

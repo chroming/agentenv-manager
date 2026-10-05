@@ -21,16 +21,22 @@ export const collectInstructionUsage = async (
   instructionId?: string
 ): Promise<InstructionUsage[]> => {
   const usage: InstructionUsage[] = [];
-  for (const summary of await profileStore.listProfiles()) {
-    if (summary.loadError) continue;
-    const profile = await profileStore.readProfile(summary.id);
-    if (
-      instructionId &&
-      !(profile.resources.instructions ?? []).some(
-        (reference) => reference.libraryId === instructionId
-      )
-    ) continue;
-    usage.push({ id: profile.id, name: profile.manifest.name, profile });
+  const summaries = (await profileStore.listProfiles()).filter((summary) => !summary.loadError);
+  for (let offset = 0; offset < summaries.length; offset += 4) {
+    // Join every active read before rejecting; callers may mutate references afterward.
+    const batch = await Promise.allSettled(summaries.slice(offset, offset + 4)
+      .map((summary) => profileStore.readProfile(summary.id)));
+    for (const result of batch) {
+      if (result.status === "rejected") throw result.reason;
+      const profile = result.value;
+      if (
+        instructionId &&
+        !(profile.resources.instructions ?? []).some(
+          (reference) => reference.libraryId === instructionId
+        )
+      ) continue;
+      usage.push({ id: profile.id, name: profile.manifest.name, profile });
+    }
   }
   return usage;
 };

@@ -314,7 +314,7 @@ describe("Repository Skill source", () => {
     await expect.poll(() => sourceGroup.count()).toBe(1);
     await page.getByRole("combobox", { name: "Source result filter" }).selectOption("changes");
     await expect.poll(() => sourceGroup.count()).toBe(1);
-    await page.getByRole("button", { name: "Reset", exact: true }).click();
+    await sourceFilterPanel.getByRole("button", { name: "Clear filters", exact: true }).click();
     await page.getByRole("button", { name: /Filters/, exact: false }).click();
     await sourceGroup.getByRole("button", { name: "Expand source" }).click();
     const firstCandidate = sourceGroup.locator(".skill-source-candidate").first();

@@ -75,12 +75,14 @@ export const effectiveAppliedLibraryVersions = async ({
   profile,
   targetPaths,
   skillLibrary,
-  state
+  state,
+  readResourceHash = hashManagedResourcePath
 }: {
   profile: ProfileDetail;
   targetPaths: TargetPaths;
   skillLibrary: readonly SkillLibraryEntry[];
   state: TargetState;
+  readResourceHash?: typeof hashManagedResourcePath;
 }) => {
   const skills = { ...(state.appliedLibraryVersions?.skills ?? {}) };
   if (
@@ -103,7 +105,7 @@ export const effectiveAppliedLibraryVersions = async ({
     if (!activeManagedPaths.has(targetPath)) continue;
     const stats = await lstat(targetPath).catch(() => undefined);
     if (!stats?.isSymbolicLink()) continue;
-    if (await hashManagedResourcePath(targetPath, "skill") === librarySkill.contentHash) {
+    if (await readResourceHash(targetPath, "skill") === librarySkill.contentHash) {
       skills[reference.libraryId] = librarySkill.contentHash;
     }
   }

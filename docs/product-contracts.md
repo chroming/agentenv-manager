@@ -2317,6 +2317,20 @@ provider session ID, the captured working directory, and the resolved Pi environ
 
 ## 23.1 AgentEnv Data Lifecycle
 
+- Passive Agent status observations MAY share Profile reads and exact path/kind hashes only
+  within one request. Each later observation and every mutation Preview/Apply starts fresh;
+  different Agent paths and resource kinds MUST NOT collapse through realpath identity.
+  With no visible Agent state entries, a status observation skips the Library scan.
+- Instruction reference inventory reads use bounded parallel batches, retain catalog order,
+  and join every active batch before reporting an error. A failed inventory cannot authorize
+  deletion; reference writes, backup verification, and rollback remain serial and hash-bound.
+- A verified backup deletion releases global operation busy state before the passive inventory
+  rescan completes. Only an exactly confirmed deleted item may be removed optimistically.
+  A pre-deletion scan cannot restore that row or satisfy the post-deletion refresh. Cleanup
+  counts alone cannot identify removed rows; destructive controls wait for the new inventory,
+  while navigation, preview, and dismissal remain available. Refresh failure does not relabel
+  a completed deletion as a failed mutation. Backend deletion protections always read fresh data.
+
 - AgentEnv data has an explicit format version. Runtime Profile reads accept only v2.
 - A v1 or unversioned non-empty data root MUST be fully copied to an external sibling migration-backup directory before conversion. When the configured data root is a symbolic link, Backup and restore operate on its physical directory and preserve the link itself. Profile conversion writes only the three canonical v2 files atomically; legacy Profile-owned Skills become self-contained Library copies; native configuration and unsupported resources remain only in the backup and migration report.
 - Migration MUST write the v2 root manifest last. Its external safety copy is hash-verified before conversion. An unsafe path, unsupported future version, backup failure, or global conversion failure first preserves the complete failed migration state, then atomically restores the entire old physical data root against that failed-state hash, including Profiles already converted earlier in the same attempt; the old version marker remains intact so startup fails closed or can retry without interpreting partial data as v2. If preserving the failed state or restoring the original fails, every known snapshot path is named and retained. A malformed individual Profile or Target state remains byte-for-byte intact, is recorded in the migration report, and enters the normal repair/recovery state without blocking valid data from moving to v2.

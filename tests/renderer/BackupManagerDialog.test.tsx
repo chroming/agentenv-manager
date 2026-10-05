@@ -22,6 +22,20 @@ const props = () => ({ busy: false, cleanupConfirm: false, dialogRef: createRef<
 });
 
 describe("Backup catalog controls", () => {
+  it("keeps preview and dismissal usable while a background inventory scan disables only deletion", () => {
+    const handlers = props();
+    const view = render(<BackupManagerDialog {...handlers} inventoryLoading />);
+    expect(screen.getByRole("button", { name: "Clean up now" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: /More actions for Older/ })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Preview backup Older · codex" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Close" })).toBeEnabled();
+    view.rerender(<BackupManagerDialog {...handlers} inventoryLoading deleteCandidate={inventory.items[0]} />);
+    expect(screen.getByRole("button", { name: "Delete backup" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeEnabled();
+    view.rerender(<BackupManagerDialog {...handlers} inventoryLoading cleanupConfirm />);
+    expect(screen.getByRole("button", { name: "Clean up 1 backup" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeEnabled();
+  });
   it("sorts and filters previews without changing cleanup scope or protected actions", () => {
     const handlers = props();
     render(<BackupManagerDialog {...handlers} />);

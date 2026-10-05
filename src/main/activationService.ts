@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { cp, lstat, readdir, rm, stat } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import { createBackupStore } from "./backupStore";
+import { createActivationStatusReads } from "./activationStatusReads";
 import { createUnifiedDiff } from "./diff";
 import {
   pathEntryExists,
@@ -268,17 +269,17 @@ export const createActivationService = ({
     const entries = await readdir(paths.targetStatesDir, { withFileTypes: true });
     const enabledTargetIds = new Set(await targetScope.listEnabledIds());
     const supportedTargetIds = new Set(targetRegistry.list().map((target) => target.id));
+    const visibleEntries = entries.filter((entry) =>
+      entry.isFile() && entry.name.endsWith(".json") &&
+      supportedTargetIds.has(entry.name.replace(/\.json$/, "")) &&
+      (options.includeDisabled || enabledTargetIds.has(entry.name.replace(/\.json$/, "")))
+    );
+    if (visibleEntries.length === 0) return [];
+    const { readProfile, readResourceHash } = createActivationStatusReads(profileStore);
     // Status reads can be partial; mutation previews still use the strict reader.
     const skillLibrary = await skillLibraryStore.listSkills(() => undefined);
     const states = await Promise.all(
-      entries
-        .filter(
-          (entry) =>
-            entry.isFile() &&
-            entry.name.endsWith(".json") &&
-            supportedTargetIds.has(entry.name.replace(/\.json$/, "")) &&
-            (options.includeDisabled || enabledTargetIds.has(entry.name.replace(/\.json$/, "")))
-        )
+      visibleEntries
         .map(async (entry): Promise<TargetManagementState | undefined> => {
           const targetId = entry.name.replace(/\.json$/, "");
           try {
@@ -295,7 +296,7 @@ export const createActivationService = ({
               (resource) => !resource.paused
             );
             const activeProfile = state.activeProfileId
-              ? await profileStore.readProfile(state.activeProfileId).catch(() => undefined)
+              ? await readProfile(state.activeProfileId)
               : undefined;
             const unreadableSkills = skillLibrary.filter((skill) => skill.readIssue &&
               activeProfile?.resources.skills.some((reference) => reference.libraryId === skill.id));
@@ -341,7 +342,7 @@ export const createActivationService = ({
               activeManagedResources
                 .filter((resource) => resource.kind !== "config")
                 .map(async (resource) => {
-                  const currentHash = await hashManagedResourcePath(resource.path, resource.kind);
+                  const currentHash = await readResourceHash(resource.path, resource.kind);
                   if (
                     resource.kind === "skill" &&
                     activeExpectedSkillHashes.get(resolve(resource.path)) === currentHash
@@ -380,7 +381,8 @@ export const createActivationService = ({
                       profile: deploymentProfile,
                       targetPaths: activeTargetPaths,
                       skillLibrary,
-                      state
+                      state,
+                      readResourceHash
                     })
                   : state.appliedLibraryVersions;
                 const profileHashCurrent =

@@ -1,10 +1,10 @@
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createBackupStore } from "../../src/main/backupStore";
 import { createInstructionLibraryStore } from "../../src/main/instructionLibraryStore";
-import { removeInstructionBlockWithReferences } from "../../src/main/instructionRemovalService";
+import { collectInstructionUsage, removeInstructionBlockWithReferences } from "../../src/main/instructionRemovalService";
 import { createPaths } from "../../src/main/paths";
 import { createProfileStore } from "../../src/main/profileStore";
 
@@ -39,6 +39,42 @@ const setup = async () => {
 };
 
 describe("Instruction removal", () => {
+  it("reads references in bounded parallel batches and preserves Profile order", async () => {
+    const { profile, block } = await setup();
+    let active = 0;
+    let peak = 0;
+    const store = {
+      listProfiles: async () => Array.from({ length: 9 }, (_, index) => ({ ...profile.manifest, id: `profile-${index}` })),
+      readProfile: async (id: string) => {
+        peak = Math.max(peak, ++active);
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        active--;
+        return { ...profile, id };
+      }
+    };
+    const usage = await collectInstructionUsage(store, block.id);
+    expect(peak).toBe(4);
+    expect(usage.map(({ id }) => id)).toEqual(Array.from({ length: 9 }, (_, index) => `profile-${index}`));
+  });
+
+  it("joins the active read batch on failure without reading queued Profiles", async () => {
+    const { profile } = await setup();
+    let active = 0;
+    const readProfile = vi.fn(async (id: string) => {
+      active++;
+      try {
+        if (id === "profile-0") throw new Error("Profile changed");
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        return { ...profile, id };
+      } finally { active--; }
+    });
+    await expect(collectInstructionUsage({
+      listProfiles: async () => Array.from({ length: 8 }, (_, index) => ({ ...profile.manifest, id: `profile-${index}` })),
+      readProfile
+    })).rejects.toThrow("Profile changed");
+    expect(active).toBe(0);
+    expect(readProfile).toHaveBeenCalledTimes(4);
+  });
   it("backs up the Instruction and removes its Profile references in one operation", async () => {
     const { backupStore, block, instructionLibraryStore, profile, profileStore } = await setup();
 

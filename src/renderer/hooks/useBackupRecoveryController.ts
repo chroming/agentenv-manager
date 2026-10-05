@@ -7,6 +7,7 @@ import type {
 } from "../../shared/types";
 import type { TranslationValues } from "../i18n";
 import { formatBytes } from "../formatBytes";
+import { refreshBackupInventory, withoutDeletedBackup } from "../backupInventory";
 import type { BackupManagerNotice } from "../components/BackupManagerDialog";
 import type { useFreshnessCoordinator } from "./useFreshnessCoordinator";
 
@@ -47,21 +48,24 @@ export const useBackupRecoveryController = ({
   const [backupManagerNotice, setBackupManagerNotice] = useState<BackupManagerNotice>();
   const restoreReturnFocusRef = useRef<HTMLElement | null>(null);
   const managerReturnFocusRef = useRef<HTMLElement | null>(null);
+  const inventoryEpochRef = useRef(0);
 
   const refreshManagedBackups = useCallback(async (
     reason: BackupRefreshReason = "manual"
   ) => {
     try {
-      await runFreshness("backups", reason, async () => {
+      const readInventory = async () => {
+        const epoch = inventoryEpochRef.current;
         setManagedBackupsLoading(true);
         try {
           const inventory = await window.agentEnv.listManagedBackups();
-          setManagedBackups(inventory);
+          if (epoch === inventoryEpochRef.current) setManagedBackups(inventory);
           return inventory;
         } finally {
           setManagedBackupsLoading(false);
         }
-      });
+      };
+      await refreshBackupInventory(runFreshness, reason, readInventory);
     } catch (error) {
       const message = errorMessage(error);
       if (reason === "manual") onError(message);
@@ -137,6 +141,10 @@ export const useBackupRecoveryController = ({
         id: backupDeleteCandidate.id,
         kind: backupDeleteCandidate.kind
       });
+      inventoryEpochRef.current++;
+      if (result.deletedCount === 1) {
+        setManagedBackups((current) => withoutDeletedBackup(current, backupDeleteCandidate));
+      }
       setBackupDeleteCandidate(undefined);
       setBackupManagerNotice({
         kind: "success",
@@ -145,7 +153,7 @@ export const useBackupRecoveryController = ({
           size: formatBytes(result.freedBytes)
         })
       });
-      await refreshManagedBackups("mutation");
+      void refreshManagedBackups("mutation");
     } catch (error) {
       setBackupManagerNotice({ kind: "error", message: errorMessage(error) });
     } finally {
@@ -158,6 +166,7 @@ export const useBackupRecoveryController = ({
     setBackupManagerNotice(undefined);
     try {
       const result = await window.agentEnv.cleanupManagedBackups();
+      inventoryEpochRef.current++;
       setBackupCleanupConfirm(false);
       setBackupManagerNotice({
         kind: result.failures.length > 0 ? "error" : "success",
@@ -175,7 +184,7 @@ export const useBackupRecoveryController = ({
               { count: result.deletedCount, size: formatBytes(result.freedBytes) }
             )
       });
-      await refreshManagedBackups("mutation");
+      void refreshManagedBackups("mutation");
     } catch (error) {
       setBackupManagerNotice({ kind: "error", message: errorMessage(error) });
     } finally {

@@ -1,7 +1,8 @@
 import { access, cp, lstat, mkdir, mkdtemp, readFile, readlink, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import * as managedHashes from "../../src/main/managedResourceHashes";
 import { createActivationService } from "../../src/main/activationService";
 import { createBackupStore } from "../../src/main/backupStore";
 import { createPaths } from "../../src/main/paths";
@@ -13,6 +14,7 @@ import { blockingMessages, noticeMessages, reviewMessages } from "../helpers/app
 
 let root = "";
 afterEach(async () => {
+  vi.restoreAllMocks();
   if (root) await rm(root, { recursive: true, force: true });
   root = "";
 });
@@ -78,6 +80,27 @@ const writeCodexLiveFiles = async (paths: ReturnType<typeof createPaths>) => {
 };
 
 describe("activation service v2", () => {
+  it("shares Profile and linked Skill reads within a status request, but rechecks the next request", async () => {
+    const { paths, service, profileStore, profile, settingsStore } = await makeEnv();
+    await settingsStore.updateSettings({ enabledTargetIds: ["codex", "claude-code"], skillSyncMethod: "symlink" });
+    await profileStore.saveProfile({ ...profile, expectedContentHash: profile.contentHash,
+      resources: { ...profile.resources, mcpByTarget: {} } });
+    for (const targetId of ["codex", "claude-code"]) {
+      const preview = await service.previewProfile(profile.id, targetId);
+      expect(await service.applyProfile(profile.id, preview.id)).toMatchObject({ ok: true });
+    }
+    const readProfile = vi.spyOn(profileStore, "readProfile");
+    const readHash = vi.spyOn(managedHashes, "hashManagedResourcePath");
+    const linkedPath = join(paths.homeDir, ".claude", "skills", "review");
+    const linkedReads = () => readHash.mock.calls.filter(([path, kind]) => path === linkedPath && kind === "skill");
+    expect((await service.listTargetStates()).map((state) => state.lifecycleStatus)).toEqual(["applied", "applied"]);
+    expect(readProfile).toHaveBeenCalledTimes(1);
+    expect(linkedReads()).toHaveLength(1);
+    await writeFile(paths.globalAgentsPath, "# Changed outside AgentEnv\n");
+    expect((await service.listTargetStates()).find((state) => state.targetId === "codex")?.lifecycleStatus).toBe("drifted");
+    expect(readProfile).toHaveBeenCalledTimes(2);
+    expect(linkedReads()).toHaveLength(2);
+  });
   it("isolates unreadable Library entries in status reads without trusting stale content for Apply", async () => {
     const { paths, service, profile } = await makeEnv();
     await writeCodexLiveFiles(paths);
@@ -325,15 +348,16 @@ describe("activation service v2", () => {
   });
 
   it("retains managed state visibility for configuration-root safety when an Agent is turned off", async () => {
-    const { paths, service, settingsStore } = await makeEnv();
+    const { paths, service, settingsStore, skillLibraryStore } = await makeEnv();
     await writeCodexLiveFiles(paths);
     const preview = await service.previewProfile("daily-coding", "codex");
     await expect(service.applyProfile("daily-coding", preview.id)).resolves.toEqual(
       expect.objectContaining({ ok: true })
     );
     await settingsStore.updateSettings({ enabledTargetIds: ["opencode"] });
-
+    const listSkills = vi.spyOn(skillLibraryStore, "listSkills");
     await expect(service.listTargetStates()).resolves.toEqual([]);
+    expect(listSkills).not.toHaveBeenCalled();
     await expect(service.listTargetStates({ includeDisabled: true })).resolves.toEqual([
       expect.objectContaining({
         targetId: "codex",

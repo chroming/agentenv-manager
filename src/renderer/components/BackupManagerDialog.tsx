@@ -197,7 +197,7 @@ export const BackupManagerDialog = ({
               >
                 {t("Cancel")}
               </Button>
-              <Button variant="danger" disabled={busy} onClick={onDelete}>
+              <Button variant="danger" disabled={busy || inventoryLoading} onClick={onDelete}>
                 {t("Delete backup")}
               </Button>
             </footer>
@@ -233,7 +233,7 @@ export const BackupManagerDialog = ({
               >
                 {t("Cancel")}
               </Button>
-              <Button variant="danger" disabled={busy} onClick={onCleanup}>
+              <Button variant="danger" disabled={busy || inventoryLoading} onClick={onCleanup}>
                 {t(
                   (inventory?.eligibleCount ?? 0) === 1
                     ? "Clean up 1 backup"
@@ -346,7 +346,7 @@ export const BackupManagerDialog = ({
                     </button>
                     {item.deletable ? (
                       <ToolbarOverflowMenu
-                        disabled={busy}
+                        disabled={busy || inventoryLoading}
                         label={t("More actions for {{name}}", {
                           name: managedBackupTitle(item, t)
                         })}
@@ -398,7 +398,7 @@ export const BackupManagerDialog = ({
               </Button>
               <Button
                 variant="danger"
-                disabled={busy || !inventory?.eligibleCount}
+                disabled={busy || inventoryLoading || !inventory?.eligibleCount}
                 onClick={onOpenCleanupConfirm}
               >
                 {t("Clean up now")}

@@ -7,6 +7,7 @@ import type {
   ManagedBackupItem
 } from "../../src/shared/types";
 import { useBackupRecoveryController } from "../../src/renderer/hooks/useBackupRecoveryController";
+import { useFreshnessCoordinator } from "../../src/renderer/hooks/useFreshnessCoordinator";
 
 const requiredBackup: ManagedBackupItem = {
   id: "required-backup",
@@ -195,6 +196,73 @@ describe("useBackupRecoveryController", () => {
       [true], [false],
       [true], [false]
     ]);
+  });
+
+  it("releases the mutation busy state before a slow backup inventory refresh", async () => {
+    const { result, api, callbacks } = renderController();
+    await act(() => result.current.actions.refreshManagedBackups());
+    let finishRefresh!: (value: ManagedBackupInventory) => void;
+    vi.mocked(api.listManagedBackups).mockImplementationOnce(() => new Promise((resolve) => { finishRefresh = resolve; }));
+    act(() => result.current.actions.openDelete(eligibleBackup));
+    let finished = false;
+    let operation!: Promise<void>;
+    await act(async () => {
+      operation = result.current.actions.deleteSelectedBackup().then(() => { finished = true; });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    try {
+      expect(finished).toBe(true);
+      expect(callbacks.onBusyChange).toHaveBeenLastCalledWith(false);
+      expect(result.current.state.managedBackups?.items).toEqual([requiredBackup]);
+      expect(result.current.state.managedBackups?.totalBytes).toBe(4096);
+      expect(result.current.state.managedBackupsLoading).toBe(true);
+    } finally {
+      await act(async () => { finishRefresh({ ...inventory, items: [requiredBackup], totalBytes: 4096, eligibleBytes: 0, eligibleCount: 0 }); await operation; });
+    }
+    expect(result.current.state.managedBackupsLoading).toBe(false);
+  });
+
+  it("does not restore a deleted row from a coalesced pre-deletion scan", async () => {
+    const api = createApi();
+    Object.defineProperty(window, "agentEnv", { configurable: true, value: api });
+    let finishOld!: (value: ManagedBackupInventory) => void;
+    let finishNew!: (value: ManagedBackupInventory) => void;
+    vi.mocked(api.listManagedBackups)
+      .mockImplementationOnce(() => new Promise((resolve) => { finishOld = resolve; }))
+      .mockImplementationOnce(() => new Promise((resolve) => { finishNew = resolve; }));
+    const onBusyChange = vi.fn();
+    const { result } = renderHook(() => {
+      const freshness = useFreshnessCoordinator();
+      return useBackupRecoveryController({ activeWorkspace: "profiles", onBusyChange,
+        onError: vi.fn(), onRestoreApplied: async () => undefined,
+        runFreshness: freshness.run, translate });
+    });
+    let oldScan!: Promise<void>;
+    act(() => { oldScan = result.current.actions.refreshManagedBackups(); });
+    act(() => result.current.actions.openDelete(eligibleBackup));
+    await act(() => result.current.actions.deleteSelectedBackup());
+    expect(onBusyChange).toHaveBeenLastCalledWith(false);
+    await act(async () => { finishOld(inventory); await oldScan; });
+    expect(api.listManagedBackups).toHaveBeenCalledTimes(2);
+    expect(result.current.state.managedBackups).toBeUndefined();
+    expect(result.current.state.managedBackupsLoading).toBe(true);
+    await act(async () => finishNew({ ...inventory, items: [requiredBackup], totalBytes: 4096, eligibleBytes: 0, eligibleCount: 0 }));
+    expect(result.current.state.managedBackups?.items).toEqual([requiredBackup]);
+    expect(result.current.state.managedBackupsLoading).toBe(false);
+  });
+
+  it("keeps partial cleanup results without guessing deleted IDs while refresh runs", async () => {
+    const { result, api, callbacks } = renderController();
+    await act(() => result.current.actions.refreshManagedBackups());
+    vi.mocked(api.cleanupManagedBackups).mockResolvedValueOnce({ deletedCount: 1,
+      freedBytes: 2048, failures: [{ id: "other", kind: "target-recovery", message: "changed" }] });
+    let finishRefresh!: (value: ManagedBackupInventory) => void;
+    vi.mocked(api.listManagedBackups).mockImplementationOnce(() => new Promise((resolve) => { finishRefresh = resolve; }));
+    await act(() => result.current.actions.cleanupBackups());
+    expect(callbacks.onBusyChange).toHaveBeenLastCalledWith(false);
+    expect(result.current.state.backupManagerNotice).toEqual({ kind: "error", message: "Deleted 1 backup; 1 failed" });
+    expect(result.current.state.managedBackups).toEqual(inventory);
+    await act(async () => finishRefresh(inventory));
   });
 
   it("keeps preview failures inside the backup manager", async () => {
