@@ -1,18 +1,19 @@
 {
   "formatVersion": 1,
-  "reviewedAt": "2026-09-23T01:59:18.021Z",
-  "applicationVersion": "0.2.1",
-  "baseCommit": "007e97cc",
+  "reviewedAt": "2026-10-07T09:21:54.964Z",
+  "applicationVersion": "0.2.3",
+  "baseCommit": "1e258192",
   "build": {
-    "sourceFingerprint": "b8eef0ee9306653b0235e91db2ba8153f7ad4c976c5abe94f36fa8e541278109",
-    "artifactFingerprint": "583207aada88e1847543eb6d576bce311f5733cc638f29dacba545eb132e2cd8",
-    "generatedAt": "2026-09-23T01:53:55.510Z"
+    "sourceFingerprint": "8556cb7f903d3ef2107ba3f3c54c89486625cf7b21b5aa0d252d6e009a5b9224",
+    "artifactFingerprint": "d0fa55ef939e77a66615eaa67e815bde6d66010bfd615429f92947607038e5e7",
+    "generatedAt": "2026-10-07T09:10:17.767Z"
   },
   "review": {
     "scenarios": 100,
-    "method": "All contract screenshots visually inspected; affected layouts also inspected at native size and checked with runtime containment assertions",
+    "method": "Changed scenarios inspected in old/current contact sheets; history, file diff, import, cleanup and group dialogs also inspected at native size. Remaining baselines preserved.",
     "scope": "Mock Electron workflows on macOS; no real Agent resources or model requests",
-    "thresholdsChanged": false
+    "thresholdsChanged": false,
+    "updatedScenarios": 51
   },
   "files": [
     {
@@ -77,33 +78,33 @@
     },
     {
       "file": "history-sources-920.png",
-      "sha256": "dcc496978d9fce707f921d49be920ed67c43062d425af896e71e1ad5371a81d8",
-      "reviewReason": "Device-level source controls; distinct fixture timestamps and explicit selection stabilize local/remote ordering"
+      "sha256": "290847cbc0e08c2c27a8e7e8481f4078bdb8b154265f20a7e9f5da91c2f51212",
+      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
     },
     {
       "file": "history-disabled-920.png",
-      "sha256": "3d78ba3907eedc0be3bed5c110091257d4a5b0817bd23f57caff8fcb0f298dd0",
-      "reviewReason": "Device-level source controls; distinct fixture timestamps and explicit selection stabilize local/remote ordering"
+      "sha256": "5b792403326f167827feb4af8440ddc8899aeabb069a7e7646b2b45ece268dca",
+      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
     },
     {
       "file": "history-enabled-920.png",
-      "sha256": "5c2962da2b97da1138a5df97d244e746834bb6a66ba09ceb1427e8b244d0ba79",
-      "reviewReason": "Device-level source controls; distinct fixture timestamps and explicit selection stabilize local/remote ordering"
+      "sha256": "da3658278b81569189e42bb5797398b8e085fd59595b6266c0bb71f489fc9a3a",
+      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
     },
     {
       "file": "history-paused-920.png",
-      "sha256": "7c172e0bf92f9dfdfeb30dfbf070665852921fda410620ddddee508b36ec56b4",
-      "reviewReason": "Device-level source controls; distinct fixture timestamps and explicit selection stabilize local/remote ordering"
+      "sha256": "b97a6707cc841d08951b11a7d7da4e4b85b2bc676c6b193b922be7b14769f3f2",
+      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
     },
     {
       "file": "history-details-920.png",
-      "sha256": "be2258cccdb2cb4fbbec152056949e651cc3af1c2fd50c1d3dcdd24439e65cd0",
-      "reviewReason": "Device-level source controls; distinct fixture timestamps and explicit selection stabilize local/remote ordering"
+      "sha256": "29f23a6c5ce9d032cd1ca4773b7ab6be77322c412ef255d3291310bfdaf34078",
+      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
     },
     {
       "file": "history-remote-result.png",
-      "sha256": "742dd8e37039205cf4f6fc4356390969c50add1a908237bf9232f98e8f3cf8da",
-      "reviewReason": "Device-level source controls; distinct fixture timestamps and explicit selection stabilize local/remote ordering"
+      "sha256": "52711d110b3365fbbb0541a545dc0e07a7a3e87694fb25c01568fff1ce593537",
+      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
     },
     {
       "file": "ai-analysis-profile-920x620.png",
@@ -137,8 +138,8 @@
     },
     {
       "file": "agents-actions-920x620.png",
-      "sha256": "e7d6962e299d5607bd556b6db420af0189c732b13d1e569d062664062fdb99c0",
-      "reviewReason": "Agent menu uses the shared 220px width; labels fit without edge clipping"
+      "sha256": "63564621f9bf4060bc0c8d5ff46995182d5fee13ff6f8628585a91dfbaee2891",
+      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
     },
     {
       "file": "agents-add-ssh-device-920x620.png",
@@ -157,8 +158,8 @@
     },
     {
       "file": "project-empty-resources-920x620.png",
-      "sha256": "532eccdb4ac9242167216ebd21c6c776c6c89746b9a5fd731997efaa73d08d52",
-      "reviewReason": "Shared object and resource layout in Workspace workflows"
+      "sha256": "95b0d00cbf600d7528dd60e3daa6e2fa60f2607ac89472b228c031ec25f8e479",
+      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
     },
     {
       "file": "project-instruction-editor-920x620.png",
@@ -167,13 +168,13 @@
     },
     {
       "file": "project-add-skill-920x620.png",
-      "sha256": "4034572bab0a5af71e6ed96e65cc63bc314f5fd0520375a3d3691264e7fe3b92",
-      "reviewReason": "Shared object and resource layout in Workspace workflows"
+      "sha256": "c50a80f6a55da8b704ab03ebc6e4597e5fe56acb6b5a4619ffadb8185ffd2b96",
+      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
     },
     {
       "file": "project-recovery-920x620.png",
-      "sha256": "ce842ed3357c5299a5ddd034a472b90ab451ab3bca8678c17ec4aabd5a51ffe8",
-      "reviewReason": "Shared object and resource layout in Workspace workflows"
+      "sha256": "3833f8c964e63476b52a6184ce3246d2cf5ac83b03e98c638340db22398bec35",
+      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
     },
     {
       "file": "projects-empty-920x620.png",
@@ -182,8 +183,8 @@
     },
     {
       "file": "projects-selected-920x620.png",
-      "sha256": "56b0be7c5b3fbd51261bdc674747c61a3af179e5c5ca177344478c3eee4160c6",
-      "reviewReason": "Shared object and resource layout in Workspace workflows"
+      "sha256": "d12a3b891e472c12609471c9be04d4cceff0410fd6b1f67dcd52285ca24c4622",
+      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
     },
     {
       "file": "project-environment-preview-920x620.png",
@@ -217,8 +218,8 @@
     },
     {
       "file": "profile-skill-group-picker-920x620.png",
-      "sha256": "b8d70c2b86e42b41e3aed2fbaee9ff624264eae2c2d72a62ce2365f258fd8973",
-      "reviewReason": "Compact object header, shared resource groups, green switches, and current AI review"
+      "sha256": "9d908914830de4791d4f79b3664418da067fbdd72a473155b2d8852667ab4aeb",
+      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
     },
     {
       "file": "profile-skills-applied-920x620.png",
@@ -227,23 +228,23 @@
     },
     {
       "file": "workspaces-skills-expanded-920x620.png",
-      "sha256": "d4aba5a2f992ed73752925d143df205095a26ce49adeef5907f692d1bf759e65",
-      "reviewReason": "Shared object and resource layout in Workspace workflows"
+      "sha256": "8d269ccc642823dd2a51490b14ac41d7cbd4a8485cdb8a7d91a6d9e30444a6c1",
+      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
     },
     {
       "file": "workspaces-skill-picker-920x620.png",
-      "sha256": "66ffe3f9d34de181f762a912cd54bd04a4d4c50f73b9680f58282bf7737714ab",
-      "reviewReason": "Shared object and resource layout in Workspace workflows"
+      "sha256": "2cfc90bdb8f05f5c19bf80776e879bb188c18ca9e334880a64416a26a615a760",
+      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
     },
     {
       "file": "workspaces-skill-group-picker-920x620.png",
-      "sha256": "251fd132d41ce2aa68c93f526b62d5918ae9fcca62583794d1916b2b6c4366a7",
-      "reviewReason": "Shared object and resource layout in Workspace workflows"
+      "sha256": "4967f6455f712bc1418417a616c644ef85f66b68f38b7bf2bbf5057e108517d3",
+      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
     },
     {
       "file": "workspaces-resource-exclusive-920x620.png",
-      "sha256": "1967c7fbe9e995c0359d3012fc67aa798563aca834b14740f586cf2ae1e476ef",
-      "reviewReason": "Shared object and resource layout in Workspace workflows"
+      "sha256": "e07479d649dc2bb94a8a2c31726efee68b8199dcc77e3ec4cda1f3eb1d42e2b5",
+      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
     },
     {
       "file": "workspaces-resources-region-920.png",
@@ -252,8 +253,8 @@
     },
     {
       "file": "profile-mcps-920x620.png",
-      "sha256": "500b65a105dbe07aa2132d262f2ee2956b025a5f740cbf1b19ebcd4e1b2873f5",
-      "reviewReason": "Compact object header, shared resource groups, green switches, and current AI review"
+      "sha256": "f2e87993a277c501c2b8f667a930ff716cb9e23564c13233808fd0e2752978a9",
+      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
     },
     {
       "file": "profile-resource-exclusive-920x620.png",
@@ -287,8 +288,8 @@
     },
     {
       "file": "comparison-result-920x620.png",
-      "sha256": "55ea6f155e90f91812e000d6b18239f6f43e43d86c7101316e311e19fd37d70c",
-      "reviewReason": "Current comparison layout and shared dialog controls"
+      "sha256": "106d896c45d04bc0c05a6ca5d1eb0b699a6516d4b9cc8139c0de83cefcc8d3f6",
+      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
     },
     {
       "file": "apply-preview-920x620.png",
@@ -302,18 +303,18 @@
     },
     {
       "file": "target-stop-managing-choice-920x620.png",
-      "sha256": "ded3d3f926e7620a3bc4ae13fcbeef24b0e91ea100d0bf819bb86421bdaf321f",
-      "reviewReason": "Unified Agent management and deterministic eight-Agent discovery"
+      "sha256": "dee4b44cd8c0801759bec34fef6245562a32735c340f0d70c9714406352c95b1",
+      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
     },
     {
       "file": "target-stop-managing-preview-920x620.png",
-      "sha256": "9ea8a933ae0dec1c3e5e168f8c8a1ac16f57dd378632bbb7e418cf58e3b2b7fe",
-      "reviewReason": "Unified Agent management and deterministic eight-Agent discovery"
+      "sha256": "a31e6befbd904051cb717dbaec132086b4c244efd32ac7c9231f84c11d187b12",
+      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
     },
     {
       "file": "skills-920x620.png",
-      "sha256": "a0a06362a9fad45c5fa13f007051a0cbe1ae21bd73fa2812872519cbe9150362",
-      "reviewReason": "Compact library toolbars, resource reviews, and device status controls"
+      "sha256": "cc5720f074190caf655fbabc433ae47411a953d3e767a897e078f57b91fa743c",
+      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
     },
     {
       "file": "skills-file-details-920x620.png",
@@ -327,68 +328,68 @@
     },
     {
       "file": "instructions-920x620.png",
-      "sha256": "993fb00610a14c0755d01a41eaf802976d4c490059b363adfd353b72ef10019a",
-      "reviewReason": "Current instruction library split view"
+      "sha256": "9e1f38c8ea69b6b4fc9b60fa1d0bc752f91a2ed009b02b8adfbe0fc390e0fd5a",
+      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
     },
     {
       "file": "instructions-1180x728.png",
-      "sha256": "228a5d1323209c9a77344c9240f465ae31d7df7aec145e4d5b01a3a1f32fe453",
-      "reviewReason": "Current instruction library split view"
+      "sha256": "126a695a139a4664d2c08471b51054f2f088bc33d70d4f54315a1408648f0eff",
+      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
     },
     {
       "file": "instructions-1440x900.png",
-      "sha256": "cf924f0f6b2c945aec2f1bb3197c1c28d4b94abfd3c6e30a8ffc02c73709aea3",
-      "reviewReason": "Current instruction library split view"
+      "sha256": "fdb4ed285e41448c7fde56f9a44846023489be20f9a935d4ac3675aa35bb5493",
+      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
     },
     {
       "file": "skills-sources-920x620.png",
-      "sha256": "6c688c856c79945a011a4dc01b82c1877f6d56f16d3d20653131fc33bc4d9a72",
-      "reviewReason": "Compact library toolbars, resource reviews, and device status controls"
+      "sha256": "311994006b074f42e1526ff54112e14feb6ae2dc814ec40dea8615672d3fa9d8",
+      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
     },
     {
       "file": "skills-sources-expanded-920x620.png",
-      "sha256": "dad40039de1e161cc05d49bf0cb1b90c62695d5eb421c1eb5d7995f314b1ec85",
-      "reviewReason": "Compact library toolbars, resource reviews, and device status controls"
+      "sha256": "e5b9571c0302b3b44e8e44759594f80d13bf07e29e71075421fc3f6b2167d7a4",
+      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
     },
     {
       "file": "skills-sources-expanded-1180x728.png",
-      "sha256": "9adb06b0987897ee067de73a1a430ea860267bd44088fa1c95b6a5a09fed0b06",
-      "reviewReason": "Compact library toolbars, resource reviews, and device status controls"
+      "sha256": "9cc63cf1ca1e3f4df3c319ab8eab1e1a50e22b711a5453b677dbe2ffd65641bd",
+      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
     },
     {
       "file": "skills-sources-expanded-1440x900.png",
-      "sha256": "51248c9354979c505c15a9d91ba4feadb5b15e22a2bebc5b1f287c6180818d8a",
-      "reviewReason": "Compact library toolbars, resource reviews, and device status controls"
+      "sha256": "f438c283da9f7bb8532e10bcba70f1a32a9770987f563414d3419bba2c076bff",
+      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
     },
     {
       "file": "skills-groups-920x620.png",
-      "sha256": "ae309b37991707d7fce4c5d99cfced4d81d885ed941ec71456e5b98ff25e552c",
-      "reviewReason": "Compact library toolbars, resource reviews, and device status controls"
+      "sha256": "0012dba75df4de520f3f7721a9bf5445587c031e37c6b7439c54e59b62cfe6ab",
+      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
     },
     {
       "file": "skills-groups-expanded-920x620.png",
-      "sha256": "82652c8c372294e8835cade0a7e6c58ddf9785d9079f0fd8d30e237ffc62f987",
-      "reviewReason": "Compact library toolbars, resource reviews, and device status controls"
+      "sha256": "e7f6f13bd6f257295048109a375909cbb117fc8c1b8bb186842e67ae33ccf77b",
+      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
     },
     {
       "file": "skills-groups-expanded-1180x728.png",
-      "sha256": "7f2c96d24c0b41e7b1f603e3c572dab204cc11a81cf4e1a561c0098d1aad3d2f",
-      "reviewReason": "Compact library toolbars, resource reviews, and device status controls"
+      "sha256": "a8adbdb6fd4a5f229f33211d4220c9b11be85dde563bdbfb4d80cfeba6b79dee",
+      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
     },
     {
       "file": "skills-group-icon-picker-920x620.png",
-      "sha256": "d7a8411efb698c59f24545f016423a6da7858fb1724cdd72973a65ee7b01c9a8",
-      "reviewReason": "Compact library toolbars, resource reviews, and device status controls"
+      "sha256": "2cf05b169071989fb60637242b17ced4e884f0b79a629963b0dc20337a82e531",
+      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
     },
     {
       "file": "skills-update-920x620.png",
-      "sha256": "1052a4e978685ab56378b945595ab45649892457ed8157e47c7bd2b401103dee",
-      "reviewReason": "Compact library toolbars, resource reviews, and device status controls"
+      "sha256": "6303d529b185e01db062d9ac1389ae78ae8fa9d9815f60aa1a61c292427ef40a",
+      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
     },
     {
       "file": "skills-update-review-920x620.png",
-      "sha256": "3f81017f91245e680182cf6deed3e927543e6be9865c32383f01d144ed52a169",
-      "reviewReason": "Compact library toolbars, resource reviews, and device status controls"
+      "sha256": "53d890c6f57cec8fed11f17f0deec092050683ca44cb64a32022ed2e56c4e6bf",
+      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
     },
     {
       "file": "skills-ai-tags-920x620.png",
@@ -397,18 +398,18 @@
     },
     {
       "file": "skills-update-1180x728.png",
-      "sha256": "ceda755add48d455a9d72c6962357961e0469887ee5d6aaf2bd21d1af7ca0adf",
-      "reviewReason": "Compact library toolbars, resource reviews, and device status controls"
+      "sha256": "e45c22e7d12922c72fc81d343baeac4ba4212874ed1a381721148ec1cb1bf88a",
+      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
     },
     {
       "file": "skills-sources-update-920x620.png",
-      "sha256": "def378481e902109dfc5404bd1de420f1a21e7af139f824d567718beeb601edc",
-      "reviewReason": "Compact library toolbars, resource reviews, and device status controls"
+      "sha256": "195061170e6cdc223d1c8d4815f7153fef65e21e4a61e3deb19835968265d7cb",
+      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
     },
     {
       "file": "skills-sources-update-1180x728.png",
-      "sha256": "20aa96f467a847b123801a991d29ec47bf7f89b04c2ef350068c18f987bd390c",
-      "reviewReason": "Compact library toolbars, resource reviews, and device status controls"
+      "sha256": "7614feba82b9722d1d03b6d53dabb3a5173b4807bb4d590c1bac6bbc70816493",
+      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
     },
     {
       "file": "skills-bulk-update-ready-920x620.png",
@@ -432,63 +433,63 @@
     },
     {
       "file": "skills-import-results-920x620.png",
-      "sha256": "8362d9f4fb307efc9f0048a4b6f5603f4dab530fccd5704e4f9f079896479908",
-      "reviewReason": "Compact library toolbars, resource reviews, and device status controls"
+      "sha256": "dcd36f0ea81e414542521a7c34c8eae4acb06ad218e9e2a22e96c2c8efc5ce35",
+      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
     },
     {
       "file": "skills-cleanup-review-920x620.png",
-      "sha256": "d6f9b7826ca958b246b0efd836de9ed6e1b272e780ab6c2cd087d35df94c44e2",
-      "reviewReason": "Compact library toolbars, resource reviews, and device status controls"
+      "sha256": "2305149d023d8549e53c6f56458ef23be6ee8e70aa84d142949e2d9af174c14b",
+      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
     },
     {
       "file": "skills-shared-folder-920x620.png",
-      "sha256": "9a4dae2126b0bd4257da1a123b9cda296efc1ac5b1b39f18f8a697691f684b72",
-      "reviewReason": "Compact library toolbars, resource reviews, and device status controls"
+      "sha256": "53c772543b8c9a189df74771f8f68f0b9a4154d34b85ddc8b326c35483c4d16a",
+      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
     },
     {
       "file": "skills-shared-folder-behavior-920x620.png",
-      "sha256": "8468c08d1763113a7884c0ea0d59cfb001779e7346184b6661712c7cd2df905b",
-      "reviewReason": "Compact library toolbars, resource reviews, and device status controls"
+      "sha256": "c3f0dd9a853d36db59a2b2cfeeca185887f6c4c31ff610eef47021bdd8ab1b34",
+      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
     },
     {
       "file": "skills-shared-folder-1180x728.png",
-      "sha256": "b5967d180f0e41ce556ab74848fe2524c6329cbd63b7bd3530e6c7ce13ddf3db",
-      "reviewReason": "Compact library toolbars, resource reviews, and device status controls"
+      "sha256": "d94c5c9839cdbdc65adbbb11b5b29a45c0c381650eb1ed3042138b2f60db1691",
+      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
     },
     {
       "file": "skills-shared-folder-profiles-only-920x620.png",
-      "sha256": "2743548c89c51c48b17632c8e13147c2319b762eb1a5a4d850013896127427be",
-      "reviewReason": "Compact library toolbars, resource reviews, and device status controls"
+      "sha256": "f9138cafecf44000d4037fec6a346cc0e6490916162e90447d12c0b5f20a30cd",
+      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
     },
     {
       "file": "skills-shared-folder-profiles-only-1180x728.png",
-      "sha256": "da5971bd3b7b2adc41263300f6f64471bff27d8c4572efbecdfa960776754da9",
-      "reviewReason": "Compact library toolbars, resource reviews, and device status controls"
+      "sha256": "b22e833e32913d2c6a5993274cd01aa637b2c0e7665fbe4c948e0dd28c7069bf",
+      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
     },
     {
       "file": "conversations-detail-920x620.png",
-      "sha256": "5f8d1a3237988aff29e40fac6fe88b6104cc4970ce187ef3c4c77d87c4dbd6b2",
-      "reviewReason": "Existing reviewed layout retained with current mock runtime rendering"
+      "sha256": "2e9e3e092b16b19857383bd80b5be9a180d4cd38e1db0e13f66fb3432b81805e",
+      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
     },
     {
       "file": "conversations-largest-920x620.png",
-      "sha256": "844749a4dc50567ceed3f4d6ae3fd92d396a26165fdfa62256f8853cf3046384",
-      "reviewReason": "Existing reviewed layout retained with current mock runtime rendering"
+      "sha256": "1fb72a2594f48cf4b60b69140c046de690b5346642976c54c15ee2a409f686c1",
+      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
     },
     {
       "file": "conversations-list-region-920.png",
-      "sha256": "14f2924b0b25132a2de237f819f2671c92058e736261086e04855129199d4f89",
-      "reviewReason": "Existing reviewed layout retained with current mock runtime rendering"
+      "sha256": "a723d3d829aa671ddc903bbfa1902e2fab8101e00d0f843c351a8757606af36d",
+      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
     },
     {
       "file": "conversations-continue-menu-920x620.png",
-      "sha256": "031fbbe45841464fe269fac18e4b054fdcff9486073f5856b640b0506447f5fd",
-      "reviewReason": "Existing reviewed layout retained with current mock runtime rendering"
+      "sha256": "016aa4860fcc3280e9f55418d301c78a38ddf18f1c43490de0caa019a57d9b20",
+      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
     },
     {
       "file": "conversations-detail-920x620-move.png",
-      "sha256": "88365f8376c8cdce3b879984059c56a7642f2279e81ec9cd586f6bc7a628fe33",
-      "reviewReason": "Long destination paths wrap inside the move dialog"
+      "sha256": "0159cdb6332d3b3ccb057f7c8e280c7542168acec0794f8a28aa0d97780a1f23",
+      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
     },
     {
       "file": "settings-connections-920x620.png",
@@ -502,8 +503,8 @@
     },
     {
       "file": "skills-zh-cn-920x620.png",
-      "sha256": "96b43469c92e3586c6a9c640c26621265f292398e26051f5233b4133a1f305b9",
-      "reviewReason": "Compact library toolbars, resource reviews, and device status controls"
+      "sha256": "b1f45dfaab44c32c573969eec4e321135376ef496e4aea7ea1313595e81c3393",
+      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
     },
     {
       "file": "profiles-zh-tw-920x620.png",
@@ -512,8 +513,8 @@
     },
     {
       "file": "startup-failure-920x620.png",
-      "sha256": "fe987f620e118e0139c05d5df5e9871194b25ef4d36553849b63d019142fad8c",
-      "reviewReason": "Existing reviewed layout retained with current mock runtime rendering"
+      "sha256": "e4f735865f7b007da56c50bfd11cd487925c37e14c2d02526a17e50afc1513bf",
+      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
     }
   ],
   "incrementalReviews": [

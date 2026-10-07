@@ -17,3 +17,13 @@ it("keeps a reviewed image hash for every critical visual scenario", async () =>
     expect(entry.reviewReason.length).toBeGreaterThan(0);
   }
 });
+
+it("captures history and invocation scenarios in both visual verification entry points", async () => {
+  for (const file of ["verify-product.mjs", "verify-visual.mjs"]) {
+    const source = await readFile(join(process.cwd(), "scripts", file), "utf8");
+    expect(source, file).toContain("tests/e2e/conversationHistorySearch.e2e.test.ts");
+    expect(source, file).toContain("AGENTENV_CAPTURE_HISTORY_DIR");
+    expect(source, file).toContain("persists manual Skill invocation");
+    expect(source, file).toContain("AGENTENV_STATUS_CAPTURE_DIR");
+  }
+});

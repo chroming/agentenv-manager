@@ -89,6 +89,7 @@ await run(
     "vitest",
     "run",
     "tests/e2e/projects.e2e.test.ts",
+    "tests/e2e/conversationHistorySearch.e2e.test.ts",
     "tests/e2e/worktrees.e2e.test.ts",
     "--maxWorkers=1",
     "--no-file-parallelism"
@@ -97,11 +98,20 @@ await run(
     env: {
       ...process.env,
       AGENTENV_CAPTURE_PROJECTS_DIR: captureRoot,
+      AGENTENV_CAPTURE_HISTORY_DIR: captureRoot,
       AGENTENV_CAPTURE_WORKTREES_DIR: captureRoot
     }
   }
 );
 await run("node", ["scripts/capture-critical-comparison.mjs", "--output", captureRoot]);
+await run(
+  process.platform === "win32" ? "npx.cmd" : "npx",
+  [
+    "vitest", "run", "tests/e2e/electronUiProfileSwitching.e2e.test.ts",
+    "-t", "persists manual Skill invocation", "--maxWorkers=1"
+  ],
+  { env: { ...process.env, AGENTENV_STATUS_CAPTURE_DIR: captureRoot } }
+);
 await rm(visualReportRoot, { recursive: true, force: true });
 await run("swift", [
   "scripts/compare-ui-captures.swift",
