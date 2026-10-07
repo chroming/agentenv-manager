@@ -290,8 +290,7 @@
 .backup-preview-file code {
   color: var(--text-secondary);
   cursor: text;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
-    monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   line-height: 18px;
   min-width: 0;

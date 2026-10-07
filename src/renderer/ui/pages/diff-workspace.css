@@ -56,7 +56,7 @@
 
 .diff-workspace__root {
   color: var(--subtle);
-  font: 11px/28px ui-monospace, SFMono-Regular, Menlo, monospace;
+  font: 11px/28px var(--font-mono);
   overflow: hidden;
   padding: 0 8px 4px;
   text-overflow: ellipsis;
@@ -193,7 +193,7 @@
 
 .diff-workspace__preview > header > div > span {
   color: var(--subtle);
-  font: 10px/16px ui-monospace, SFMono-Regular, Menlo, monospace;
+  font: 10px/16px var(--font-mono);
 }
 
 .diff-workspace__diff {

@@ -2801,7 +2801,7 @@ describe("Electron UI profile switching e2e", () => {
     const sharedRow = page.getByRole("group", { name: "Library item shared-reviewer" });
     await sharedRow.getByRole("button", { name: "More actions for shared-reviewer" }).click();
     await page.getByRole("menuitem", { name: /Remove from library/ }).click();
-    const skillDelete = page.getByRole("dialog", { name: "Delete library skill" });
+    const skillDelete = page.getByRole("dialog", { name: "Remove from library" });
     await expectFocusInside(skillDelete);
     await expectFocusTrapped(skillDelete);
     await page.keyboard.press("Meta+f");
@@ -3730,7 +3730,7 @@ describe("Electron UI profile switching e2e", () => {
       .getByRole("button", { name: "More actions for target-only-reviewer" })
       .click();
     await page.getByRole("menuitem", { name: /Remove from library/ }).click();
-    const removeDialog = page.getByRole("dialog", { name: "Delete library skill" });
+    const removeDialog = page.getByRole("dialog", { name: "Remove from library" });
     await expect.poll(() => removeDialog.textContent()).toContain("1 managed Agent install");
     await removeDialog.getByRole("button", { name: "Remove skill and installs" }).click();
     await expect
@@ -4206,7 +4206,7 @@ describe("Electron UI profile switching e2e", () => {
     await sharedRow.getByRole("button", { name: "More actions for shared-reviewer" }).click();
     await page.getByRole("menuitem", { name: /Remove from library/ }).click();
 
-    const deleteDialog = page.getByRole("dialog", { name: "Delete library skill" });
+    const deleteDialog = page.getByRole("dialog", { name: "Remove from library" });
     await deleteDialog.waitFor({ state: "visible" });
     await expect.poll(() => deleteDialog.textContent()).toContain("Remove Shared Reviewer from the shared library?");
     await deleteDialog.getByRole("button", { name: "Remove skill" }).click();

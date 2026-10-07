@@ -2,6 +2,7 @@ import {
   Fragment,
   type RefObject,
   useEffect,
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -422,6 +423,7 @@ export const SkillLibraryPanel = ({ model, actions, onOpenLocalSkills, onRefresh
   const aiPreferences = useAIPreferences();
   const openActionId = openAction?.id;
   const [deleteCandidate, setDeleteCandidate] = useState<SkillLibraryEntry>();
+  const deleteDialogTitleId = useId();
   const [disableCandidate, setDisableCandidate] = useState<SkillLibraryEntry>();
   const [sourceCandidate, setSourceCandidate] = useState<SkillLibraryEntry>();
   const [tagCandidate, setTagCandidate] = useState<SkillLibraryEntry>();
@@ -2445,13 +2447,13 @@ export const SkillLibraryPanel = ({ model, actions, onOpenLocalSkills, onRefresh
             ref={modalDialogRef}
             className="profile-form-dialog profile-form-dialog--compact"
             role="dialog"
-            aria-label={t("Delete library skill")}
+            aria-labelledby={deleteDialogTitleId}
             aria-modal="true"
             onClick={(event) => event.stopPropagation()}
           >
             <header className="profile-dialog-header">
               <div className="ui-dialog-header__copy">
-                <div className="section-title ui-dialog-title">{t("Remove from library")}</div>
+                <div id={deleteDialogTitleId} className="section-title ui-dialog-title">{t("Remove from library")}</div>
                 <p className="muted ui-dialog-description">
                   {(skillUsage[deleteCandidate.id] ?? []).length > 0
                     ? t("{{name}} is used by {{profiles}} Profiles. Remove it from those Profiles first.", {

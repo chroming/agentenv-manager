@@ -270,7 +270,7 @@ export const BackupManagerDialog = ({
                     <SelectControl controlWidth="fill" aria-label={t("Backup type filter")} value={view.kindFilter}
                       onChange={(event) => updateView({ kindFilter: event.currentTarget.value as typeof view.kindFilter })}>
                       <option value="all">{t("All types")}</option><option value="target-recovery">{t("Agent recovery")}</option>
-                      <option value="skill-cleanup">{t("Skill cleanup")}</option><option value="workspace-sync">{t("Workspace Sync")}</option>
+                      <option value="skill-cleanup">{t("Skill cleanup")}</option><option value="workspace-sync">{t("Device Sync")}</option>
                     </SelectControl></label>
                   <label><span>{t("Status")}</span>
                     <SelectControl controlWidth="fill" aria-label={t("Backup status filter")} value={view.statusFilter}

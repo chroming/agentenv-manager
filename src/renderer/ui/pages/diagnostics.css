@@ -98,8 +98,7 @@
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-control);
   color: var(--text-secondary);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
-    monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   line-height: 18px;
   margin: 0;

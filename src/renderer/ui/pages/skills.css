@@ -872,8 +872,7 @@
 }
 
 .cleanup-group-locations {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
-    monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
 }
 
@@ -1152,7 +1151,7 @@
   min-width: 0;
   overflow: hidden;
   color: var(--subtle);
-  font: 11px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace;
+  font: 11px/1.3 var(--font-mono);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1333,7 +1332,7 @@
   padding: 12px 14px;
   color: var(--muted);
   background: var(--surface);
-  font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace;
+  font: 12px/1.55 var(--font-mono);
   white-space: pre-wrap;
 }
 

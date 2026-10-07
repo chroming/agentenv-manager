@@ -1582,7 +1582,7 @@ try {
   await page.keyboard.press("Escape");
   await skillActionsButton.click();
   await page.getByRole("menuitem", { name: "Remove from library" }).click();
-  const deleteSkillDialog = page.getByRole("dialog", { name: "Delete library skill" });
+  const deleteSkillDialog = page.getByRole("dialog", { name: "Remove from library" });
   await deleteSkillDialog.waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "skills-delete-confirmation-920x620.png"));
   await page.keyboard.press("Escape");

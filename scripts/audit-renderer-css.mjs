@@ -1,5 +1,6 @@
 import { readFile, readdir } from "node:fs/promises";
 import { relative, resolve } from "node:path";
+import { collectHardcodedMonoFonts } from "./ui-font-policy.mjs";
 import {
   collectRendererRawInteractiveUsage,
   collectRendererRawInteractiveUsageByTag,
@@ -189,10 +190,13 @@ const selectorCounts = (content) => {
 };
 
 const reports = [];
+const hardcodedMonoFontViolations = [];
 const declaredCustomProperties = new Set();
 const usedCustomProperties = new Map();
 for (const file of files) {
   const content = await readFile(resolve(projectRoot, file), "utf8");
+  hardcodedMonoFontViolations.push(...collectHardcodedMonoFonts(content)
+    .map((declaration) => ({ file, ...declaration })));
   for (const match of content.matchAll(/(--[a-zA-Z0-9_-]+)\s*:/g)) {
     declaredCustomProperties.add(match[1]);
   }
@@ -377,6 +381,7 @@ const result = {
     )
   },
   architecture: {
+    hardcodedMonoFontViolations,
     animationOwnerViolations,
     inheritedFontShorthandOwnerViolations,
     highFrequencySpatialMotion,
@@ -419,6 +424,10 @@ if (shouldCheck) {
       importantDeclarations > 0 && file !== "src/renderer/ui/accessibility.css"
   );
   const failures = [
+    hardcodedMonoFontViolations.length > 0
+      ? `Monospace declarations must use --font-mono: ${hardcodedMonoFontViolations
+          .map(({ file, line }) => `${file}:${line}`).join(", ")}`
+      : undefined,
     files.includes("src/renderer/product-shell.css")
       ? "src/renderer/product-shell.css must not return"
       : undefined,

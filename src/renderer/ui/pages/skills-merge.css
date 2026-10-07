@@ -167,7 +167,7 @@
 .skill-merge-diff > header span {
   overflow: hidden;
   color: var(--subtle);
-  font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+  font: 11px/1.4 var(--font-mono);
   text-overflow: ellipsis;
   white-space: nowrap;
 }

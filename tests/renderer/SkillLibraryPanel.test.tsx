@@ -1292,7 +1292,10 @@ describe("SkillLibraryPanel", () => {
     );
     fireEvent.click(within(sharedRow).getByRole("button", { name: "More actions for shared-reviewer" }));
     fireEvent.click(screen.getByRole("menuitem", { name: /Remove from library/ }));
-    const deleteDialog = screen.getByRole("dialog", { name: "Delete library skill" });
+    const deleteDialog = screen.getByRole("dialog", { name: "Remove from library" });
+    const deleteTitle = within(deleteDialog).getByText("Remove from library", { exact: true });
+    expect(deleteTitle.id).not.toBe("");
+    expect(deleteDialog).toHaveAttribute("aria-labelledby", deleteTitle.id);
     expect(deleteDialog).toHaveTextContent("Shared Reviewer");
     expect(deleteDialog).toHaveTextContent("used by Daily Coding");
     expect(deleteDialog).toHaveTextContent("/tmp/skills-library/shared-reviewer");
@@ -1303,7 +1306,7 @@ describe("SkillLibraryPanel", () => {
       within(copiedLocalRow).getByRole("button", { name: "More actions for copied-local" })
     );
     fireEvent.click(screen.getByRole("menuitem", { name: /Remove from library/ }));
-    const installedDeleteDialog = screen.getByRole("dialog", { name: "Delete library skill" });
+    const installedDeleteDialog = screen.getByRole("dialog", { name: "Remove from library" });
     expect(installedDeleteDialog).toHaveTextContent("1 managed Agent install");
     expect(installedDeleteDialog).toHaveTextContent("/tmp/skills-library/copied-local");
     expect(installedDeleteDialog).toHaveTextContent("/tmp/opencode/skills/copied-local");

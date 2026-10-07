@@ -865,7 +865,7 @@
 .preview-preserve-path {
   color: var(--muted);
   display: block;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-family: var(--font-mono);
   font-size: 11px;
   min-width: 0;
   overflow: hidden;

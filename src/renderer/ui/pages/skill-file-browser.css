@@ -102,7 +102,7 @@
 
 .skill-file-preview > header > span {
   color: var(--text-secondary);
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: var(--font-size-caption);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -123,7 +123,7 @@
 }
 
 .skill-file-preview__content pre {
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
   line-height: 1.65;
   margin: 0;

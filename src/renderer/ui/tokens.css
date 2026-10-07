@@ -35,7 +35,7 @@
   --info-bg: #f3f7ff;
   --danger: #d70015;
   --danger-bg: #fff0f1;
-  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --font-mono: ui-monospace, "SFMono-Regular", Menlo, Monaco, Consolas, "Liberation Mono", monospace;
   --mono: var(--font-mono);
 
   --space-1: 4px;

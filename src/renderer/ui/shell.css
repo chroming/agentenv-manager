@@ -797,7 +797,7 @@ html[data-platform="darwin"] .global-sidebar--collapsed {
 
 .editor-panel > .app-feedback .app-feedback__reference {
   color: currentColor;
-  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-family: var(--font-mono);
   font-size: 10px;
   line-height: 15px;
   opacity: 0.78;

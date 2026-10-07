@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { BackupManagerDialog } from "../../src/renderer/components/BackupManagerDialog";
 import type { ManagedBackupInventory } from "../../src/shared/types";
+import { I18nProvider, translate } from "../../src/renderer/i18n";
 
 afterEach(cleanup);
 const inventory: ManagedBackupInventory = {
@@ -22,6 +23,19 @@ const props = () => ({ busy: false, cleanupConfirm: false, dialogRef: createRef<
 });
 
 describe("Backup catalog controls", () => {
+  it.each([
+    ["en", "Device Sync"],
+    ["zh_CN", "设备同步"],
+    ["zh_TW", "裝置同步"]
+  ] as const)("names the sync backup filter consistently in %s without changing its stored kind", (preference, name) => {
+    render(<I18nProvider preference={preference}><BackupManagerDialog {...props()} /></I18nProvider>);
+    fireEvent.click(screen.getByRole("button", { name: translate(preference, "Filters") }));
+    const filter = screen.getByRole("combobox", { name: translate(preference, "Backup type filter") });
+    expect(within(filter).getByRole("option", { name })).toHaveValue("workspace-sync");
+    expect(within(filter).queryByRole("option", { name: "Workspace Sync" })).not.toBeInTheDocument();
+    fireEvent.change(filter, { target: { value: "workspace-sync" } });
+    expect(filter).toHaveValue("workspace-sync");
+  });
   it("keeps preview and dismissal usable while a background inventory scan disables only deletion", () => {
     const handlers = props();
     const view = render(<BackupManagerDialog {...handlers} inventoryLoading />);
