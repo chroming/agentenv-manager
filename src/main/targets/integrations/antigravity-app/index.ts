@@ -98,9 +98,9 @@ export const antigravityAppIntegration: AgentTargetIntegration = {
     createTargetPaths: ({ homeDir, rootDirOverride }) => {
       const geminiDir = rootDirOverride ?? join(homeDir, ".gemini");
       const configDir = join(geminiDir, "antigravity");
-      const appSkillsDir = join(geminiDir, "skills");
-      const cliSkillsDir = join(geminiDir, "antigravity-cli", "skills");
-      const legacySkillsDir = join(geminiDir, "config", "skills");
+      const appSkillsDir = join(geminiDir, "config", "skills");
+      const ideSkillsDir = join(geminiDir, "antigravity", "skills");
+      const formerSkillsDir = join(geminiDir, "skills");
       return {
         targetId: "antigravity-app",
         configDir,
@@ -117,7 +117,7 @@ export const antigravityAppIntegration: AgentTargetIntegration = {
             management: "managed"
           },
           {
-            path: cliSkillsDir,
+            path: ideSkillsDir,
             role: "compatibility-runtime",
             shared: false,
             scope: "user",
@@ -125,15 +125,15 @@ export const antigravityAppIntegration: AgentTargetIntegration = {
             management: "observed"
           },
           {
-            path: legacySkillsDir,
+            path: formerSkillsDir,
             role: "discovery-only",
             shared: false,
             scope: "user",
             scanDepth: "direct",
-            management: "legacy"
+            management: "observed"
           }
         ],
-        skillScanDirs: [appSkillsDir, cliSkillsDir, legacySkillsDir]
+        skillScanDirs: [appSkillsDir, ideSkillsDir, formerSkillsDir]
       };
     }
   },
@@ -150,7 +150,7 @@ export const antigravityAppIntegration: AgentTargetIntegration = {
     instructionCreateFile: "GEMINI.md",
     skillLocations: [
       { relativePath: ".agents/skills", scope: "shared", writable: false, priority: 100 },
-      { relativePath: ".gemini/skills", scope: "agent-specific", writable: false, priority: 50 }
+      { relativePath: ".agent/skills", scope: "agent-specific", writable: false, priority: 50 }
     ],
     mcpFiles: [],
     compareResourcePaths: ["GEMINI.md", ".gemini", ".agents"]

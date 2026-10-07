@@ -2278,7 +2278,7 @@ Every multi-path Skill mutation owns a persistent operation journal with pre-wri
 
 Legacy migration eligibility is both path- and Target-owned. A shared copy carrying another Target's AgentEnv ownership marker is observable but MUST NOT be removed, replaced, or claimed by the current Target.
 
-Antigravity's implemented global scope manages `~/.gemini/GEMINI.md` and
+Antigravity CLI's implemented global scope manages `~/.gemini/GEMINI.md` and
 `~/.gemini/antigravity-cli/skills`. It observes `~/.gemini/skills` as a shared compatibility
 location and treats the former `~/.gemini/config/skills` destination as legacy. Apply previews,
 backs up, removes, verifies, and can roll back only AgentEnv-owned legacy copies; unowned legacy
@@ -2286,6 +2286,18 @@ content remains untouched. Antigravity CLI readiness requires authoritative `agy
 the Antigravity desktop application is a separate product and is not sufficient. AgentEnv discovers
 MCP names from `~/.gemini/config/mcp_config.json` without mutating that file. Secret-bearing headers, OAuth configuration, literal
 environment values, and all other MCP definition fields remain Agent-owned.
+
+Antigravity App deploys global Skills to `~/.gemini/config/skills`, as specified by the
+[Antigravity Skills documentation](https://www.antigravity.google/docs/skills). The standalone IDE's
+`~/.gemini/antigravity/skills` is an observed compatibility runtime. The former incorrect App
+destination `~/.gemini/skills` is discovery-only, not evidence that an App Skill is loaded, and
+is never automatically removed during correction; Gemini or another tool may use its contents.
+The CLI's `~/.gemini/antigravity-cli/skills` is not an App runtime location. Workspace inspection
+uses `.agents/skills` and the documented `.agent/skills` compatibility location. App and CLI remain
+separate Targets; changing an adapter directory requires a new reviewed Apply, not a startup
+migration. An unchanged Profile and Library hash MUST NOT make obsolete deployment paths appear
+up to date. The corrected Apply must be a no-op on subsequent previews and must not change
+other products' Skill directories or native configuration files.
 
 Trae CLI uses one internal integration that prefers its current TOML layout. `TRAE_HOME`, when
 available to the application, selects the configuration and shared-resource root; otherwise it

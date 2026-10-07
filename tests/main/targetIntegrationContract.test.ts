@@ -316,7 +316,7 @@ describe("target integration contract", () => {
       "antigravity-app": {
         instructions: ["GEMINI.md", "AGENTS.md"],
         instructionCreateFile: "GEMINI.md",
-        skills: [".agents/skills", ".gemini/skills"],
+        skills: [".agents/skills", ".agent/skills"],
         mcp: [],
         compare: ["GEMINI.md", ".gemini", ".agents"],
         evaluationOwnsPaths: false

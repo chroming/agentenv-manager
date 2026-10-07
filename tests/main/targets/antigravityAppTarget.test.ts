@@ -20,6 +20,36 @@ const setup = async () => {
 };
 
 describe("Antigravity App Target adapter", () => {
+  it("deploys to the documented App directory, independently of CLI paths", async () => {
+    const { adapter, paths } = await setup();
+    expect(paths.skillsDir).toBe(join(root, ".gemini", "config", "skills"));
+    expect(paths.skillLocations).toContainEqual(expect.objectContaining({
+      path: join(root, ".gemini", "config", "skills"),
+      role: "preferred-runtime",
+      management: "managed"
+    }));
+    const overridden = adapter.createTargetPaths({ homeDir: root, rootDirOverride: join(root, "custom") });
+    expect(overridden.skillsDir).toBe(join(root, "custom", "config", "skills"));
+    expect(adapter.projects?.skillLocations.map((location) => location.relativePath))
+      .toEqual([".agents/skills", ".agent/skills"]);
+  });
+
+  it("does not mistake Gemini or CLI Skills for loaded App Skills", async () => {
+    const { adapter, paths } = await setup();
+    for (const directory of ["config", "antigravity", "antigravity-cli", ""]) {
+      const name = directory || "gemini";
+      const skillDir = join(root, ".gemini", directory, "skills", name);
+      await mkdir(skillDir, { recursive: true });
+      await writeFile(join(skillDir, "SKILL.md"), `---\nname: ${name}\ndescription: Fixture\n---\n# Fixture\n`);
+    }
+    const runtime = await adapter.skills.inspectRuntime(paths);
+    expect(runtime.observations.filter((item) => item.availability === "enabled")
+      .map((item) => item.runtimeName).sort()).toEqual(["antigravity", "config"]);
+    expect(runtime.observations.find((item) => item.runtimeName === "gemini"))
+      .toMatchObject({ availability: "unknown", locationRole: "discovery-only", legacy: false });
+    expect(runtime.observations.find((item) => item.runtimeName === "antigravity-cli")).toBeUndefined();
+  });
+
   it("describes the Antigravity App target correctly", () => {
     const adapter = createAntigravityAppTargetAdapter();
     expect(adapter.descriptor.id).toBe("antigravity-app");

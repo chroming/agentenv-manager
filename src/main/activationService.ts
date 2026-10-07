@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { cp, lstat, readdir, rm, stat } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import { createBackupStore } from "./backupStore";
-import { createActivationStatusReads } from "./activationStatusReads";
+import { createActivationStatusReads, hasCurrentManagedSkillLocations } from "./activationStatusReads";
 import { createUnifiedDiff } from "./diff";
 import {
   pathEntryExists,
@@ -391,7 +391,10 @@ export const createActivationService = ({
                   currentVersions,
                   appliedLibraryVersions
                 );
-                const isCurrent = profileHashCurrent && libraryVersionsCurrent;
+                const skillLocationsCurrent =
+                  !profileUsesResource(deploymentProfile.resources, targetId, "skills") ||
+                  hasCurrentManagedSkillLocations(activeManagedResources, activeExpectedSkillHashes.keys());
+                const isCurrent = profileHashCurrent && libraryVersionsCurrent && skillLocationsCurrent;
                 if (!appliedProfileSnapshot && isCurrent && state.appliedProfileHash) {
                   const capturedAt = state.lastAppliedAt ?? new Date().toISOString();
                   const snapshot = {
@@ -425,7 +428,9 @@ export const createActivationService = ({
                 if (!isCurrent) {
                   lifecycleReason = !profileHashCurrent
                     ? "The saved Profile changed after the last Apply"
-                    : "Referenced Library resources changed after the last Apply";
+                    : !skillLocationsCurrent
+                      ? "Skills need to be deployed to the current Agent directory"
+                      : "Referenced Library resources changed after the last Apply";
                 } else if (localOverrideCount > 0) {
                   lifecycleReason = `${localOverrideCount} local ${
                     localOverrideCount === 1 ? "management boundary is" : "management boundaries are"
