@@ -131,8 +131,11 @@ it.skipIf(process.platform === "win32")("requires opt-in, searches local and SSH
   await page.getByRole("button",{name:"Resume",exact:true}).click();
   await expect.poll(()=>page.evaluate(async ()=>(await window.agentEnv.conversationHistoryStatus()).config.paused)).toBe(false);
   await page.getByRole("searchbox",{name:"Search conversations"}).fill("needle");
+  // Wait for debounced search results, not the still-visible unfiltered list.
+  await expect.poll(() => page.locator(".conversation-list-item__snippet").count(), { timeout: 10_000 }).toBe(2);
   await page.getByRole("option",{name:/Remote searchable history fixture/}).click();
-  await expect.poll(() => page.getByRole("option").first().innerText()).toContain("Remote searchable");
+  await expect.poll(() => page.getByRole("option",{name:/Remote searchable history fixture/})
+    .getAttribute("aria-selected")).toBe("true");
   await page.getByText("/work/remote/example",{exact:true}).waitFor();
   expect(await page.getByRole("button",{name:"Open original",exact:true}).count()).toBe(0);
   await page.getByRole("button",{name:"History location",exact:true}).click();

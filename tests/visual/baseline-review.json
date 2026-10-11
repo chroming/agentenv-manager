@@ -103,8 +103,8 @@
     },
     {
       "file": "history-remote-result.png",
-      "sha256": "52711d110b3365fbbb0541a545dc0e07a7a3e87694fb25c01568fff1ce593537",
-      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
+      "sha256": "2b455070dd81304c01664d8135840a0b361063cbc51538a93d4ebb71e9d543e5",
+      "reviewReason": "Reviewed 2026-10-11 against actual CI capture: wait for debounced search results, showing both matching snippets and the selected remote conversation. Prior baseline captured the unfiltered list. Pixel thresholds unchanged."
     },
     {
       "file": "ai-analysis-profile-920x620.png",
@@ -536,6 +536,12 @@
       "reviewedAt": "2026-10-11",
       "scope": "Fourteen reviewed device, conversation and dialog captures; other baselines unchanged.",
       "method": "Current isolated Electron mock captures individually inspected at native size against prior images. All workflow assertions retained.",
+      "thresholdsChanged": false
+    },
+    {
+      "reviewedAt": "2026-10-11",
+      "scope": "Remote history search result only.",
+      "method": "Inspected actual failed CI screenshot, difference image, prior baseline and corrected local capture at native size; verify completed search rather than transient unfiltered list.",
       "thresholdsChanged": false
     }
   ],
