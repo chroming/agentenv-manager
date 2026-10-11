@@ -1,4 +1,5 @@
-import { LoaderCircle, Server, Pencil, RefreshCw, Trash2 } from "lucide-react";
+import { LoaderCircle, Server, Pencil, RefreshCw, Trash2, Settings2 } from "lucide-react";
+import { AgentDeviceHeader } from "./AgentDeviceHeader";
 import { DiagnosticMessage } from "./ui/DiagnosticCopyButton";
 import { TargetEnvironmentSummary } from "./TargetEnvironmentSummary";
 import { forwardRef, useImperativeHandle, useMemo, useRef, useState } from "react";
@@ -10,7 +11,8 @@ import type {
   SshConfigHost,
   SshConfigHostResolution,
   TargetInfo,
-  TargetManagementState
+  TargetManagementState,
+  UpdateRemoteDeviceInput
 } from "../../shared/types";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { useI18n } from "../i18n";
@@ -27,7 +29,8 @@ import {
   SelectField,
   TextAction,
   ToolbarOverflowMenu,
-  TextField
+  TextField,
+  AlignedResourceList, ResourceRow, ChoiceInput
 } from "./ui";
 
 interface RemoteDeviceManagerProps {
@@ -44,7 +47,7 @@ interface RemoteDeviceManagerProps {
   } | void>;
   onListSshConfigHosts(): Promise<SshConfigHost[]>;
   onResolveSshConfigHost(alias: string): Promise<SshConfigHostResolution>;
-  onUpdate(input: CreateRemoteDeviceInput & { id: string }): Promise<{
+  onUpdate(input: UpdateRemoteDeviceInput): Promise<{
     device: RemoteDevice;
     probe?: RemoteDeviceProbe;
   } | void>;
@@ -98,6 +101,8 @@ export const RemoteDeviceManager = forwardRef<RemoteDeviceManagerHandle, RemoteD
 }, forwardedRef) => {
   const { localeTag, t } = useI18n();
   const [editingId, setEditingId] = useState<string>();
+  const [choosingId, setChoosingId] = useState<string>();
+  const [disabledAgents, setDisabledAgents] = useState<string[]>([]);
   const [removingId, setRemovingId] = useState<string>();
   const [form, setForm] = useState<CreateRemoteDeviceInput>(EMPTY_FORM);
   const [error, setError] = useState("");
@@ -112,7 +117,8 @@ export const RemoteDeviceManager = forwardRef<RemoteDeviceManagerHandle, RemoteD
   const dialogRef = useRef<HTMLElement>(null);
   const nameRef = useRef<HTMLInputElement>(null);
   const returnFocusRef = useRef<HTMLElement | null>(null);
-  const open = editingId !== undefined || removingId !== undefined;
+  const open = editingId !== undefined || removingId !== undefined || choosingId !== undefined;
+  const choosingDevice = devices.find((device) => device.id === choosingId);
   const removingDevice = devices.find((device) => device.id === removingId);
   const editorTitle = editingId === "new" ? t("Add SSH device") : t("Edit SSH device");
   const endpointsByDevice = useMemo(() => {
@@ -136,6 +142,7 @@ export const RemoteDeviceManager = forwardRef<RemoteDeviceManagerHandle, RemoteD
     if (busy) return;
     sshConfigRequestRef.current += 1;
     setEditingId(undefined);
+    setChoosingId(undefined);
     setRemovingId(undefined);
     setForm(EMPTY_FORM);
     setError("");
@@ -293,7 +300,8 @@ export const RemoteDeviceManager = forwardRef<RemoteDeviceManagerHandle, RemoteD
   return (
     <>
       {devices.map((device) => {
-        const deviceEndpoints = endpointsByDevice.get(device.id) ?? [];
+        const allDeviceEndpoints = endpointsByDevice.get(device.id) ?? [];
+        const deviceEndpoints = allDeviceEndpoints.filter((endpoint) => !device.disabledAgentIds?.includes(endpoint.agentId));
         const probe = probesByDevice.get(device.id);
         const status = probe?.status ?? "unavailable";
         const checking = busyDeviceIds.includes(device.id);
@@ -304,25 +312,15 @@ export const RemoteDeviceManager = forwardRef<RemoteDeviceManagerHandle, RemoteD
               ? t(deviceEndpoints.length === 1 ? "{{count}} Agent" : "{{count}} Agents", {
                   count: deviceEndpoints.length
                 })
-              : t("No supported Agents")
+              : allDeviceEndpoints.length > 0 ? t("No Agents selected") : t("No supported Agents")
             : status === "unsupported"
               ? t("Unsupported")
               : t("Offline");
         return (
           <section className={`remote-location-group is-${status}`} key={device.id}>
-            <header className="remote-location-header">
-              <span className="remote-location-header__icon" aria-hidden="true">
-                <Server size={16} strokeWidth={2.1} />
-              </span>
-              <span className="remote-location-header__identity">
-                <span className="remote-location-header__name">{device.name}</span>
-                <OverflowTooltip
-                  className="remote-location-header__host"
-                  displayText={`${device.user ? `${device.user}@` : ""}${device.host}${device.port ? `:${device.port}` : ""}`}
-                  text={`${device.user ? `${device.user}@` : ""}${device.host}${device.port ? `:${device.port}` : ""}`}
-                />
-              </span>
-              <span
+            <AgentDeviceHeader icon={<Server size={15} />} name={device.name}
+              detail={`${device.user ? `${device.user}@` : ""}${device.host}${device.port ? `:${device.port}` : ""}`}
+              status={<span
                 className={`remote-location-header__status is-${status}`}
                 title={probe?.checkedAt
                   ? t("Checked {{time}}", { time: formatCheckedAt(probe.checkedAt) })
@@ -330,8 +328,9 @@ export const RemoteDeviceManager = forwardRef<RemoteDeviceManagerHandle, RemoteD
               >
                 {checking ? <LoaderCircle className="is-spinning" size={13} aria-hidden="true" /> : null}
                 <span>{statusText}</span>
-              </span>
-              <ControlGroup density="compact" className="remote-location-header__actions">
+              </span>} actions={<>
+                <IconButton label={t("Choose Agents on {{device}}", { device: device.name })} size="compact" variant="ghost" disabled={busy}
+                  onClick={(event) => { returnFocusRef.current = event.currentTarget; setError(""); setDisabledAgents(device.disabledAgentIds ?? []); setChoosingId(device.id); }}><Settings2 size={15} /></IconButton>
                 <IconButton
                   disabled={busy || checking}
                   label={t("Refresh {{name}}", { name: device.name })}
@@ -360,8 +359,7 @@ export const RemoteDeviceManager = forwardRef<RemoteDeviceManagerHandle, RemoteD
                   label={t("More actions for {{name}}", { name: device.name })}
                   menuLabel={t("Actions for {{name}}", { name: device.name })}
                 />
-              </ControlGroup>
-            </header>
+              </>} />
             {!checking && probe?.error ? (
               <div className="remote-location-error" role="status">
                 <OverflowTooltip className="remote-location-error__message" text={probe.error} />
@@ -408,13 +406,30 @@ export const RemoteDeviceManager = forwardRef<RemoteDeviceManagerHandle, RemoteD
               );
             }) : (
               <div className="remote-location-empty">
-                {status === "ready" ? t("No supported Agents installed") : t("Previously detected Agents will remain visible after a successful connection.")}
+                {allDeviceEndpoints.length > 0 ? t("No Agents selected") : status === "ready" ? t("No supported Agents installed") : t("Previously detected Agents will remain visible after a successful connection.")}
               </div>
             )}
           </section>
         );
       })}
 
+      {choosingDevice ? <ModalFrame ariaLabel={t("Choose Agents on {{device}}", { device: choosingDevice.name })}
+        className="remote-device-dialog ui-dialog-shell" dialogRef={dialogRef} dismissPolicy="intentional" dismissDisabled={busy} onDismiss={close}>
+        <DialogHeader title={t("Choose Agents on {{device}}", { device: choosingDevice.name })}
+          description={t("Choose which Agents to use in AgentEnv. Existing deployments and remote files are not changed.")} />
+        <DialogBody>
+          <AlignedResourceList actionTrack="compact">
+            {(endpointsByDevice.get(choosingDevice.id) ?? []).map((endpoint) => <ResourceRow key={endpoint.id} title={endpoint.agentName} icon={<AgentEndpointIcon target={{ id: endpoint.agentId, name: endpoint.agentName }} size={20} />} density="compact" appearance="plain"
+              actions={<ChoiceInput type="checkbox" aria-label={endpoint.agentName} disabled={busy} checked={!disabledAgents.includes(endpoint.agentId)}
+                onChange={(event) => setDisabledAgents((current) => event.target.checked ? current.filter((id) => id !== endpoint.agentId) : [...new Set([...current, endpoint.agentId])])} /> } />)}
+          </AlignedResourceList>
+          {(endpointsByDevice.get(choosingDevice.id) ?? []).length === 0 ? <p>{t("No supported Agents installed")}</p> : null}
+          {error ? <p className="ui-field__error" role="alert"><DiagnosticMessage message={error} /></p> : null}
+        </DialogBody>
+        <DialogFooter><Button disabled={busy} onClick={close}>{t("Cancel")}</Button>
+          <Button variant="primary" busy={busy} disabled={busy} onClick={() => void onUpdate({ ...choosingDevice, disabledAgentIds: disabledAgents }).then(close).catch((cause) => setError(String(cause)))}>{t("Save")}</Button>
+        </DialogFooter>
+      </ModalFrame> : null}
       {editingId ? (
         <ModalFrame
           ariaLabel={editorTitle}

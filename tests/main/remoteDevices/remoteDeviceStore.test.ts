@@ -13,6 +13,19 @@ afterEach(async () => {
 });
 
 describe("remote device store", () => {
+  it("persists agent exclusions independently of connection edits", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-remote-selection-"));
+    const paths = createPaths({ appDataRoot: root });
+    const store = createRemoteDeviceStore(paths);
+    const device = await store.add({ name: "Build", host: "fixture" });
+    await store.update({ ...device, disabledAgentIds: ["opencode", "opencode"] });
+    expect((await createRemoteDeviceStore(paths).get(device.id)).disabledAgentIds).toEqual(["opencode"]);
+    await store.update({ ...device, name: "Renamed" });
+    expect((await store.get(device.id)).disabledAgentIds).toEqual(["opencode"]);
+    await expect(store.update({ ...device, disabledAgentIds: ["../bad"] })).rejects.toThrow();
+    await store.update({ ...device, disabledAgentIds: [] });
+    expect((await store.get(device.id)).disabledAgentIds).toEqual([]);
+  });
   it("persists only the SSH connection descriptor", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-remote-device-"));
     const paths = createPaths({ appDataRoot: root, homeDir: join(root, "home") });

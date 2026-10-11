@@ -2141,6 +2141,7 @@ export interface RemoteDevice {
   port?: number;
   createdAt: string;
   updatedAt: string;
+  disabledAgentIds?: string[];
 }
 
 export interface CreateRemoteDeviceInput {
@@ -2152,6 +2153,7 @@ export interface CreateRemoteDeviceInput {
 
 export interface UpdateRemoteDeviceInput extends CreateRemoteDeviceInput {
   id: string;
+  disabledAgentIds?: string[];
 }
 
 export interface SshConfigHost {

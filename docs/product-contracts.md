@@ -2555,6 +2555,15 @@ commit as its implementation.
 
 ## 23.5 SSH Linux Endpoint Contract
 
+Agents groups use the same single-line device header for local and remote devices;
+device identity is distinct from Agent rows and SSH addresses remain hover detail.
+Each device owns an icon-only Agent chooser. Remote choices persist locally as
+disabled Agent IDs, defaulting to all detected Agents. They filter Agent rows and
+Profile target choices without deleting deployments, changing remote resources or
+changing Conversation history-source consent. Selection-only updates do not probe SSH
+and remain available offline using last-known endpoints. Connection edits retain their
+existing identity verification. Clearing an exclusion restores the Agent immediately.
+
 An Agent endpoint is the combination of an Agent adapter and a device. Local Agents and
 SSH Linux Agents share the same portable Profile, but deployment state and recovery
 receipts are device-local.

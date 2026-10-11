@@ -117,6 +117,7 @@ export const useRemoteEndpoints = ({
   const profileTargets = useMemo(() => [
     ...targets,
     ...endpoints.flatMap((endpoint) => {
+      if (devicesById.get(endpoint.deviceId)?.disabledAgentIds?.includes(endpoint.agentId)) return [];
       const descriptor = supportedTargets.find((target) => target.id === endpoint.agentId);
       return descriptor ? [endpointTargetInfo(endpoint, descriptor, devicesById.get(endpoint.deviceId))] : [];
     })
@@ -225,6 +226,17 @@ export const useRemoteEndpoints = ({
     },
     update: (input: UpdateRemoteDeviceInput) => {
       if (!window.agentEnv.updateRemoteDevice) return Promise.resolve();
+      const previous = devicesById.get(input.id);
+      if (input.disabledAgentIds !== undefined && previous && previous.name === input.name && previous.host === input.host && previous.user === input.user && previous.port === input.port) {
+        return (async () => {
+          setBusy(true);
+          try {
+            const device = await window.agentEnv.updateRemoteDevice!(input);
+            setDevices((current) => current.map((item) => item.id === device.id ? device : item));
+            return { device };
+          } finally { setBusy(false); }
+        })();
+      }
       return runMutation(async () => {
         const device = await window.agentEnv.updateRemoteDevice!(input);
         const probe = await window.agentEnv.probeRemoteDevice?.(device.id, false);

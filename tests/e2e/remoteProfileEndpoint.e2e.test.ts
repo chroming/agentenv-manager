@@ -118,8 +118,7 @@ HOME="$AGENTENV_REMOTE_HOME" PATH="$AGENTENV_REMOTE_BIN:/usr/bin:/bin" /bin/sh -
     await setup.waitFor({ state: "hidden" });
     const typography = await page.locator(".target-list").evaluate((list) => {
       const remoteGroup = list.querySelector<HTMLElement>(".remote-location-group")!;
-      const remoteDeviceName = remoteGroup.querySelector<HTMLElement>(".remote-location-header__name")!;
-      const remoteDeviceHost = remoteGroup.querySelector<HTMLElement>(".remote-location-header__host")!;
+      const remoteDeviceName = remoteGroup.querySelector<HTMLElement>(".agent-device-header__name")!;
       const remoteAgentName = remoteGroup.querySelector<HTMLElement>(
         ".target-workflow-name-action > strong"
       )!;
@@ -135,7 +134,7 @@ HOME="$AGENTENV_REMOTE_HOME" PATH="$AGENTENV_REMOTE_BIN:/usr/bin:/bin" /bin/sh -
         bodyLineHeight: getComputedStyle(document.body).lineHeight,
         remoteAgent: style(remoteAgentName),
         remoteDevice: style(remoteDeviceName),
-        remoteHost: style(remoteDeviceHost)
+        localDevice: style(list.querySelector<HTMLElement>(".agent-device-header__name")!)
       };
     });
     expect(typography.remoteAgent).toEqual({
@@ -143,26 +142,18 @@ HOME="$AGENTENV_REMOTE_HOME" PATH="$AGENTENV_REMOTE_BIN:/usr/bin:/bin" /bin/sh -
       fontWeight: "500",
       lineHeight: typography.bodyLineHeight
     });
-    expect(typography.remoteDevice).toEqual({
-      fontSize: "12px",
-      fontWeight: "500",
-      lineHeight: "16px"
-    });
-    expect(typography.remoteHost).toEqual({
-      fontSize: "11px",
-      fontWeight: "400",
-      lineHeight: "15px"
-    });
+    expect(typography.remoteDevice).toEqual(typography.localDevice);
+    expect(typography.remoteDevice.fontSize).toBe("12px");
     const remoteLayout = await remoteDeviceGroup.evaluate((group) => {
-      const header = group.querySelector<HTMLElement>(".remote-location-header")!;
+      const header = group.querySelector<HTMLElement>(".agent-device-header")!;
       const headerBox = header.getBoundingClientRect();
-      const actions = header.querySelector<HTMLElement>(".remote-location-header__actions")!;
+      const actions = header.querySelector<HTMLElement>(".ui-control-group")!;
       const actionButtons = Array.from(actions.querySelectorAll<HTMLElement>("button"));
       const remoteRow = group.querySelector<HTMLElement>(".target-workflow-header")!;
       const remoteName = remoteRow.querySelector<HTMLElement>(".target-workflow-name-action > strong")!;
       const remoteStatus = remoteRow.querySelector<HTMLElement>(".target-health-status")!;
       const remoteProfile = remoteRow.querySelector<HTMLElement>(".target-workflow-environment")!;
-      const tableHeader = group.parentElement?.querySelector<HTMLElement>(".target-list__header")!;
+      const localRow = group.parentElement?.querySelector<HTMLElement>(".target-workflow-header")!;
       const textLeft = (element: HTMLElement) => {
         const range = document.createRange();
         range.selectNodeContents(element);
@@ -175,11 +166,11 @@ HOME="$AGENTENV_REMOTE_HOME" PATH="$AGENTENV_REMOTE_BIN:/usr/bin:/bin" /bin/sh -
           return `${Math.round(box.width)}x${Math.round(box.height)}`;
         }),
         nameAligned: Math.abs(
-          textLeft(remoteName) - textLeft(tableHeader.children[1] as HTMLElement)
+          textLeft(remoteName) - textLeft(localRow.querySelector<HTMLElement>(".target-workflow-name-action > strong")!)
         ) <= 1,
         profileAligned: Math.abs(
           remoteProfile.getBoundingClientRect().left -
-          (tableHeader.children[2] as HTMLElement).getBoundingClientRect().left
+          localRow.querySelector<HTMLElement>(".target-workflow-environment")!.getBoundingClientRect().left
         ) <= 1,
         statusInline: remoteStatus.parentElement === remoteName.closest(".target-workflow-name-line"),
         statusText: remoteStatus.textContent?.trim()
@@ -187,7 +178,7 @@ HOME="$AGENTENV_REMOTE_HOME" PATH="$AGENTENV_REMOTE_BIN:/usr/bin:/bin" /bin/sh -
     });
     expect(remoteLayout).toEqual({
       actionsContained: true,
-      actionSizes: ["28x28", "28x28"],
+      actionSizes: ["28x28", "28x28", "28x28"],
       nameAligned: true,
       profileAligned: true,
       statusInline: true,
@@ -196,6 +187,8 @@ HOME="$AGENTENV_REMOTE_HOME" PATH="$AGENTENV_REMOTE_BIN:/usr/bin:/bin" /bin/sh -
 
     for (const width of [920, 1180, 1440]) {
       await page.setViewportSize({ width, height: 900 });
+      const actionEdges = await page.locator(".agent-device-header > .ui-control-group").evaluateAll((elements) => elements.map((element) => element.getBoundingClientRect().right));
+      expect(Math.max(...actionEdges) - Math.min(...actionEdges)).toBeLessThanOrEqual(1);
       expect(await page.locator(".target-location-divider").count()).toBe(0);
       const centers = await page.locator(".target-workflow-environment").evaluateAll((cells) =>
         cells.map((cell) => {
@@ -211,8 +204,24 @@ HOME="$AGENTENV_REMOTE_HOME" PATH="$AGENTENV_REMOTE_BIN:/usr/bin:/bin" /bin/sh -
       );
       expect(centers.length).toBeGreaterThanOrEqual(1);
       expect(centers.every((difference) => difference <= 1)).toBe(true);
+      if (process.env.AGENTENV_CAPTURE_REMOTE_DIR) {
+        await mkdir(process.env.AGENTENV_CAPTURE_REMOTE_DIR, { recursive: true });
+        await page.screenshot({ path: join(process.env.AGENTENV_CAPTURE_REMOTE_DIR, `agents-${width}.png`) });
+      }
     }
     await page.setViewportSize({ width: 920, height: 620 });
+
+    await remoteDeviceGroup.getByRole("button", { name: /Choose Agents on/ }).click();
+    const remoteChooser = page.getByRole("dialog", { name: /Choose Agents on/ });
+    await remoteChooser.getByRole("checkbox", { name: "OpenCode" }).uncheck();
+    await remoteChooser.getByRole("button", { name: "Save", exact: true }).click();
+    await remoteChooser.waitFor({ state: "hidden" });
+    expect(await remoteDeviceGroup.locator(".remote-agent-row").count()).toBe(0);
+    await remoteDeviceGroup.getByRole("button", { name: /Choose Agents on/ }).click();
+    await remoteChooser.getByRole("checkbox", { name: "OpenCode" }).check();
+    await remoteChooser.getByRole("button", { name: "Save", exact: true }).click();
+    await remoteChooser.waitFor({ state: "hidden" });
+    await remoteDeviceGroup.locator(".remote-agent-row").waitFor();
 
     const result = await page.evaluate(async () => {
       const created = await window.agentEnv.createProfile({

@@ -1599,9 +1599,9 @@ describe("Electron UI profile switching e2e", () => {
             range.selectNodeContents(element);
             return range.getBoundingClientRect().left;
           };
-          const heading = list.querySelector(".target-list__header")!;
-          const headings = heading.querySelectorAll(":scope > span");
+          const heading = list.querySelector(".agent-device-header")!;
           const rows = [...list.querySelectorAll<HTMLElement>(".target-workflow-header")];
+          const headings = [rows[0].querySelector(".target-workflow-icon")!, rows[0].querySelector(".target-workflow-name-action strong")!, rows[0].querySelector(".target-workflow-environment")!];
           return {
             columns: headings.length,
             contained: rows.every((row) => row.scrollWidth <= row.clientWidth + 1),
@@ -1629,7 +1629,7 @@ describe("Electron UI profile switching e2e", () => {
     for (const width of [920, 1180, 1440]) {
       await resizeAppWindow(page, width, width === 920 ? 620 : 900);
       for (const [workspace, toolbar] of [
-        ["targets", ".target-list__header"],
+        ["targets", ".agent-device-header"],
         ["instructions", ".instructions-list-pane .ui-catalog-toolbar"],
         ["conversations", ".conversation-list-pane .ui-catalog-toolbar"]
       ]) {
@@ -1660,7 +1660,7 @@ describe("Electron UI profile switching e2e", () => {
         if (workspace === "targets") {
           expect(await controls.locator('[aria-hidden="true"] button').count()).toBe(0);
           const name = controls.locator(":scope > span").nth(2);
-          const actions = controls.locator(".target-list__header-actions");
+          const actions = controls.locator(".agent-device-header > .ui-control-group");
           const a = await actions.boundingBox();
           const n = await name.boundingBox();
           expect(a!.x).toBeGreaterThanOrEqual(n!.x + 40);
@@ -1925,7 +1925,7 @@ describe("Electron UI profile switching e2e", () => {
       expect(Math.abs(bounds.width - bounds.parentWidth)).toBeLessThanOrEqual(1);
       expect(settings!.x + settings!.width).toBeLessThanOrEqual(width!);
       await page.getByRole("button", { name: "Agents", exact: true }).click();
-      const agentColumns = await page.locator(".target-list__header").evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(" ").map(Number.parseFloat));
+      const agentColumns = await page.locator(".target-workflow-header").first().evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(" ").map(Number.parseFloat));
       expect(agentColumns[1]).toBeLessThanOrEqual(280);
       await page.getByRole("button", { name: "Instructions", exact: true }).click();
       const list = page.locator(".instructions-list");
@@ -1974,7 +1974,7 @@ describe("Electron UI profile switching e2e", () => {
       const agents = page.getByRole("region", { name: "Agents", exact: true });
       await agents.getByRole("button", { name: "OpenCode", exact: true }).waitFor();
       expect(await agents.getByRole("region", { name: "Profile status" }).count()).toBe(0);
-      const headerBackground = await agents.locator(".target-list__header").evaluate((element) => getComputedStyle(element).backgroundColor);
+      const headerBackground = await agents.locator(".agent-device-header").evaluate((element) => getComputedStyle(element).backgroundColor);
       const rowBackground = await agents.locator(".target-card--workflow").first().evaluate((element) => getComputedStyle(element).backgroundColor);
       expect(headerBackground).toBe(rowBackground);
       const actionGeometry = await agents.locator(".target-workflow-environment").first().evaluate((cell) => {
@@ -6250,7 +6250,7 @@ describe("Electron UI profile switching e2e", () => {
             health: getComputedStyle(first.querySelector<HTMLElement>(".target-health-status")!).fontWeight,
             lifecycle: getComputedStyle(first.querySelector<HTMLElement>(".target-workflow-profile")!).fontWeight,
             name: getComputedStyle(first.querySelector<HTMLElement>(".target-workflow-name-line strong")!).fontWeight,
-            columnHeading: getComputedStyle(list.querySelector<HTMLElement>(".target-list__header")!).fontWeight
+            columnHeading: getComputedStyle(list.querySelector<HTMLElement>(".agent-device-header")!).fontWeight
           }
         };
       });
@@ -6274,10 +6274,10 @@ describe("Electron UI profile switching e2e", () => {
     await expectAgentRowGeometry();
 
     await resizeAppWindow(page, 1440, 900);
-    const wideHeaderGeometry = await page.locator(".target-list__header").evaluate((header) => {
+    const wideHeaderGeometry = await page.locator(".agent-device-header").evaluate((header) => {
       const labels = Array.from(header.querySelectorAll<HTMLElement>(":scope > span"));
       const lastApplied = header.querySelector(".target-list__last-applied-label");
-      const actions = header.querySelector(".target-list__header-actions");
+      const actions = header.querySelector(".ui-control-group");
       return {
         actionsWidth: Math.round(actions?.getBoundingClientRect().width ?? 0),
         lastAppliedHeight: Math.round(lastApplied?.getBoundingClientRect().height ?? 0),
@@ -10611,7 +10611,7 @@ describe("Electron UI profile switching e2e", () => {
     await dialog.waitFor({ state: "hidden" });
     const agentsWorkspace = page.getByRole("region", { name: "Agents" });
     expect(await agentsWorkspace.textContent()).toContain("No enabled Agents");
-    await agentsWorkspace.getByRole("button", { name: "Choose Agents" }).click();
+    await agentsWorkspace.getByRole("button", { name: "Choose local Agents" }).click();
     await dialog.waitFor({ state: "visible" });
     await dialog.getByRole("checkbox", { name: "OpenCode", exact: true }).check();
     await dialog.getByRole("checkbox", { name: "Codex" }).uncheck();
@@ -10755,7 +10755,7 @@ describe("Electron UI profile switching e2e", () => {
 
     await page.getByRole("button", { name: "Agents", exact: true }).click();
     const agentsWorkspace = page.getByRole("region", { name: "Agents", exact: true });
-    await agentsWorkspace.getByRole("button", { name: "Choose Agents" }).click();
+    await agentsWorkspace.getByRole("button", { name: "Choose local Agents" }).click();
     const chooser = page.getByRole("dialog", { name: "Choose Agents" });
 
     for (const viewport of [
@@ -10846,7 +10846,7 @@ describe("Electron UI profile switching e2e", () => {
     expect(disabledState.errors).toHaveLength(2);
     expect(disabledState.errors.join("\n")).toContain("OpenCode");
 
-    await agentsWorkspace.getByRole("button", { name: "Choose Agents" }).click();
+    await agentsWorkspace.getByRole("button", { name: "Choose local Agents" }).click();
     const allAgentsChooser = page.getByRole("dialog", { name: "Choose Agents" });
     const checkedAgents = allAgentsChooser.getByRole("checkbox", { checked: true });
     while (await checkedAgents.count()) await checkedAgents.first().click();
@@ -10867,7 +10867,7 @@ describe("Electron UI profile switching e2e", () => {
     await page.reload();
     await page.getByRole("button", { name: "Agents", exact: true }).click();
     await page.getByRole("region", { name: "Agents", exact: true })
-      .getByRole("button", { name: "Choose Agents" }).click();
+      .getByRole("button", { name: "Choose local Agents" }).click();
     const reopenedChooser = page.getByRole("dialog", { name: "Choose Agents" });
     await reopenedChooser.getByRole("checkbox", { name: "OpenCode" }).click();
     await reopenedChooser.getByRole("button", { name: "Save Agent choices" }).click();
@@ -10934,7 +10934,7 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("status").filter({ hasText: "设置已保存" }).waitFor();
     await page.getByRole("button", { name: "Agents", exact: true }).click();
     await page.getByRole("button", { name: "选择 Agents", exact: true }).waitFor();
-    expect(await page.getByRole("button", { name: "Choose Agents", exact: true }).count()).toBe(0);
+    expect(await page.getByRole("button", { name: "Choose local Agents", exact: true }).count()).toBe(0);
     await expect
       .poll(async () => JSON.parse(await readFile(join(appDataRoot, "settings.json"), "utf8")))
       .toMatchObject({ locale: "zh_CN" });
@@ -12625,11 +12625,11 @@ describe("Electron UI profile switching e2e", () => {
     const catalogHeaderMetrics = [];
     for (const workspace of ["Agents", "Skills"]) {
       await sidebar.getByRole("button", { name: workspace, exact: true }).click();
-      catalogHeaderMetrics.push(await page.locator(workspace === "Agents" ? ".target-list__header" : ".ui-page-header").first().evaluate((element) => {
+      catalogHeaderMetrics.push(await page.locator(workspace === "Agents" ? ".agent-device-header" : ".ui-page-header").first().evaluate((element) => {
         const headerBox = element.getBoundingClientRect();
-        const titleBox = element.querySelector<HTMLElement>(".ui-page-header__actions, .target-page-actions")!.getBoundingClientRect();
+        const titleBox = element.querySelector<HTMLElement>(".ui-page-header__actions, .ui-control-group")!.getBoundingClientRect();
         const actionBox = element.querySelector<HTMLElement>(
-          ".ui-page-header__actions button, .target-page-actions button"
+          ".ui-page-header__actions button, .ui-control-group button"
         )!.getBoundingClientRect();
         return {
           left: Math.round(headerBox.left),
@@ -13158,7 +13158,7 @@ describe("Electron UI profile switching e2e", () => {
     const targetListGeometry = await page.locator(".target-list").evaluate((list) => {
       const rows = Array.from(list.querySelectorAll<HTMLElement>(".target-card--workflow"));
       const listBox = list.getBoundingClientRect();
-      const agentHeader = list.querySelector<HTMLElement>(".target-list__header > span:nth-child(2)")!;
+      const agentHeader = list.querySelector<HTMLElement>(".target-workflow-name-action > strong")!;
       const agentHeaderRange = document.createRange();
       agentHeaderRange.selectNodeContents(agentHeader);
       const agentHeaderLeft = agentHeaderRange.getBoundingClientRect().left;
@@ -13171,7 +13171,7 @@ describe("Electron UI profile switching e2e", () => {
       const actionLefts = rows.map((row) =>
         row.querySelector<HTMLElement>(".target-workflow-actions")!.getBoundingClientRect().left
       );
-      const actionsHeader = list.querySelector<HTMLElement>(".target-list__header-actions")!;
+      const actionsHeader = list.querySelector<HTMLElement>(".agent-device-header > .ui-control-group")!;
       const identityWidth = rows[0]!
         .querySelector<HTMLElement>(".target-workflow-title")!
         .getBoundingClientRect().width;
@@ -13228,8 +13228,8 @@ describe("Electron UI profile switching e2e", () => {
     expect(await compactActionsHeader.count()).toBe(0);
     const compactTargetHeader = await page.locator(".target-list").evaluate((list) => {
       const headerCells = [
-        list.querySelector<HTMLElement>(".target-list__header > span:nth-child(2)")!,
-        list.querySelector<HTMLElement>(".target-list__header > span:nth-child(3)")!
+        list.querySelector<HTMLElement>(".target-workflow-name-action > strong")!,
+        list.querySelector<HTMLElement>(".target-workflow-environment")!
       ];
       const textCenters = headerCells.map((cell) => {
         const range = document.createRange();

@@ -137,3 +137,35 @@
     grid-template-columns: 32px minmax(120px, 1fr) minmax(0, auto) auto;
   }
 }
+.agent-device-header {
+  align-self: stretch;
+  background: var(--surface);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--border);
+  min-width: 0;
+  flex: 0 0 auto;
+  color: var(--text-secondary);
+  font-size: var(--font-size-metadata);
+}
+
+.agent-device-header__identity {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.agent-device-header__identity > span:first-child {
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.agent-device-header__status {
+  color: var(--muted);
+  flex-shrink: 0;
+  white-space: nowrap;
+}

@@ -132,6 +132,17 @@ const createFixture = async (
 };
 
 describe("remote Profile activation", () => {
+  it("saves remote agent selection while offline without probing or changing deployments", async () => {
+    let offline = false;
+    const fixture = await createFixture((home) => ({ execute: async (...args) => {
+      if (offline) throw new Error("Unexpected SSH request while saving selection");
+      return createLocalSshFixture(home).execute(...args);
+    } }));
+    offline = true;
+    const saved = await fixture.service.updateDevice({ ...fixture.device, disabledAgentIds: ["opencode"] });
+    expect(saved.disabledAgentIds).toEqual(["opencode"]);
+    expect((await fixture.service.listDevices())[0].disabledAgentIds).toEqual(["opencode"]);
+  });
   it("keeps manual-only policy in the SSH copy and reaches a no-op on the next preview", async () => {
     const fixture = await createFixture((home) => ({
       execute: async (device, command, options) => {

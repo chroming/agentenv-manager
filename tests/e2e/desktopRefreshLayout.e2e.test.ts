@@ -40,7 +40,7 @@ it.skipIf(process.platform === "win32")("keeps device counts, refresh geometry a
     expect(await page.getByRole("button", { name: "Show Local Agents" }).innerText()).toBe("1");
     expect(await page.locator(".app-shell").evaluate(el => getComputedStyle(el).transitionDuration)).toBe("0s");
     const before = await page.locator(".target-card").first().boundingBox();
-    await page.locator(".target-list__header").getByRole("button", { name: "Refresh", exact: true }).click();
+    await page.locator(".agent-device-header").getByRole("button", { name: "Refresh", exact: true }).click();
     const during = await page.locator(".target-card").first().boundingBox();
     expect(during?.y).toBe(before?.y);
     await page.getByRole("button", { name: "Collapse sidebar" }).click();

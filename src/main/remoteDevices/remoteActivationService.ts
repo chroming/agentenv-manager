@@ -1268,6 +1268,7 @@ export const createRemoteActivationService = (options: {
     updateDevice: async (input) => {
       const previous = await deviceStore.get(input.id);
       const device = await deviceStore.update(input);
+      if (input.disabledAgentIds !== undefined && previous.name === device.name && previous.host === device.host && previous.user === device.user && previous.port === device.port) return device;
       probes.delete(device.id);
       const probe = await probeDevice(device.id, true);
       const identityChanged = probe.status === "ready" && probe.deviceFingerprint

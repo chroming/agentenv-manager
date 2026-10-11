@@ -17,7 +17,8 @@ const RemoteDeviceSchema = z.object({
   user: z.string().min(1).max(64).optional(),
   port: z.number().int().min(1).max(65_535).optional(),
   createdAt: z.string().datetime(),
-  updatedAt: z.string().datetime()
+  updatedAt: z.string().datetime(),
+  disabledAgentIds: z.array(z.string().regex(/^[a-z][a-z0-9-]*$/).max(80)).max(100).optional()
 }).strict();
 
 const RemoteDeviceFileSchema = z.object({
@@ -113,6 +114,7 @@ export const createRemoteDeviceStore = (paths: AgentEnvPaths): RemoteDeviceStore
       const device: RemoteDevice = {
         ...devices[index],
         ...normalized,
+        ...(input.disabledAgentIds !== undefined ? { disabledAgentIds: [...new Set(RemoteDeviceSchema.shape.disabledAgentIds.parse(input.disabledAgentIds))] } : {}),
         updatedAt: new Date().toISOString()
       };
       devices[index] = device;

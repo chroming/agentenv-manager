@@ -1,4 +1,5 @@
 import { TargetEnvironmentSummary } from "./TargetEnvironmentSummary";
+import { AgentDeviceHeader } from "./AgentDeviceHeader";
 import {
   Activity,
   ArchiveRestore,
@@ -473,20 +474,14 @@ export const TargetWorkspace = ({
       ) : null}
 
       <div className="target-list" aria-busy={isLoading}>
-        <div className="target-list__header">
-            <span title={t("Local Agents")} aria-label={t("Local Agents")}><Monitor size={16} aria-hidden="true" /></span>
-            <span>{t("Agent")}</span>
-            <span>{t("Profile")}</span>
-            <div className="target-list__header-actions">
-          <ControlGroup className="target-page-actions" aria-label={t("Agent actions")}>
-            <Button
+        <AgentDeviceHeader icon={<Monitor size={15} />} name={t("This device")} status={targets.length} actions={<>
+            <IconButton label={t("Choose local Agents")} variant="ghost"
               size="compact"
-              icon={<UserRoundPlus size={15} />}
               disabled={busy || isLoading}
               onClick={onChooseAgents}
             >
-              {t("Choose Agents")}
-            </Button>
+              <Settings2 size={15} />
+            </IconButton>
             <RefreshAction
               disabled={busy || isLoading || freshness.status === "refreshing"}
               label={t("Refresh")}
@@ -537,8 +532,7 @@ export const TargetWorkspace = ({
               label={t("More Agent actions")}
               menuLabel={t("Agent actions")}
             />
-          </ControlGroup></div>
-          </div>
+          </>} />
         {isLoading && targets.length === 0 && remoteDevices.length === 0 ? (
           <div className="target-loading-state" role="status">
             <LoaderCircle className="is-spinning" size={16} aria-hidden="true" />

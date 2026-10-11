@@ -1840,7 +1840,7 @@ describe("App", () => {
     expect(screen.queryByRole("dialog", { name: "Choose Agents" })).not.toBeInTheDocument();
 
     const agentsWorkspace = await screen.findByRole("region", { name: "Agents" });
-    fireEvent.click(within(agentsWorkspace).getByRole("button", { name: "Choose Agents" }));
+    fireEvent.click(within(agentsWorkspace).getByRole("button", { name: "Choose local Agents" }));
     const reopened = screen.getByRole("dialog", { name: "Choose Agents" });
     fireEvent.click(within(reopened).getByRole("checkbox", { name: "OpenCode" }));
     fireEvent.click(within(reopened).getByRole("button", { name: "Save Agent choices" }));
@@ -3262,7 +3262,7 @@ describe("App", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "Agents" }));
     const agentsWorkspace = await screen.findByRole("region", { name: "Agents" });
-    fireEvent.click(within(agentsWorkspace).getByRole("button", { name: "Choose Agents" }));
+    fireEvent.click(within(agentsWorkspace).getByRole("button", { name: "Choose local Agents" }));
     const chooser = screen.getByRole("dialog", { name: "Choose Agents" });
     fireEvent.click(within(chooser).getByRole("checkbox", { name: "Codex" }));
     fireEvent.click(within(chooser).getByRole("checkbox", { name: "OpenCode" }));

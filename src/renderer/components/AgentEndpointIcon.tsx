@@ -7,7 +7,7 @@ export const AgentEndpointIcon = ({
   size = 16,
   className = ""
 }: {
-  target: TargetInfo;
+  target: Pick<TargetInfo, "id" | "name"> & Partial<Pick<TargetInfo, "iconKey" | "location">>;
   size?: number;
   className?: string;
 }) => {

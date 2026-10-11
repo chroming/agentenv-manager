@@ -36,6 +36,19 @@ const openAddDialog = (ref: RefObject<RemoteDeviceManagerHandle | null>) => {
 };
 
 describe("RemoteDeviceManager", () => {
+  it("offers device-local agent selection offline and saves without refresh", async () => {
+    const onUpdate = vi.fn().mockResolvedValue({ device });
+    const props = workspaceProps();
+    render(<RemoteDeviceManager {...sshConfigProps()} {...props} devices={[device]} probes={[]} busy={false}
+      endpoints={[{ id: "ssh:fixture:opencode", deviceId: device.id, agentId: "opencode", agentName: "OpenCode" } as never]}
+      onAdd={vi.fn()} onRemove={vi.fn()} onUpdate={onUpdate} />);
+    fireEvent.click(screen.getByRole("button", { name: "Choose Agents on Build server" }));
+    const dialog = screen.getByRole("dialog", { name: "Choose Agents on Build server" });
+    fireEvent.click(within(dialog).getByRole("checkbox", { name: "OpenCode" }));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(onUpdate).toHaveBeenCalledWith(expect.objectContaining({ id: device.id, disabledAgentIds: ["opencode"] })));
+    expect(props.onRefreshDevice).not.toHaveBeenCalled();
+  });
   it("uses the shared form dialog and never asks for a password or private key", async () => {
     const ref = createRef<RemoteDeviceManagerHandle>();
     render(
