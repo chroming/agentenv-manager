@@ -114,6 +114,38 @@ describe("worktree inventory and cleanup", () => {
     expect((await service.inventory("background")).entries.find((item) => item.path === linked)?.state).toBe("kept");
   });
 
+  it("revalidates cached trees for read-only analysis after restart without authorizing cleanup", async () => {
+    const { root, repo, linked, runner, service } = await fixture();
+    const entry = (await service.inventory()).entries.find((item) => item.path === linked)!;
+    const restarted = createWorktreeService({ appDataRoot: join(root, "data"), homeDir: join(root, "home"),
+      projectStore: { listLocalRootPaths: async () => [] } as unknown as ProjectStore,
+      resolveRunner: async () => runner });
+    await writeFile(join(linked, "README.md"), "fresh changes after cached scan\n");
+    const analysis = await restarted.readAnalysis(entry.commonDir, linked);
+    expect(analysis.documents.find((doc) => doc.id === "local-diff")?.content).toContain("fresh changes after cached scan");
+    await expect(restarted.preview(entry.commonDir, linked)).rejects.toThrow("Refresh Worktrees");
+    await run("git", ["-C", linked, "restore", "README.md"]);
+    await run("git", ["-C", repo, "worktree", "remove", linked]);
+    await expect(restarted.readAnalysis(entry.commonDir, linked)).rejects.toThrow("no longer registered");
+  });
+
+  it("allows cached analysis while a refresh is reading project roots", async () => {
+    const { root, linked, runner, service } = await fixture();
+    const entry = (await service.inventory()).entries.find((item) => item.path === linked)!;
+    let release!: (paths: string[]) => void;
+    const rootsReady = new Promise<string[]>((resolve) => { release = resolve; });
+    const restarted = createWorktreeService({ appDataRoot: join(root, "data"), homeDir: join(root, "home"),
+      projectStore: { listLocalRootPaths: () => rootsReady } as unknown as ProjectStore,
+      resolveRunner: async () => runner });
+    const scan = restarted.inventory();
+    try {
+      await expect(restarted.readAnalysis(entry.commonDir, linked)).resolves.toHaveProperty("documents");
+    } finally {
+      release([]);
+      await scan;
+    }
+  });
+
   it("does not infer integration from a sibling branch, tag or recovery reference", async () => {
     const { repo, linked, service } = await fixture();
     await writeFile(join(linked, "README.md"), "unfinished\n");

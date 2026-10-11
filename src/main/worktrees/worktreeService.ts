@@ -349,7 +349,13 @@ export const createWorktreeService = ({
       await saveSettings({ ...current, integrationRefs });
     },
     readAnalysis: async (commonDir, path) => {
-      if (!discovered.has(discoveredKey(commonDir, path))) throw new Error("Refresh Worktrees before analyzing this directory.");
+      if (!discovered.has(discoveredKey(commonDir, path))) {
+        const { inventory } = await inventoryCache.read();
+        // Cached rows identify a read-only request, never authorize cleanup or supply AI evidence.
+        if (!inventory?.entries.some((entry) => entry.commonDir === commonDir && entry.path === path)) {
+          throw new Error("Refresh Worktrees before analyzing this directory.");
+        }
+      }
       const entry = await findEntry(commonDir, path);
       if (entry.main || !entry.exists || !entry.head) throw new Error("This linked Worktree is unavailable for analysis. Refresh the inventory.");
       return readWorktreeAnalysis(entry, await git());
