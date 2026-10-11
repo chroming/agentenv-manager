@@ -88,9 +88,13 @@ Open local folders with an installed Agent. For remote folders, supported integr
 
 Scan common repository and worktree folders without first adding a Workspace, including common Codex, Claude Code, and Superpowers locations. Add your own scan folders when needed. Entries are grouped by repository, searchable by path or branch, and sortable by name, modification time, or size. Sort choices are remembered, and the matching information is shown in the list.
 
+Recent scan results appear immediately when you return to the page or restart the app. Keep an individual worktree or ignore a whole repository. Ignored repositories stay in a separate section at the bottom, where you can restore them at any time.
+
 ![Git worktrees](docs/images/worktrees.png)
 
 Select all worktrees eligible for batch cleanup within a repository. Before removal, review paths, uncommitted content, size, and estimated freed space. Git removes the working directory, not local branches or remote history. Main repositories cannot be removed; dirty, locked, and other review-required entries need separate attention. Cleanup that retains a file backup does not count that space as freed, and recovery remains available in Worktrees.
+
+If you are unsure what to keep, request an AI analysis from the review dialog. AgentEnv rereads Git state before analysis. Suggestions do not replace cleanup confirmation or relax deletion safeguards.
 
 ## Skill Library
 
@@ -112,7 +116,7 @@ Before updating or adding a source Skill, inspect its files or request an AI sum
 
 Conversations does not read history until you enable it. Open **History sources** from the list's More menu and enable local or SSH history search by device. To include only certain Agents, use that device's More menu.
 
-Search titles and messages, filter by device, Agent or folder, and sort by latest activity or file size. Results identify the source device, Agent, and full working directory; the list also shows the total size of the current results. Indexing and refresh run in the background, so you can use the page before every history has been read.
+Search titles and messages, filter by device, Agent or folder, and sort by latest activity or file size. Results identify the source device, Agent, and full working directory. Conversation sizes remain visible in every sort order, alongside the total size of the current results. Indexing and refresh run in the background, so you can use the page before every history has been read.
 
 The index stays on this computer. Pausing keeps cached results searchable; disabling can clear the cache without deleting original conversations. If a device is offline or some history cannot be read, existing results remain available with a notice about the read problem. Search covers enabled sources and supported history formats, not necessarily every conversation on a device.
 
@@ -135,7 +139,7 @@ Browsing and searching are read-only. For supported Agents, you can explicitly m
 
 Instructions, MCP, Conversations, and Compare support differs between Agents. The app shows only actions supported by the current Agent.
 
-Enable and reorder Agents, adjust discovery preferences, and set custom paths directly on the Agents page. Turning an Agent off hides it from everyday actions without deleting files or stopping management; stopping management is a separate action.
+Agents are grouped by local and SSH device, with a separate Agent selection for each device. Reorder Agents, adjust discovery preferences, and set custom paths on this page rather than in Settings. Turning an Agent off hides it from everyday actions without deleting files or stopping management; stopping management is a separate action.
 
 The Agents page can also read the current user's SSH configuration and add Linux devices. Remote Profile Apply uses system SSH and manages only adapter-supported remote Instructions and copied Skills. Remote MCP definitions and credentials remain owned by the Agent.
 

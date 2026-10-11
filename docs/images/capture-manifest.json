@@ -1,78 +1,80 @@
 {
-  "generatedAt": "2026-10-05T06:11:26.057Z",
+  "generatedAt": "2026-10-11T06:12:04.735Z",
   "build": {
-    "sourceFingerprint": "f728555cd8c48ba59ddd64789b2d6434c0757c007d78f58b093c2fe0977a5390",
-    "artifactFingerprint": "e3c8a1c1097194cdf3e49a6d8c91b2924d4221c7e47fbef4209030e1c0fba070",
-    "generatedAt": "2026-10-05T06:05:51.523Z"
+    "sourceFingerprint": "bc32f0bdca9b44ef38bff8066e8b86025280a04dcd9f42e3e50f7ca01c9cf4b7",
+    "artifactFingerprint": "84104088afc2f7a46aa5f94ee4b9a93f680fa0e401a7e1402d53151590913309",
+    "generatedAt": "2026-10-11T06:11:13.440Z"
   },
   "viewports": [
-    "1180x728"
+    "1180x728",
+    "920x620"
   ],
   "files": [
     {
       "file": "agents.png",
-      "bytes": 68214,
-      "sha256": "aeff7ccdab1818447d6fcca6f6e2d79cf5a1bc499a209775d24bb3f34609de11",
+      "bytes": 65862,
+      "sha256": "453f991a5995df214a8626ed5d072b43297897fe0b5d36c97f72c5ffd9097c03",
       "width": 1180,
       "height": 728
     },
     {
       "file": "conversations.png",
-      "bytes": 75468,
-      "sha256": "6c8c4cf324894408c223c150ab0298b4dd951ff86cd9066a3c74178f02d02685",
+      "bytes": 77163,
+      "sha256": "0cd774b132a0b71dcd2bcae188337004eb761f1a192a5730d0795964178e5a6c",
       "width": 1180,
       "height": 728
     },
     {
       "file": "instructions.png",
-      "bytes": 81990,
-      "sha256": "686741c12349eb96991b24d5cdf3d0fc33561f32859ff40ba8fe278a2c93710f",
+      "bytes": 85273,
+      "sha256": "437120a86dcbf692603ded33dc1aeac01623fd6c52b7dfd74b870e4e1a5b7d58",
       "width": 1180,
       "height": 728
     },
     {
       "file": "profiles.png",
-      "bytes": 62239,
-      "sha256": "5d1cc238b9fc85b39cba5c2de9e198424579a4fb26d49ce291287509e7f99853",
+      "bytes": 62332,
+      "sha256": "ebc27cbca733e6ea0e00b396fb4ac5df55a121962d3940e5094f790ffc368e2a",
       "width": 1180,
       "height": 728
     },
     {
       "file": "skills-by-source.png",
-      "bytes": 56730,
-      "sha256": "4a0488d882cabc7593fd75e18670b8ed88f1b6dfa910ecf97b66e9d06e0b195e",
+      "bytes": 56657,
+      "sha256": "bceed1250fdb0b688539056ca49d52f884fab326d9e338ce30d4ee40eaebf60a",
       "width": 1180,
       "height": 728
     },
     {
       "file": "skills-list.png",
-      "bytes": 76278,
-      "sha256": "cdc0174eb2a312cb9de8babea2abfad6a00859783851addf36a52775d20ee95b",
+      "bytes": 76246,
+      "sha256": "aa84d5091786d899b1966fab9e624062a6d8347c6ec715eefeb74a941e4aa53f",
       "width": 1180,
       "height": 728
     },
     {
       "file": "workspaces.png",
-      "bytes": 44969,
-      "sha256": "b8c69cf72339bbda99c07f29c1872e858fc3330f5af09ed1fb4b4cf6cda068ee",
+      "bytes": 45030,
+      "sha256": "33bcab3ac61a1c185628db58c4ec13903c4bd89bdd1c93134b2bf8006a1b486f",
       "width": 1180,
       "height": 728
     },
     {
       "file": "worktrees.png",
-      "bytes": 63990,
-      "sha256": "5bbd7e966546c34ae82469d8bc26023bac805b318c8bb2e08a1e746d1d604615",
+      "bytes": 68453,
+      "sha256": "f6ea79ef219886b220152eb4853dc4312f8dc835cdaf784fe1bc152297ead56d",
       "width": 1180,
       "height": 728
     },
     {
       "file": "profile-compare.png",
-      "bytes": 62907,
-      "sha256": "9b6b3d06dfe2ae64c2f57ba5d2a0ca75a0fc54dde23534d2a0d7632350971b80",
+      "bytes": 62237,
+      "sha256": "f8130f7fe6e72d9aeb68f21b0adc0516a45308fe42459a94f051850144f2e54d",
       "width": 920,
       "height": 620
     }
   ],
   "mode": "mock-data",
-  "comparisonRunner": "fake-cli"
+  "comparisonRunner": "fake-cli",
+  "appVersion": "0.2.4"
 }
