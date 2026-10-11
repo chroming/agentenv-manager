@@ -1659,11 +1659,11 @@ describe("Electron UI profile switching e2e", () => {
         }
         if (workspace === "targets") {
           expect(await controls.locator('[aria-hidden="true"] button').count()).toBe(0);
-          const name = controls.locator(":scope > span").nth(2);
-          const actions = controls.locator(".agent-device-header > .ui-control-group");
+          const name = controls.locator(".agent-device-header__identity");
+          const actions = controls.locator(":scope > .ui-control-group");
           const a = await actions.boundingBox();
           const n = await name.boundingBox();
-          expect(a!.x).toBeGreaterThanOrEqual(n!.x + 40);
+          expect(a!.x).toBeGreaterThanOrEqual(n!.x + n!.width);
         }
       }
     }
@@ -5179,6 +5179,9 @@ describe("Electron UI profile switching e2e", () => {
           const headingStyle = getComputedStyle(headingElement);
           return {
             action: rect(actionElement),
+            compactControlHeight: Number.parseFloat(
+              getComputedStyle(document.documentElement).getPropertyValue("--control-height-compact")
+            ),
             agentChipSizeToken: Number.parseFloat(
               getComputedStyle(document.documentElement).getPropertyValue("--agent-chip-size")
             ),
@@ -5275,7 +5278,13 @@ describe("Electron UI profile switching e2e", () => {
           x: skillsGeometry.heading.x
         });
         if (workspace.action || workspace.actionSelector) {
-          expect(workspaceGeometry.action?.height).toBe(skillsGeometry.action?.height);
+          if (workspace.button === "Agents") {
+            // Device-header actions use the shared compact density, not page-action density.
+            expect(workspaceGeometry.action?.height).toBe(workspaceGeometry.compactControlHeight);
+            expect(workspaceGeometry.action?.width).toBe(workspaceGeometry.compactControlHeight);
+          } else {
+            expect(workspaceGeometry.action?.height).toBe(skillsGeometry.action?.height);
+          }
         } else if (!workspace.action) {
           expect(workspaceGeometry.action).toBeUndefined();
         }
@@ -10933,7 +10942,7 @@ describe("Electron UI profile switching e2e", () => {
     await page.locator('[data-workspace="settings"]').filter({ hasText: "设置" }).waitFor();
     await page.getByRole("status").filter({ hasText: "设置已保存" }).waitFor();
     await page.getByRole("button", { name: "Agents", exact: true }).click();
-    await page.getByRole("button", { name: "选择 Agents", exact: true }).waitFor();
+    await page.getByRole("button", { name: "选择本机 Agents", exact: true }).waitFor();
     expect(await page.getByRole("button", { name: "Choose local Agents", exact: true }).count()).toBe(0);
     await expect
       .poll(async () => JSON.parse(await readFile(join(appDataRoot, "settings.json"), "utf8")))
