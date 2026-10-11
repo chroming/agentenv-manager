@@ -140,6 +140,10 @@ it.skipIf(process.platform === "win32")("requires opt-in, searches local and SSH
   const copied = await app.evaluate(({clipboard})=>clipboard.readText());
   expect(copied).toContain("fixture.invalid"); expect(copied).toContain("/work/remote/example");
   await page.getByRole("dialog",{name:"History location",exact:true}).getByRole("button",{name:"Close",exact:true}).click();
+  await page.locator(".conversation-message.is-search-match")
+    .filter({ hasText: "The needle appears at the end of this conversation." }).waitFor();
+  await page.mouse.move(2, 2);
+  await expect.poll(() => page.getByRole("tooltip").count()).toBe(0);
   await page.screenshot({path:join(output,"history-remote-result.png"),animations:"disabled"});
   await openSources();
   await expect.poll(() => dialog.getByRole("button",{name:"Save",exact:true}).isEnabled()).toBe(true);
