@@ -1832,9 +1832,7 @@ export const ConversationWorkspace = ({
                             text={item.title}
                           />
                           <span className="conversation-list-item__metric">
-                            {sort === "size-desc" ? (
-                              item.sizeBytes === undefined ? t("Unavailable") : formatConversationSize(item.sizeBytes)
-                            ) : sort === "messages-desc" ? (
+                            {sort === "messages-desc" ? (
                               t(item.messageCount === 1 ? "1 message" : "{{count}} messages", { count: item.messageCount })
                             ) : (
                               <time
@@ -1859,6 +1857,10 @@ export const ConversationWorkspace = ({
                         ) : null}
                         <small>
                           <span className="conversation-list-item__agent">{item.agentName}</span>
+                          <span aria-hidden="true">·</span>
+                          <span className="conversation-list-item__size" title={t("Size")}>
+                            {item.sizeBytes === undefined ? t("Unavailable") : formatConversationSize(item.sizeBytes)}
+                          </span>
                           {item.origin && item.origin.deviceId !== "local" ? (
                             <>
                               <span aria-hidden="true">·</span>
@@ -1875,7 +1877,7 @@ export const ConversationWorkspace = ({
                               />
                             </>
                           ) : null}
-                          {sort === "size-desc" || sort === "messages-desc" ? (
+                          {sort === "messages-desc" ? (
                             <>
                               <span aria-hidden="true">·</span>
                               <time

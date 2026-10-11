@@ -395,7 +395,7 @@ describe("ConversationWorkspace", () => {
     expect(api.listConversations).toHaveBeenCalledTimes(1);
   });
 
-  it("shows transcript size on demand without crowding the default conversation list", async () => {
+  it("shows transcript size as default conversation metadata", async () => {
     installApi();
     render(
       <ConversationWorkspace
@@ -406,7 +406,7 @@ describe("ConversationWorkspace", () => {
     const option = await screen.findByRole("option", {
       name: /Repair release workflow/
     });
-    expect(option).not.toHaveTextContent("24 KB");
+    expect(option).toHaveTextContent("24 KB");
     expect(within(option).getByText("Repair release workflow"))
       .toHaveClass("conversation-list-item__title");
     expect(document.querySelector(".conversation-list-pane .ui-catalog-toolbar__context"))
@@ -985,7 +985,7 @@ describe("ConversationWorkspace", () => {
       historyStatus: { config: { version: 1, enabled: true, paused: false, sources: [] }, needsConsent: false, running: false, sources: [], availableSources: [] }
     });
     let finishRefresh: (() => void) | undefined;
-    api.refreshConversations.mockImplementation(() => new Promise((resolve) => {
+    api.refreshConversations.mockImplementationOnce(() => new Promise((resolve) => {
       finishRefresh = () => resolve({ indexed: 0, unchanged: 0, removed: 0, failures: [], refreshedAt: new Date().toISOString() });
     }));
     const { container } = render(<ConversationWorkspace targets={[]} />);
@@ -1031,6 +1031,7 @@ describe("ConversationWorkspace", () => {
     ).not.toBeNull();
     expect(container.querySelector(".conversation-layout")).not.toHaveAttribute("inert");
     expect(screen.getByRole("searchbox", { name: "Search conversations" })).toBeEnabled();
+    await waitFor(() => expect(api.refreshConversations).toHaveBeenCalled());
     finishRefresh?.();
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 300));
@@ -1140,10 +1141,11 @@ describe("ConversationWorkspace", () => {
     render(<ConversationWorkspace targets={[target("codex", "Codex")]} />);
     await screen.findByText("Repair release workflow");
     expect(screen.getByText("Earlier")).toBeInTheDocument();
+    expect(document.querySelector(".conversation-list-item__size")).toHaveTextContent("24 KB");
 
     chooseConversationSort("Largest");
     expect(await screen.findByText("Large conversation")).toBeInTheDocument();
-    expect(document.querySelector(".conversation-list-item__metric")).toHaveTextContent("Unavailable");
+    expect(document.querySelector(".conversation-list-item__size")).toHaveTextContent("Unavailable");
     expect(api.listConversations).toHaveBeenLastCalledWith({
       sort: "size-desc",
       limit: 200
@@ -1152,6 +1154,7 @@ describe("ConversationWorkspace", () => {
 
     chooseConversationSort("Most messages");
     expect(await screen.findByText("Long conversation")).toBeInTheDocument();
+    expect(document.querySelector(".conversation-list-item__size")).toHaveTextContent("24 KB");
     expect(document.querySelector(".conversation-list-item__metric")).toHaveTextContent("2 messages");
     expect(api.listConversations).toHaveBeenLastCalledWith({
       sort: "messages-desc",
@@ -1166,6 +1169,7 @@ describe("ConversationWorkspace", () => {
     })).toBeInTheDocument());
     chooseConversationSort("Last activity");
     expect(await screen.findByText("Latest conversation")).toBeInTheDocument();
+    expect(document.querySelector(".conversation-list-item__size")).toHaveTextContent("24 KB");
     expect(api.listConversations).toHaveBeenLastCalledWith({
       query: "release",
       sort: "last-active-desc",

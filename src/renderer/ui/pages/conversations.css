@@ -189,6 +189,7 @@
 }
 
 .conversation-list-item__copy small > .conversation-list-item__agent,
+.conversation-list-item__copy small > .conversation-list-item__size,
 .conversation-list-item__copy small > time,
 .conversation-list-item__copy small > span[aria-hidden="true"] {
   flex: 0 0 auto;

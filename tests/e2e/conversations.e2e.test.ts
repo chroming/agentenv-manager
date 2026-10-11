@@ -442,6 +442,12 @@ describe("Conversations desktop workflow", () => {
     for (const viewport of [{ width: 920, height: 620 }, { width: 1180, height: 728 }, { width: 1440, height: 900 }]) {
       await page.setViewportSize(viewport);
       await expectCatalogToolbar(page.locator(".conversation-list-pane .ui-catalog-toolbar"), "pane");
+      expect(await page.locator(".conversation-list-item__size").first().textContent()).toMatch(/\d.*B/);
+      expect(await page.locator(".conversation-list-item__size").evaluateAll((elements) => elements.every((element) => {
+        const row = element.closest(".conversation-list-item")!.getBoundingClientRect();
+        const box = element.getBoundingClientRect();
+        return box.right <= row.right && box.left >= row.left && element.scrollWidth <= element.clientWidth + 1;
+      }))).toBe(true);
       await conversationSort.click();
       const sortMenu = page.getByRole("menu", { name: "Sort conversations", exact: true });
       await expectInViewport(page, sortMenu);
@@ -466,7 +472,7 @@ describe("Conversations desktop workflow", () => {
     await expect.poll(() => page.locator(".conversation-list-item__title").first().textContent())
       .toBe(sortedConversationTitles.largest);
     await expect(page.locator(".conversation-date-group").count()).resolves.toBe(0);
-    expect(await page.locator(".conversation-list-item__metric").first().textContent()).toMatch(/\d.*B/);
+    expect(await page.locator(".conversation-list-item__size").first().textContent()).toMatch(/\d.*B/);
     if (process.env.AGENTENV_CAPTURE_CONVERSATIONS) {
       await conversationSort.focus();
       await page.mouse.move(1100, 40);
@@ -544,7 +550,7 @@ describe("Conversations desktop workflow", () => {
       name: /Repair the desktop release workflow/
     });
     await selectedConversation.click();
-    await expect.poll(() => selectedConversation.textContent()).not.toContain(
+    await expect.poll(() => selectedConversation.textContent()).toContain(
       `${Buffer.byteLength(source, "utf8")} B`
     );
     await expect.poll(() => selectedConversation.getAttribute("aria-selected"))
