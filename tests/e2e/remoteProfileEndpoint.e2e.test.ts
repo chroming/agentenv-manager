@@ -186,7 +186,7 @@ HOME="$AGENTENV_REMOTE_HOME" PATH="$AGENTENV_REMOTE_BIN:/usr/bin:/bin" /bin/sh -
     });
 
     for (const width of [920, 1180, 1440]) {
-      await page.setViewportSize({ width, height: 900 });
+      await page.setViewportSize({ width, height: width === 920 ? 620 : 900 });
       const actionEdges = await page.locator(".agent-device-header > .ui-control-group").evaluateAll((elements) => elements.map((element) => element.getBoundingClientRect().right));
       expect(Math.max(...actionEdges) - Math.min(...actionEdges)).toBeLessThanOrEqual(1);
       expect(await page.locator(".target-location-divider").count()).toBe(0);
@@ -213,6 +213,16 @@ HOME="$AGENTENV_REMOTE_HOME" PATH="$AGENTENV_REMOTE_BIN:/usr/bin:/bin" /bin/sh -
 
     await remoteDeviceGroup.getByRole("button", { name: /Choose Agents on/ }).click();
     const remoteChooser = page.getByRole("dialog", { name: /Choose Agents on/ });
+    expect(await remoteChooser.getByRole("button", { name: "Save", exact: true }).isDisabled()).toBe(true);
+    const choiceGeometry = await remoteChooser.locator(".agent-discovery-row").evaluate((row) => ({
+      rowHeight: row.getBoundingClientRect().height,
+      listHeight: row.parentElement!.getBoundingClientRect().height
+    }));
+    expect(choiceGeometry.rowHeight).toBeLessThanOrEqual(72);
+    expect(choiceGeometry.listHeight - choiceGeometry.rowHeight).toBeLessThanOrEqual(3);
+    if (process.env.AGENTENV_CAPTURE_REMOTE_DIR) {
+      await page.screenshot({ path: join(process.env.AGENTENV_CAPTURE_REMOTE_DIR, "remote-chooser-920.png") });
+    }
     await remoteChooser.getByRole("checkbox", { name: "OpenCode" }).uncheck();
     await remoteChooser.getByRole("button", { name: "Save", exact: true }).click();
     await remoteChooser.waitFor({ state: "hidden" });

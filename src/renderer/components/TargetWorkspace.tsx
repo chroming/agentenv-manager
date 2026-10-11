@@ -474,7 +474,7 @@ export const TargetWorkspace = ({
       ) : null}
 
       <div className="target-list" aria-busy={isLoading}>
-        <AgentDeviceHeader icon={<Monitor size={15} />} name={t("This device")} status={targets.length} actions={<>
+        <AgentDeviceHeader icon={<Monitor size={15} />} name={t("This device")} status={t(targets.length === 1 ? "{{count}} Agent" : "{{count}} Agents", { count: targets.length })} actions={<>
             <IconButton label={t("Choose local Agents")} variant="ghost"
               size="compact"
               disabled={busy || isLoading}

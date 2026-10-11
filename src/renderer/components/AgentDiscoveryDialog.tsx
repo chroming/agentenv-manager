@@ -7,6 +7,7 @@ import { useModalDialog } from "../hooks/useModalDialog";
 import { useI18n } from "../i18n";
 import { targetIconFor } from "./ProfileSidebar";
 import { Button, ModalFrame } from "./ui";
+import { AgentSelectionRow } from "./AgentSelectionRow";
 
 interface AgentDiscoveryDialogProps {
   agents: TargetInfo[];
@@ -75,6 +76,7 @@ export const AgentDiscoveryDialog = ({
   });
 
   const selected = useMemo(() => new Set(selectedIds), [selectedIds]);
+  const selectionChanged = agents.some((agent) => selected.has(agent.id) !== enabledAgentIds.includes(agent.id));
   const managedTurnOffCount = (managementStates ?? []).filter((state) =>
     state.status === "managed" &&
     enabledAgentIds.includes(state.targetId) &&
@@ -146,69 +148,30 @@ export const AgentDiscoveryDialog = ({
               : setupAction.kind === "repair-profile"
                 ? t("Review Profile")
                 : t("Review current setup");
+          if (!setupPhase) return <AgentSelectionRow key={agent.id} id={agent.id} name={agent.name}
+            checked={checked} disabled={busy || recoveryRequired}
+            description={recoveryRequired ? t("Recovery required") : detectionSummary} detail={evidence}
+            profileName={managementStates?.find((state) => state.targetId === agent.id)?.activeProfileName}
+            onChange={() => setSelectedIds((current) => checked ? current.filter((id) => id !== agent.id) : [...current, agent.id])}
+            actions={recoveryRequired && onRecovery ? <Button size="compact" variant="ghost" icon={<TriangleAlert size={14} />} disabled={busy} onClick={() => onRecovery(agent.id)}>{t("Open Recovery")}</Button>
+              : allowSuggestionPreferences && installed ? <Button size="compact" variant="ghost" disabled={busy} aria-label={t("Don't suggest {{name}} again", { name: agent.name })} onClick={() => void onSuppress(agent.id)}>{t("Don't suggest again")}</Button> : undefined} />;
           return (
-            <div className={`agent-discovery-row${phase === "setup" ? " agent-discovery-row--setup" : ""}`} key={agent.id}>
-              {phase === "choose" ? (
-                <input
-                  id={`agent-discovery-${agent.id}`}
-                  type="checkbox"
-                  aria-label={agent.name}
-                  checked={checked}
-                  disabled={busy || recoveryRequired}
-                  onChange={() => setSelectedIds((current) =>
-                    checked
-                      ? current.filter((id) => id !== agent.id)
-                      : [...current, agent.id]
-                  )}
-                />
-              ) : (
+            <div className="agent-discovery-row agent-discovery-row--setup" key={agent.id}>
                 <span className="agent-discovery-ready" aria-hidden="true">
                   <CheckCircle2 size={16} strokeWidth={2.2} />
                 </span>
-              )}
-              <label className="agent-discovery-choice" htmlFor={phase === "choose" ? `agent-discovery-${agent.id}` : undefined}>
+              <span className="agent-discovery-choice">
                 <span className={`agent-settings-icon agent-settings-icon--${icon.flavor}`} aria-hidden="true">
                   {icon.assetUrl ? <img src={icon.assetUrl} alt="" /> : <Monitor size={18} />}
                 </span>
                 <span className="agent-discovery-copy">
                   <span>{agent.name}</span>
-                  <small title={phase === "setup"
-                    ? setupCopy
-                    : evidence ?? detectionSummary}
-                  >
-                    {phase === "setup"
-                    ? setupCopy
-                    : recoveryRequired
-                      ? t("Recovery required")
-                      : detectionSummary}
-                  </small>
+                  <small title={setupCopy}>{setupCopy}</small>
                 </span>
-              </label>
-              {phase === "setup" ? (
+              </span>
                 <Button size="compact" disabled={busy} onClick={() => onConfigure(agent.id)}>
                   {setupLabel}
                 </Button>
-              ) : recoveryRequired && onRecovery ? (
-                <Button
-                  size="compact"
-                  variant="ghost"
-                  icon={<TriangleAlert size={14} />}
-                  disabled={busy}
-                  onClick={() => onRecovery(agent.id)}
-                >
-                  {t("Open Recovery")}
-                </Button>
-              ) : allowSuggestionPreferences && installed ? (
-                <button
-                  className="text-action agent-discovery-suppress"
-                  type="button"
-                  disabled={busy}
-                  aria-label={t("Don't suggest {{name}} again", { name: agent.name })}
-                  onClick={() => void onSuppress(agent.id)}
-                >
-                  {t("Don't suggest again")}
-                </button>
-              ) : null}
             </div>
           );
         })}
@@ -234,7 +197,7 @@ export const AgentDiscoveryDialog = ({
           <Button
             variant="primary"
             busy={busy}
-            disabled={!manualSelection && selectedIds.length === 0}
+            disabled={manualSelection ? !selectionChanged : selectedIds.length === 0}
             onClick={() => void onEnable([
               ...new Set([...selectedIds, ...recoveryAgentIds])
             ])}

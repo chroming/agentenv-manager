@@ -36,6 +36,29 @@ const openAddDialog = (ref: RefObject<RemoteDeviceManagerHandle | null>) => {
 };
 
 describe("RemoteDeviceManager", () => {
+  it.each([undefined, "unavailable", "ready"] as const)("explains empty discovery truthfully: %s", (status) => {
+    const props = workspaceProps();
+    render(<RemoteDeviceManager {...sshConfigProps()} {...props} devices={[device]} endpoints={[]} busy={false}
+      probes={status ? [{ deviceId: device.id, status, agentExecutables: {}, checkedAt: "2026-08-21T00:00:00.000Z" }] : []}
+      onAdd={vi.fn()} onRemove={vi.fn()} onUpdate={vi.fn()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Choose Agents on Build server" }));
+    const dialog = screen.getByRole("dialog");
+    expect(dialog).toHaveTextContent(status === "ready" ? "No supported Agents installed" : status ? "Connection unavailable" : "Not checked");
+    expect(within(dialog).getByRole("button", { name: "Save" })).toBeDisabled();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Refresh Build server" }));
+    expect(props.onRefreshDevice).toHaveBeenCalledWith(device.id);
+  });
+  it("offers selection from an all-hidden group and shows its deployed Profile in the chooser", () => {
+    render(<RemoteDeviceManager {...sshConfigProps()} {...workspaceProps()} devices={[{ ...device, disabledAgentIds: ["opencode"] }]} busy={false}
+      probes={[{ deviceId: device.id, status: "ready", agentExecutables: {}, checkedAt: "2026-08-21T00:00:00.000Z" }]}
+      endpoints={[{ id: "ssh:fixture:opencode", deviceId: device.id, agentId: "opencode", agentName: "OpenCode" } as never]}
+      targetStates={[{ targetId: "ssh:fixture:opencode", activeProfileName: "Daily coding" } as never]}
+      onAdd={vi.fn()} onRemove={vi.fn()} onUpdate={vi.fn()} />);
+    expect(screen.getByText("0 Agents")).toBeInTheDocument();
+    expect(screen.queryByText("No Agents selected")).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Choose Agents" }));
+    expect(within(screen.getByRole("dialog")).getByLabelText("Daily coding")).toHaveAttribute("title", "Daily coding");
+  });
   it("offers device-local agent selection offline and saves without refresh", async () => {
     const onUpdate = vi.fn().mockResolvedValue({ device });
     const props = workspaceProps();
@@ -44,6 +67,11 @@ describe("RemoteDeviceManager", () => {
       onAdd={vi.fn()} onRemove={vi.fn()} onUpdate={onUpdate} />);
     fireEvent.click(screen.getByRole("button", { name: "Choose Agents on Build server" }));
     const dialog = screen.getByRole("dialog", { name: "Choose Agents on Build server" });
+    expect(within(dialog).getByRole("button", { name: "Save" })).toBeDisabled();
+    fireEvent.click(within(dialog).getByRole("checkbox", { name: "OpenCode" }));
+    expect(within(dialog).getByRole("button", { name: "Save" })).toBeEnabled();
+    fireEvent.click(within(dialog).getByRole("checkbox", { name: "OpenCode" }));
+    expect(within(dialog).getByRole("button", { name: "Save" })).toBeDisabled();
     fireEvent.click(within(dialog).getByRole("checkbox", { name: "OpenCode" }));
     fireEvent.click(within(dialog).getByRole("button", { name: "Save" }));
     await waitFor(() => expect(onUpdate).toHaveBeenCalledWith(expect.objectContaining({ id: device.id, disabledAgentIds: ["opencode"] })));
@@ -232,7 +260,7 @@ describe("RemoteDeviceManager", () => {
       />
     );
 
-    expect(screen.getByText("Offline")).toBeInTheDocument();
+    expect(screen.getByText("0 Agents · Offline")).toBeInTheDocument();
     expect(screen.getByText("device is offline")).toBeInTheDocument();
     expect(screen.queryByText("No supported Agents installed")).not.toBeInTheDocument();
   });
@@ -294,7 +322,9 @@ describe("RemoteDeviceManager", () => {
     );
 
     expect(screen.getByText("OpenCode")).toBeInTheDocument();
-    expect(screen.getByText("Checking")).toBeInTheDocument();
+    expect(screen.getByText("1 Agent")).toBeInTheDocument();
+    expect(screen.queryByText("Checking")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Refresh Build server" }).querySelector(".is-spinning")).not.toBeNull();
     expect(screen.getByRole("button", { name: "Refresh Build server" })).toBeDisabled();
   });
 });

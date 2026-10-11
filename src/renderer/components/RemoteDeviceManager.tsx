@@ -1,5 +1,6 @@
-import { LoaderCircle, Server, Pencil, RefreshCw, Trash2, Settings2 } from "lucide-react";
+import { Server, Pencil, RefreshCw, Trash2, Settings2 } from "lucide-react";
 import { AgentDeviceHeader } from "./AgentDeviceHeader";
+import { AgentSelectionRow } from "./AgentSelectionRow";
 import { DiagnosticMessage } from "./ui/DiagnosticCopyButton";
 import { TargetEnvironmentSummary } from "./TargetEnvironmentSummary";
 import { forwardRef, useImperativeHandle, useMemo, useRef, useState } from "react";
@@ -29,8 +30,7 @@ import {
   SelectField,
   TextAction,
   ToolbarOverflowMenu,
-  TextField,
-  AlignedResourceList, ResourceRow, ChoiceInput
+  TextField
 } from "./ui";
 
 interface RemoteDeviceManagerProps {
@@ -119,6 +119,10 @@ export const RemoteDeviceManager = forwardRef<RemoteDeviceManagerHandle, RemoteD
   const returnFocusRef = useRef<HTMLElement | null>(null);
   const open = editingId !== undefined || removingId !== undefined || choosingId !== undefined;
   const choosingDevice = devices.find((device) => device.id === choosingId);
+  const choicesChanged = choosingDevice !== undefined && (
+    disabledAgents.some((id) => !choosingDevice.disabledAgentIds?.includes(id)) ||
+    (choosingDevice.disabledAgentIds ?? []).some((id) => !disabledAgents.includes(id))
+  );
   const removingDevice = devices.find((device) => device.id === removingId);
   const editorTitle = editingId === "new" ? t("Add SSH device") : t("Edit SSH device");
   const endpointsByDevice = useMemo(() => {
@@ -153,6 +157,20 @@ export const RemoteDeviceManager = forwardRef<RemoteDeviceManagerHandle, RemoteD
     setResolvedSshHost(undefined);
     setResolvingSshHost(false);
     setSshResolutionError(false);
+  };
+
+  const chooseAgents = (device: RemoteDevice, trigger: HTMLElement) => {
+    returnFocusRef.current = trigger;
+    setError("");
+    setDisabledAgents(device.disabledAgentIds ?? []);
+    setChoosingId(device.id);
+  };
+
+  const emptyMessage = (deviceId: string) => {
+    const probe = probesByDevice.get(deviceId);
+    if (!probe) return t("Not checked");
+    if (probe.status === "ready") return t("No supported Agents installed");
+    return probe.status === "unsupported" ? t("Unsupported") : t("Connection unavailable");
   };
 
   useModalDialog({
@@ -305,17 +323,10 @@ export const RemoteDeviceManager = forwardRef<RemoteDeviceManagerHandle, RemoteD
         const probe = probesByDevice.get(device.id);
         const status = probe?.status ?? "unavailable";
         const checking = busyDeviceIds.includes(device.id);
-        const statusText = checking
-          ? t("Checking")
-          : status === "ready"
-            ? deviceEndpoints.length > 0
-              ? t(deviceEndpoints.length === 1 ? "{{count}} Agent" : "{{count}} Agents", {
-                  count: deviceEndpoints.length
-                })
-              : allDeviceEndpoints.length > 0 ? t("No Agents selected") : t("No supported Agents")
-            : status === "unsupported"
-              ? t("Unsupported")
-              : t("Offline");
+        const countText = t(deviceEndpoints.length === 1 ? "{{count}} Agent" : "{{count}} Agents", { count: deviceEndpoints.length });
+        const statusText = !probe ? (allDeviceEndpoints.length ? countText : t("Not checked"))
+          : status === "ready" ? countText
+          : `${countText} · ${status === "unsupported" ? t("Unsupported") : t("Offline")}`;
         return (
           <section className={`remote-location-group is-${status}`} key={device.id}>
             <AgentDeviceHeader icon={<Server size={15} />} name={device.name}
@@ -326,11 +337,10 @@ export const RemoteDeviceManager = forwardRef<RemoteDeviceManagerHandle, RemoteD
                   ? t("Checked {{time}}", { time: formatCheckedAt(probe.checkedAt) })
                   : undefined}
               >
-                {checking ? <LoaderCircle className="is-spinning" size={13} aria-hidden="true" /> : null}
                 <span>{statusText}</span>
               </span>} actions={<>
                 <IconButton label={t("Choose Agents on {{device}}", { device: device.name })} size="compact" variant="ghost" disabled={busy}
-                  onClick={(event) => { returnFocusRef.current = event.currentTarget; setError(""); setDisabledAgents(device.disabledAgentIds ?? []); setChoosingId(device.id); }}><Settings2 size={15} /></IconButton>
+                  onClick={(event) => chooseAgents(device, event.currentTarget)}><Settings2 size={15} /></IconButton>
                 <IconButton
                   disabled={busy || checking}
                   label={t("Refresh {{name}}", { name: device.name })}
@@ -406,7 +416,7 @@ export const RemoteDeviceManager = forwardRef<RemoteDeviceManagerHandle, RemoteD
               );
             }) : (
               <div className="remote-location-empty">
-                {allDeviceEndpoints.length > 0 ? t("No Agents selected") : status === "ready" ? t("No supported Agents installed") : t("Previously detected Agents will remain visible after a successful connection.")}
+                {allDeviceEndpoints.length > 0 ? <Button size="compact" variant="ghost" disabled={busy} onClick={(event) => chooseAgents(device, event.currentTarget)}>{t("Choose Agents")}</Button> : emptyMessage(device.id)}
               </div>
             )}
           </section>
@@ -418,16 +428,20 @@ export const RemoteDeviceManager = forwardRef<RemoteDeviceManagerHandle, RemoteD
         <DialogHeader title={t("Choose Agents on {{device}}", { device: choosingDevice.name })}
           description={t("Choose which Agents to use in AgentEnv. Existing deployments and remote files are not changed.")} />
         <DialogBody>
-          <AlignedResourceList actionTrack="compact">
-            {(endpointsByDevice.get(choosingDevice.id) ?? []).map((endpoint) => <ResourceRow key={endpoint.id} title={endpoint.agentName} icon={<AgentEndpointIcon target={{ id: endpoint.agentId, name: endpoint.agentName }} size={20} />} density="compact" appearance="plain"
-              actions={<ChoiceInput type="checkbox" aria-label={endpoint.agentName} disabled={busy} checked={!disabledAgents.includes(endpoint.agentId)}
-                onChange={(event) => setDisabledAgents((current) => event.target.checked ? current.filter((id) => id !== endpoint.agentId) : [...new Set([...current, endpoint.agentId])])} /> } />)}
-          </AlignedResourceList>
-          {(endpointsByDevice.get(choosingDevice.id) ?? []).length === 0 ? <p>{t("No supported Agents installed")}</p> : null}
+          <div className="agent-discovery-list">
+            {(endpointsByDevice.get(choosingDevice.id) ?? []).map((endpoint) => <AgentSelectionRow key={endpoint.id} id={endpoint.agentId} name={endpoint.agentName}
+              disabled={busy} checked={!disabledAgents.includes(endpoint.agentId)}
+              profileName={statesByTarget.get(endpoint.id)?.activeProfileName}
+              onChange={() => setDisabledAgents((current) => current.includes(endpoint.agentId) ? current.filter((id) => id !== endpoint.agentId) : [...current, endpoint.agentId])} />)}
+          </div>
+          {(endpointsByDevice.get(choosingDevice.id) ?? []).length === 0 ? <ControlGroup>
+            <span>{emptyMessage(choosingDevice.id)}</span>
+            <IconButton label={t("Refresh {{name}}", { name: choosingDevice.name })} disabled={busy || busyDeviceIds.includes(choosingDevice.id)} onClick={() => void onRefreshDevice(choosingDevice.id).catch((cause) => setError(String(cause)))}><RefreshCw size={14} className={busyDeviceIds.includes(choosingDevice.id) ? "is-spinning" : ""} /></IconButton>
+          </ControlGroup> : null}
           {error ? <p className="ui-field__error" role="alert"><DiagnosticMessage message={error} /></p> : null}
         </DialogBody>
         <DialogFooter><Button disabled={busy} onClick={close}>{t("Cancel")}</Button>
-          <Button variant="primary" busy={busy} disabled={busy} onClick={() => void onUpdate({ ...choosingDevice, disabledAgentIds: disabledAgents }).then(close).catch((cause) => setError(String(cause)))}>{t("Save")}</Button>
+          <Button variant="primary" busy={busy} disabled={busy || !choicesChanged} onClick={() => void onUpdate({ ...choosingDevice, disabledAgentIds: disabledAgents }).then(close).catch((cause) => setError(String(cause)))}>{t("Save")}</Button>
         </DialogFooter>
       </ModalFrame> : null}
       {editingId ? (

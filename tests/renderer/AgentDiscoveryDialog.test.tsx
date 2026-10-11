@@ -107,6 +107,11 @@ describe("AgentDiscoveryDialog", () => {
 
     expect(screen.getByRole("checkbox", { name: "OpenCode" })).not.toBeChecked();
     expect(screen.getByRole("checkbox", { name: "Codex" })).toBeChecked();
+    expect(screen.getByRole("button", { name: "Save Agent choices" })).toBeDisabled();
+    fireEvent.click(screen.getByRole("checkbox", { name: "OpenCode" }));
+    expect(screen.getByRole("button", { name: "Save Agent choices" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("checkbox", { name: "OpenCode" }));
+    expect(screen.getByRole("button", { name: "Save Agent choices" })).toBeDisabled();
     fireEvent.click(screen.getByRole("checkbox", { name: "Codex" }));
     fireEvent.click(screen.getByRole("button", { name: "Save Agent choices" }));
     expect(onEnable).toHaveBeenCalledWith([]);
@@ -182,6 +187,7 @@ describe("AgentDiscoveryDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Open Recovery" }));
     expect(onRecovery).toHaveBeenCalledWith("opencode");
     fireEvent.click(screen.getByRole("button", { name: "Save Agent choices" }));
-    expect(onEnable).toHaveBeenCalledWith(["opencode"]);
+    expect(onEnable).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Save Agent choices" })).toBeDisabled();
   });
 });
