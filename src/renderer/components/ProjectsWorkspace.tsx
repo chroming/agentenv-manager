@@ -99,15 +99,8 @@ import {
 type ProjectOperation = "add" | "refresh" | "rename" | "remove" | "add-skill" | "remove-skill" | "inspect" | "open" | "preview";
 type ProjectMenuState = { projectId: string; left: number; top: number };
 
-export const projectSnapshotCache = new Map<string, ProjectEnvironmentSnapshot>();
-
-export const clearProjectSnapshotCache = (projectId?: string) => {
-  if (projectId) {
-    projectSnapshotCache.delete(projectId);
-  } else {
-    projectSnapshotCache.clear();
-  }
-};
+import { projectSnapshotCache, clearProjectSnapshotCache, readProjectSnapshot } from "../projectSnapshotCache";
+export { projectSnapshotCache, clearProjectSnapshotCache } from "../projectSnapshotCache";
 
 export const ProjectsWorkspace = ({
   initialProjects,
@@ -162,6 +155,9 @@ export const ProjectsWorkspace = ({
     toggleExpandedId: toggleResourceKind
   } = useExclusiveDisclosure<ProjectResourceKind>();
   const [selectedId, setSelectedId] = useState<string | undefined>(uiState.selectedWorkspaceId);
+  const selectedIdRef = useRef(selectedId);
+  const inspectionRequest = useRef(0);
+  selectedIdRef.current = selectedId;
   const [operation, setOperation] = useState<ProjectOperation>();
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -270,6 +266,7 @@ export const ProjectsWorkspace = ({
   const selectedSkillMatches = selectedWorkspaceSkillPlans.filter((plan) => plan.matches).length;
   const selectedSkillConflicts = selectedWorkspaceSkillPlans.filter((plan) => plan.conflicts).length;
   const selectProject = (projectId: string | undefined) => {
+    selectedIdRef.current = projectId;
     setSelectedId(projectId);
     if (uiState.selectedWorkspaceId !== projectId) {
       onUpdateUiState({ selectedWorkspaceId: projectId });
@@ -311,9 +308,8 @@ export const ProjectsWorkspace = ({
       if (refreshEnvironment) {
         const nextSelected = next.find((project) => project.id === nextSelectedId);
         if (nextSelected?.exists) {
-          const inspected = await window.agentEnv.inspectProject(nextSelected.id);
-          projectSnapshotCache.set(nextSelected.id, inspected);
-          setSnapshot(inspected);
+          const inspected = await readProjectSnapshot(nextSelected.id, true);
+          if (selectedIdRef.current === nextSelected.id && projectSnapshotCache.get(nextSelected.id) === inspected) setSnapshot(inspected);
         } else {
           setSnapshot(undefined);
         }
@@ -392,21 +388,21 @@ export const ProjectsWorkspace = ({
     }
     const cached = projectSnapshotCache.get(selected.id);
     setSnapshot(cached);
+    const request = ++inspectionRequest.current;
     let current = true;
     setOperation("inspect");
     setError("");
-    void window.agentEnv.inspectProject(selected.id)
+    void readProjectSnapshot(selected.id)
       .then((next) => {
-        if (current) {
-          projectSnapshotCache.set(selected.id, next);
+        if (current && request === inspectionRequest.current && projectSnapshotCache.get(selected.id) === next) {
           setSnapshot(next);
         }
       })
       .catch((unknownError) => {
-        if (current) setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+        if (current && request === inspectionRequest.current) setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
       })
       .finally(() => {
-        if (current) setOperation((value) => value === "inspect" ? undefined : value);
+        if (current && request === inspectionRequest.current) setOperation((value) => value === "inspect" ? undefined : value);
       });
     return () => {
       current = false;
@@ -685,7 +681,7 @@ export const ProjectsWorkspace = ({
       const next = orderByPreference(loaded, order, (project) => project.id);
       const nextSelected = next[Math.min(Math.max(removedIndex, 0), next.length - 1)];
       applyProjects(next);
-      projectSnapshotCache.delete(removeCandidate.id);
+      clearProjectSnapshotCache(removeCandidate.id);
       setSelectedId(nextSelected?.id);
       onUpdateUiState({ workspaceOrder: order, selectedWorkspaceId: nextSelected?.id });
       setRemoveCandidate(undefined);
@@ -701,7 +697,7 @@ export const ProjectsWorkspace = ({
     setModalError("");
     try {
       await window.agentEnv.updateProject({ id: selected.id, name: renameValue.trim() });
-      projectSnapshotCache.delete(selected.id);
+      clearProjectSnapshotCache(selected.id);
       setRenameOpen(false);
       await refresh();
     } catch (unknownError) {
@@ -933,17 +929,17 @@ export const ProjectsWorkspace = ({
   });
 
   const refreshSelectedProject = async () => {
-    if (!selected?.exists || operation === "inspect") return;
+    if (!selected?.exists) return;
+    const request = ++inspectionRequest.current;
     setOperation("inspect");
     setError("");
     try {
-      const next = await window.agentEnv.inspectProject(selected.id);
-      projectSnapshotCache.set(selected.id, next);
-      setSnapshot(next);
+      const next = await readProjectSnapshot(selected.id, true);
+      if (selectedIdRef.current === selected.id && request === inspectionRequest.current && projectSnapshotCache.get(selected.id) === next) setSnapshot(next);
     } catch (unknownError) {
-      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+      if (selectedIdRef.current === selected.id && request === inspectionRequest.current) setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     } finally {
-      setOperation((value) => value === "inspect" ? undefined : value);
+      if (selectedIdRef.current === selected.id && request === inspectionRequest.current) setOperation((value) => value === "inspect" ? undefined : value);
     }
   };
 

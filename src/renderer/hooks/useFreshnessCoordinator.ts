@@ -30,6 +30,11 @@ export const useFreshnessCoordinator = (now: () => number = Date.now) => {
   const inFlightRef = useRef(
     new Map<FreshResource, Promise<FreshnessResult<unknown>>>()
   );
+  const versions = useRef(new Map<FreshResource, number>());
+  const queued = useRef(new Map<FreshResource, {
+    task: () => Promise<unknown>; options: RunFreshnessOptions;
+    promise: Promise<FreshnessResult<unknown>>;
+  }>());
 
   const update = useCallback((
     resource: FreshResource,
@@ -52,6 +57,7 @@ export const useFreshnessCoordinator = (now: () => number = Date.now) => {
     } = {}
   ) => {
     const at = options.at ?? now();
+    versions.current.set(resource, (versions.current.get(resource) ?? 0) + 1);
     update(resource, (current) => ({
       ...current,
       error: options.error,
@@ -63,17 +69,36 @@ export const useFreshnessCoordinator = (now: () => number = Date.now) => {
   }, [now, update]);
 
   const invalidate = useCallback((resource: FreshResource) => {
+    versions.current.set(resource, (versions.current.get(resource) ?? 0) + 1);
     update(resource, (current) => ({ ...current, invalidated: true }));
   }, [update]);
 
-  const run = useCallback(<T,>(
+  const run = useCallback(function runResource<T>(
     resource: FreshResource,
     reason: FreshnessReason,
     task: () => Promise<T>,
     options: RunFreshnessOptions = {}
-  ): Promise<FreshnessResult<T>> => {
+  ): Promise<FreshnessResult<T>> {
     const existing = inFlightRef.current.get(resource);
-    if (existing) return existing as Promise<FreshnessResult<T>>;
+    if (existing) {
+      if (reason !== "mutation" && reason !== "manual" && !options.force) {
+        return existing as Promise<FreshnessResult<T>>;
+      }
+      invalidate(resource);
+      const pending = queued.current.get(resource);
+      if (pending) {
+        pending.task = task;
+        pending.options = options;
+        return pending.promise as Promise<FreshnessResult<T>>;
+      }
+      const next = { task, options, promise: undefined! as Promise<FreshnessResult<unknown>> };
+      next.promise = existing.catch(() => undefined).then(() => {
+        queued.current.delete(resource);
+        return runResource(resource, "mutation", next.task, { ...next.options, force: true });
+      });
+      queued.current.set(resource, next);
+      return next.promise as Promise<FreshnessResult<T>>;
+    }
 
     const configuredMaxAge =
       resource === "skill-upstreams"
@@ -93,6 +118,7 @@ export const useFreshnessCoordinator = (now: () => number = Date.now) => {
     }
 
     const startedAt = now();
+    const version = versions.current.get(resource) ?? 0;
     update(resource, (current) => ({
       ...current,
       error: undefined,
@@ -103,18 +129,24 @@ export const useFreshnessCoordinator = (now: () => number = Date.now) => {
       .then((value) => {
         const partialError = options.partialError?.(value);
         const completedAt = now();
-        update(resource, (current) => ({
+        update(resource, (current) => (versions.current.get(resource) ?? 0) !== version ? {
+          ...current,
+          status: current.status === "refreshing" ? "idle" : current.status
+        } : ({
           ...current,
           error: partialError,
           invalidated: false,
           lastAttemptAt: startedAt,
-          lastSuccessAt: completedAt,
+          lastSuccessAt: !partialError ? completedAt : current.lastSuccessAt,
           status: partialError ? "partial" : "ready"
         }));
         return { performed: true, value };
       })
       .catch((error) => {
-        update(resource, (current) => ({
+        update(resource, (current) => (versions.current.get(resource) ?? 0) !== version ? {
+          ...current,
+          status: current.status === "refreshing" ? "idle" : current.status
+        } : ({
           ...current,
           error: errorMessage(error),
           lastAttemptAt: startedAt,
@@ -130,7 +162,7 @@ export const useFreshnessCoordinator = (now: () => number = Date.now) => {
       operation as Promise<FreshnessResult<unknown>>
     );
     return operation;
-  }, [now, update]);
+  }, [now, update, invalidate]);
 
   return {
     states,

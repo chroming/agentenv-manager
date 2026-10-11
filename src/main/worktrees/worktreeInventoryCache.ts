@@ -48,7 +48,7 @@ export const createWorktreeInventoryCache = (path: string) => {
       generation++;
       loaded = true;
       inventory = value;
-      completedAt = Date.now();
+      completedAt = value.incomplete ? 0 : Date.now();
       await writeAtomic(path, JSON.stringify({ version: 1, inventory })).catch(() => undefined);
     },
     async invalidate(keepDisplay = false) {
@@ -56,7 +56,13 @@ export const createWorktreeInventoryCache = (path: string) => {
       loaded = true;
       completedAt = 0;
       if (!keepDisplay) inventory = undefined;
-      await rm(path, { force: true });
+      try {
+        await rm(path, { force: true });
+      } catch {
+        // Cache maintenance must never block the actual resource operation.
+        await writeAtomic(path, JSON.stringify({ version: 0 })).catch(() => undefined);
+        console.warn("[AgentEnv] Could not remove Worktree display cache; it will be revalidated on restart.");
+      }
     }
   };
 };

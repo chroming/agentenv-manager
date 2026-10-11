@@ -324,6 +324,10 @@ Group metrics use the currently filtered inventory. Sorting changes only local `
 not worktrees, Git metadata, Workspace references or sync data.
 Git's worktree registration is the source of truth for linked and main worktrees;
 directory names alone are never proof. The inventory reports its scan scope and failures.
+An incomplete refresh preserves previous rows for unreadable repositories within the same
+scan scope, marks them unavailable, and never restores their cleanup eligibility. Partial
+results do not acquire a full freshness TTL. Failure to remove a display-cache file is
+diagnostic only; in-memory invalidation still happens and resource operations may continue.
 Leaving Worktrees does not cancel its main-process scan. Concurrent requests join one
 scan; reopening within five minutes reuses the completed result. A validated local
 display snapshot survives restarts, but is always stale on restart and cannot restore
@@ -869,9 +873,14 @@ shared desktop contract rather than a collection of page-specific effects.
   are skipped while their last successful result remains fresh: Agents, Library, and Local Skills
   use 1 minute on page entry and 5 minutes on focus; Conversations uses 1 minute for both; managed
   Backup inventory uses 1 minute on page entry.
-- One resource permits only one in-flight read. Navigation, focus, timers, and a manual command
-  MUST join the same operation rather than start duplicate filesystem scans, Agent discovery, or
-  network requests.
+- One resource permits only one in-flight read. Navigation, focus and timers join that read.
+  Manual or post-mutation requests arriving during an older read queue one latest follow-up
+  rather than losing their refresh intent or starting overlapping scans. An older completion
+  cannot clear a newer invalidation or replace an explicitly newer freshness result.
+- Workspace snapshots reuse results for one minute and survive page navigation within the
+  session. Reads remain scoped by Workspace identity; invalidation prevents a late read from
+  repopulating the cache, and a late result cannot replace another Workspace's visible details
+  or reset its loading state. Leaving a page does not discard a useful in-flight cache read.
 - A successful mutation invalidates or refreshes every affected local projection. Unrelated
   projections remain intact. A semantic no-op does not churn freshness timestamps.
 - Automatic reads are non-blocking and do not emit routine success toasts. When usable content is

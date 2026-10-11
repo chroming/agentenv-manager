@@ -43,6 +43,26 @@ const fixture = async () => {
 };
 
 describe("worktree inventory and cleanup", () => {
+  it("retains unreadable repository rows without retaining cleanup authorization", async () => {
+    const { linked, runner, service } = await fixture();
+    const previous = await service.inventory();
+    const entry = previous.entries.find((item) => item.path === linked)!;
+    const runGit = runner.run.bind(runner);
+    const fail = vi.spyOn(runner, "run").mockImplementation(async (args, options) => {
+      if (args.includes("worktree") && args.includes("list")) throw new Error("Temporary read failure");
+      return runGit(args, options);
+    });
+    const partial = await service.inventory("background");
+    expect(partial.incomplete).toBe(true);
+    expect(partial.entries.find((item) => item.path === linked)).toMatchObject({
+      state: "unavailable", cleanupReviewAvailable: false, manualReviewAvailable: false
+    });
+    expect((await service.cachedInventory()).fresh).toBe(false);
+    await expect(service.preview(entry.commonDir, linked)).rejects.toThrow("Refresh Worktrees");
+    fail.mockRestore();
+    expect((await service.inventory()).entries.find((item) => item.path === linked)?.state).toBe("candidate");
+  });
+
   it("refreshes known registrations without repeating discovery or size measurement", async () => {
     const { root, repo, service } = await fixture();
     const measure = vi.spyOn(snapshot, "measureWorktreeTree");

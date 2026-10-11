@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
@@ -36,4 +36,20 @@ it("ignores corrupt and structurally invalid cache files", async () => {
     await writeFile(path, contents);
     expect(await createWorktreeInventoryCache(path).read()).toEqual({ inventory: undefined, fresh: false });
   }
+});
+
+it("does not mark an incomplete inventory fresh", async () => {
+  const cache = createWorktreeInventoryCache(await fixture());
+  await cache.save({ ...inventory, incomplete: true, issues: ["Unreadable repository"] });
+  expect((await cache.read()).fresh).toBe(false);
+});
+
+it("does not block mutations when a cache file cannot be removed", async () => {
+  const path = await fixture();
+  await mkdir(path);
+  const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+  const cache = createWorktreeInventoryCache(path);
+  await expect(cache.invalidate()).resolves.toBeUndefined();
+  expect(await cache.read()).toEqual({ inventory: undefined, fresh: false });
+  expect(warning).toHaveBeenCalledOnce();
 });

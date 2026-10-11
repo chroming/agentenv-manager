@@ -536,6 +536,17 @@ export const createWorktreeService = ({
         controller.signal.throwIfAborted();
         discovered.clear();
         for (const key of found) discovered.add(key);
+        // An unreadable repository is not evidence that its worktrees were removed.
+        // Retained rows are display-only and never enter `discovered` authorization.
+        if (issues.length && previous && JSON.stringify([...scanRoots].sort()) === JSON.stringify([...previous.scanRoots].sort())) {
+          for (const entry of previous.entries) {
+            if (!repositories.has(entry.commonDir) && !found.has(discoveredKey(entry.commonDir, entry.path))) {
+              entries.push({ ...entry, state: "unavailable", cleanupReviewAvailable: false,
+                manualReviewAvailable: false,
+                reasons: [...new Set([...entry.reasons, "Could not refresh this repository; showing the last known state."])] });
+            }
+          }
+        }
         const visiblePaths = new Set(entries.map((entry) => entry.path));
         for (const path of measurements.keys()) if (!visiblePaths.has(path)) measurements.delete(path);
         if (!reuseRepositories) lastDiscoveryAt = Date.now();

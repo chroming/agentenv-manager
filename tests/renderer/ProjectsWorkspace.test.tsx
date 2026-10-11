@@ -166,6 +166,40 @@ afterEach(() => {
 });
 
 describe("ProjectsWorkspace", () => {
+  it("reuses a fresh snapshot when the page is reopened", async () => {
+    const api = installApi();
+    const first = render(<ProjectsWorkspace targets={[target]} />);
+    await screen.findByRole("button", { name: "Open in OpenCode" });
+    await waitFor(() => expect(api.inspectProject).toHaveBeenCalledTimes(1));
+    first.unmount();
+    render(<ProjectsWorkspace targets={[target]} />);
+    await screen.findByRole("button", { name: "Open in OpenCode" });
+    expect(api.inspectProject).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not let a late manual refresh clear the newly selected workspace", async () => {
+    const api = installApi();
+    const base = await api.inspectProject(project.id);
+    api.inspectProject.mockClear();
+    const second = { ...project, id: "second", name: "Second", rootPath: "/work/second" };
+    api.listProjects.mockResolvedValue([project, second]);
+    const view = render(<ProjectsWorkspace targets={[target]} />);
+    await screen.findByRole("button", { name: "Open in OpenCode" });
+    let finish!: (value: typeof base) => void;
+    api.inspectProject.mockImplementation((id: string) => id === project.id
+      ? new Promise((resolve) => { finish = resolve; })
+      : Promise.resolve({ ...base, projectId: second.id, projectRoot: second.rootPath,
+        resources: base.resources.map((resource: { name: string }) => ({ ...resource, name: "second-only" })) }));
+    fireEvent.click(screen.getByRole("button", { name: "More Workspace actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Refresh Workspace" }));
+    await waitFor(() => expect(finish).toBeDefined());
+    view.rerender(<ProjectsWorkspace targets={[target]} openRequest={{ requestId: 1, projectId: second.id }} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Expand Skills" }));
+    await screen.findByText("second-only");
+    await act(async () => finish(base));
+    expect(screen.getByText("second-only")).toBeInTheDocument();
+  });
+
   it("uses the shared single-object workspace, switcher, inspector, resource, and field contracts", async () => {
     installApi();
     render(<ProjectsWorkspace targets={[target]} />);

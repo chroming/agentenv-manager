@@ -1,12 +1,55 @@
 // @vitest-environment jsdom
 
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useFreshnessCoordinator } from "../../src/renderer/hooks/useFreshnessCoordinator";
 
 afterEach(cleanup);
 
 describe("useFreshnessCoordinator", () => {
+  it("does not replace a newer explicit freshness result with an older failure", async () => {
+    const { result } = renderHook(() => useFreshnessCoordinator(() => 500));
+    let reject!: (error: Error) => void;
+    let pending!: Promise<unknown>;
+    act(() => {
+      pending = result.current.run("agents", "page-entry", () => new Promise<void>((_, fail) => { reject = fail; })).catch(() => undefined);
+      result.current.markFresh("agents", { at: 501 });
+    });
+    await act(async () => { reject(new Error("obsolete")); await pending; });
+    expect(result.current.states.agents).toMatchObject({ status: "ready", lastSuccessAt: 501, invalidated: false });
+    expect(result.current.states.agents.error).toBeUndefined();
+  });
+
+  it("keeps invalidation that happens while an older request is running", async () => {
+    const { result } = renderHook(() => useFreshnessCoordinator());
+    let finish!: () => void;
+    let pending!: Promise<unknown>;
+    act(() => { pending = result.current.run("agents", "page-entry", () => new Promise<void>((resolve) => { finish = resolve; })); });
+    act(() => result.current.invalidate("agents"));
+    await act(async () => { finish(); await pending; });
+    expect(result.current.states.agents.invalidated).toBe(true);
+    expect(result.current.states.agents.lastSuccessAt).toBeUndefined();
+  });
+
+  it("queues one latest mutation refresh even when the older request fails", async () => {
+    const { result } = renderHook(() => useFreshnessCoordinator());
+    let reject!: (error: Error) => void;
+    const firstMutation = vi.fn(async () => "earlier");
+    const latestMutation = vi.fn(async () => "latest");
+    let first!: Promise<unknown>;
+    let second!: Promise<unknown>;
+    act(() => {
+      void result.current.run("agents", "page-entry", () => new Promise<void>((_, fail) => { reject = fail; })).catch(() => undefined);
+      first = result.current.run("agents", "mutation", firstMutation);
+      second = result.current.run("agents", "mutation", latestMutation);
+    });
+    expect(first).toBe(second);
+    await act(async () => { reject(new Error("old failure")); await second; });
+    expect(firstMutation).not.toHaveBeenCalled();
+    expect(latestMutation).toHaveBeenCalledOnce();
+    expect(result.current.states.agents).toMatchObject({ invalidated: false, status: "ready" });
+  });
+
   it("deduplicates work, respects TTL, and refreshes invalidated resources", async () => {
     let now = 100_000;
     let finish: ((value: string) => void) | undefined;
