@@ -1075,9 +1075,18 @@ try {
   const enabledBeforeReview = await page.evaluate(async () =>
     (await window.agentEnv.readSettings()).enabledTargetIds ?? []
   );
-  const selectedForReview = await agentDiscoveryDialog.locator('input[type="checkbox"]:checked')
-    .evaluateAll((inputs) => inputs.map((input) => input.id.replace("agent-discovery-", "")));
-  const expectedAgents = ["opencode", "claude-code", "codex", "antigravity", "antigravity-app", "trae-cli", "pi", "workbuddy"];
+  const fixtureAgentIds = {
+    OpenCode: "opencode", "Claude Code": "claude-code", Codex: "codex",
+    "Antigravity CLI": "antigravity", "Antigravity App": "antigravity-app",
+    "Trae CLI": "trae-cli", Pi: "pi", WorkBuddy: "workbuddy"
+  };
+  const selectedNames = await agentDiscoveryDialog.locator('input[type="checkbox"]:checked')
+    .evaluateAll((inputs) => inputs.map((input) => input.getAttribute("aria-label")));
+  const selectedForReview = selectedNames.map((name) => {
+    if (!Object.hasOwn(fixtureAgentIds, name)) throw new Error(`Unknown selected fixture Agent: ${name}`);
+    return fixtureAgentIds[name];
+  });
+  const expectedAgents = Object.values(fixtureAgentIds);
   if (JSON.stringify([...selectedForReview].sort()) !== JSON.stringify(expectedAgents.sort())) {
     throw new Error(`Visual fixture Agent discovery changed: ${selectedForReview.join(", ")}`);
   }

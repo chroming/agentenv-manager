@@ -108,8 +108,8 @@
     },
     {
       "file": "ai-analysis-profile-920x620.png",
-      "sha256": "eb1a12121881487d8a50fbb97d963d3ff4f538e4f9745324119a363f6b8e88bf",
-      "reviewReason": "Compact object header, shared resource groups, green switches, and current AI review"
+      "sha256": "8b26cae1a013fce74c15fa35fcc319587ca006d083cc4892a3a93ea1576ce509",
+      "reviewReason": "Reviewed 2026-10-11 at native size: current shared device headers and compact actions, persistent conversation size metadata, and dialog body spacing. No clipping or overlapping controls; pixel thresholds unchanged."
     },
     {
       "file": "settings-ai-920x620.png",
@@ -118,38 +118,38 @@
     },
     {
       "file": "agents-first-run-920x620.png",
-      "sha256": "d11bbeea6c6b61c166316b30d41251bfc479dce19e98ba1d8d44b4d5b663224d",
-      "reviewReason": "Unified Agent management and deterministic eight-Agent discovery"
+      "sha256": "ba0c171f1080ce73f313d2f19eae9714c4c5e9a92b7a82560e2af431fa69c01b",
+      "reviewReason": "Reviewed 2026-10-11 at native size: current shared device headers and compact actions, persistent conversation size metadata, and dialog body spacing. No clipping or overlapping controls; pixel thresholds unchanged."
     },
     {
       "file": "agents-setup-920x620.png",
-      "sha256": "927af5521d8951cb55e23a67683c4d45243724419577caab353d65b600a86ca4",
-      "reviewReason": "Unified Agent management and deterministic eight-Agent discovery"
+      "sha256": "27ad8005edd37362a16ca0da24fc7e9ba4032398e4a3dde36c08764c4b4f0caa",
+      "reviewReason": "Reviewed 2026-10-11 at native size: current shared device headers and compact actions, persistent conversation size metadata, and dialog body spacing. No clipping or overlapping controls; pixel thresholds unchanged."
     },
     {
       "file": "agents-setup-1180x728.png",
-      "sha256": "66a3551652b4153cbbb357033aea11f672be2ac36f8f3c28467df3e1888dcea1",
-      "reviewReason": "Unified Agent management and deterministic eight-Agent discovery"
+      "sha256": "42f5e75f16fd9b4f4c7ae5919ff0507759ed8eb57cd1f0bd5f619ab075b1406c",
+      "reviewReason": "Reviewed 2026-10-11 at native size: current shared device headers and compact actions, persistent conversation size metadata, and dialog body spacing. No clipping or overlapping controls; pixel thresholds unchanged."
     },
     {
       "file": "agents-ready-920x620.png",
-      "sha256": "927af5521d8951cb55e23a67683c4d45243724419577caab353d65b600a86ca4",
-      "reviewReason": "Unified Agent management and deterministic eight-Agent discovery"
+      "sha256": "27ad8005edd37362a16ca0da24fc7e9ba4032398e4a3dde36c08764c4b4f0caa",
+      "reviewReason": "Reviewed 2026-10-11 at native size: current shared device headers and compact actions, persistent conversation size metadata, and dialog body spacing. No clipping or overlapping controls; pixel thresholds unchanged."
     },
     {
       "file": "agents-actions-920x620.png",
-      "sha256": "63564621f9bf4060bc0c8d5ff46995182d5fee13ff6f8628585a91dfbaee2891",
-      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
+      "sha256": "bb82029c6cdb501af1071a334b3456e65fb74493a2c56d0e91ebdab8b88c3199",
+      "reviewReason": "Reviewed 2026-10-11 at native size: current shared device headers and compact actions, persistent conversation size metadata, and dialog body spacing. No clipping or overlapping controls; pixel thresholds unchanged."
     },
     {
       "file": "agents-add-ssh-device-920x620.png",
-      "sha256": "a8497621f750c99ffdf08e21a521a14e7da494b903aa215034e3dcb09ae929d4",
-      "reviewReason": "Unified Agent management and deterministic eight-Agent discovery"
+      "sha256": "d456b42435b29637b23d18cf43877fcc8fa8c7004e01b13780747bf97b857bd7",
+      "reviewReason": "Reviewed 2026-10-11 at native size: current shared device headers and compact actions, persistent conversation size metadata, and dialog body spacing. No clipping or overlapping controls; pixel thresholds unchanged."
     },
     {
       "file": "agents-ready-1180x728.png",
-      "sha256": "66a3551652b4153cbbb357033aea11f672be2ac36f8f3c28467df3e1888dcea1",
-      "reviewReason": "Unified Agent management and deterministic eight-Agent discovery"
+      "sha256": "42f5e75f16fd9b4f4c7ae5919ff0507759ed8eb57cd1f0bd5f619ab075b1406c",
+      "reviewReason": "Reviewed 2026-10-11 at native size: current shared device headers and compact actions, persistent conversation size metadata, and dialog body spacing. No clipping or overlapping controls; pixel thresholds unchanged."
     },
     {
       "file": "profiles-920x620.png",
@@ -283,8 +283,8 @@
     },
     {
       "file": "comparison-overview-920x620.png",
-      "sha256": "94fde1ceac4a3751439c2be894b2c1bf79e5fc305a5545757f83e933ad55ebe6",
-      "reviewReason": "Current comparison layout and shared dialog controls"
+      "sha256": "92d2de5b41a334b7bd6155a307851bc713cf67b39f889617220f62fd9d7b38d9",
+      "reviewReason": "Reviewed 2026-10-11 at native size: current shared device headers and compact actions, persistent conversation size metadata, and dialog body spacing. No clipping or overlapping controls; pixel thresholds unchanged."
     },
     {
       "file": "comparison-result-920x620.png",
@@ -303,13 +303,13 @@
     },
     {
       "file": "target-stop-managing-choice-920x620.png",
-      "sha256": "dee4b44cd8c0801759bec34fef6245562a32735c340f0d70c9714406352c95b1",
-      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
+      "sha256": "3ad2d00bd91e76907d3cb7f7db60155913599825f7369714f05a5fbce7e2a5cb",
+      "reviewReason": "Reviewed 2026-10-11 at native size: current shared device headers and compact actions, persistent conversation size metadata, and dialog body spacing. No clipping or overlapping controls; pixel thresholds unchanged."
     },
     {
       "file": "target-stop-managing-preview-920x620.png",
-      "sha256": "a31e6befbd904051cb717dbaec132086b4c244efd32ac7c9231f84c11d187b12",
-      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
+      "sha256": "f75194ee7b8240a5e18f87cc87b03eda1c57e2fe200f82383532c4a31f460eea",
+      "reviewReason": "Reviewed 2026-10-11 at native size: current shared device headers and compact actions, persistent conversation size metadata, and dialog body spacing. No clipping or overlapping controls; pixel thresholds unchanged."
     },
     {
       "file": "skills-920x620.png",
@@ -438,8 +438,8 @@
     },
     {
       "file": "skills-cleanup-review-920x620.png",
-      "sha256": "2305149d023d8549e53c6f56458ef23be6ee8e70aa84d142949e2d9af174c14b",
-      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
+      "sha256": "aa61b9e5375debb6d685dbf15cd9ba80ee865abaacfb064239b6fd8a531faf33",
+      "reviewReason": "Reviewed 2026-10-11 at native size: current shared device headers and compact actions, persistent conversation size metadata, and dialog body spacing. No clipping or overlapping controls; pixel thresholds unchanged."
     },
     {
       "file": "skills-shared-folder-920x620.png",
@@ -473,13 +473,13 @@
     },
     {
       "file": "conversations-largest-920x620.png",
-      "sha256": "1fb72a2594f48cf4b60b69140c046de690b5346642976c54c15ee2a409f686c1",
-      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
+      "sha256": "50c40a2a06fa62c2ea4596a89f58713298589f115c2b2291602bc82d415bd4ce",
+      "reviewReason": "Reviewed 2026-10-11 at native size: current shared device headers and compact actions, persistent conversation size metadata, and dialog body spacing. No clipping or overlapping controls; pixel thresholds unchanged."
     },
     {
       "file": "conversations-list-region-920.png",
-      "sha256": "a723d3d829aa671ddc903bbfa1902e2fab8101e00d0f843c351a8757606af36d",
-      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
+      "sha256": "8c329dfd9f2bc323438f548e559c37dc913b4e3ab65fdbab2dead132474baa6d",
+      "reviewReason": "Reviewed 2026-10-11 at native size: current shared device headers and compact actions, persistent conversation size metadata, and dialog body spacing. No clipping or overlapping controls; pixel thresholds unchanged."
     },
     {
       "file": "conversations-continue-menu-920x620.png",
@@ -530,6 +530,12 @@
       "reviewedAt": "2026-10-11",
       "scope": "Nine Worktree retention screenshots only; other baseline images unchanged.",
       "method": "Three isolated Electron locale tests passed, with geometry assertions and individual pixel inspection of all nine captures.",
+      "thresholdsChanged": false
+    },
+    {
+      "reviewedAt": "2026-10-11",
+      "scope": "Fourteen reviewed device, conversation and dialog captures; other baselines unchanged.",
+      "method": "Current isolated Electron mock captures individually inspected at native size against prior images. All workflow assertions retained.",
       "thresholdsChanged": false
     }
   ],

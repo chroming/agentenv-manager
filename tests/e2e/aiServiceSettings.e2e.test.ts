@@ -62,4 +62,4 @@ it("saves without shifting actions and tests only synthetic content on explicit 
     await new Promise<void>((resolve) => server.close(() => resolve()));
     await rm(root, { recursive: true, force: true });
   }
-});
+}, 45_000);

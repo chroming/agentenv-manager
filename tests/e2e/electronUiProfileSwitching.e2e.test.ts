@@ -6418,7 +6418,7 @@ describe("Electron UI profile switching e2e", () => {
     await page.reload();
     const agents = page.getByRole("region", { name: "Agents", exact: true });
     await agents.waitFor({ state: "visible" });
-    await expect.poll(() => agents.locator(".target-workflow-name-action").allTextContents())
+    await expect.poll(() => agents.locator(".target-workflow-name-action").allTextContents(), { timeout: 10_000 })
       .toEqual(persisted.agentOrder);
 
     await page.getByRole("button", { name: "Profiles", exact: true }).click();

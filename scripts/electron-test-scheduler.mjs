@@ -137,6 +137,7 @@ const runJob = async ({ job, projectRoot, reportRoot, vitestEntry }) => {
       ...(job.pattern ? ["--testNamePattern", job.pattern] : []),
       "--maxWorkers=1",
       "--no-file-parallelism",
+      "--reporter=default",
       "--reporter=json",
       `--outputFile=${reportPath}`
     ], {
@@ -146,6 +147,9 @@ const runJob = async ({ job, projectRoot, reportRoot, vitestEntry }) => {
     });
   } catch (error) {
     processError = error;
+    // Vitest's JSON reporter can retain only a polling wrapper stack; preserve the real assertion too.
+    if (error.stdout) process.stderr.write(error.stdout);
+    if (error.stderr) process.stderr.write(error.stderr);
   }
   let report;
   try {
