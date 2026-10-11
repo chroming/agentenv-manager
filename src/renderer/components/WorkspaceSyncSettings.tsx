@@ -8,6 +8,7 @@ import {
   LoaderCircle,
   RefreshCw,
   TriangleAlert,
+  Unplug,
   X
 } from "lucide-react";
 import type {
@@ -19,7 +20,7 @@ import type {
 import { useI18n } from "../i18n";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { OverflowTooltip } from "./OverflowTooltip";
-import { Button, IconButton, ModalFrame, SelectControl } from "./ui";
+import { Button, IconButton, ModalFrame, SelectControl, ToolbarOverflowMenu } from "./ui";
 
 const emptyStatus: WorkspaceSyncStatus = {
   kind: "not-connected",
@@ -381,16 +382,18 @@ export const WorkspaceSyncSettings = ({
                 {t("Recover Device Sync")}
               </Button>
             ) : null}
-            {status.kind !== "recovery-required" ? <Button variant="secondary" busy={working === "check"} busyLabel={t("Checking...")} icon={<RefreshCw />} disabled={Boolean(working)} onClick={() => void check()}>
-              {t("Check")}
-            </Button> : null}
+            {status.kind !== "recovery-required" ? <IconButton variant="ghost" label={t("Check")} busy={working === "check"} disabled={Boolean(working)} onClick={() => void check()}>
+              <RefreshCw size={15} />
+            </IconButton> : null}
             {status.kind !== "up-to-date" && status.kind !== "error" && status.kind !== "recovery-required" ? (
               <Button ref={reviewButtonRef} variant="primary" busy={working === "review"} busyLabel={t("Preparing...")} disabled={Boolean(working)} onClick={() => void openReview()}>
                 {pendingActionLabel}
               </Button>
             ) : null}
             {status.kind !== "recovery-required" ? (
-              <Button variant="ghost" disabled={Boolean(working)} onClick={() => void disconnect()}>{t("Disconnect")}</Button>
+              <ToolbarOverflowMenu label={t("More actions for {{name}}", { name: t("Device Sync") })}
+                menuLabel={t("Actions for {{name}}", { name: t("Device Sync") })} disabled={Boolean(working)}
+                items={[{ id: "disconnect", label: t("Disconnect"), icon: <Unplug size={15} />, onSelect: () => void disconnect() }]} />
             ) : null}
           </div>
         </>

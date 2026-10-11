@@ -349,8 +349,7 @@
 
 .conversation-continue-button {
   justify-content: center;
-  min-width: 112px;
-  width: 112px;
+  width: auto;
 }
 
 .conversation-target-menu {

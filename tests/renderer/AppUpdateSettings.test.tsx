@@ -63,6 +63,8 @@ describe("App update settings", () => {
     expect(statusRow).toHaveTextContent("0.1.0");
     expect(screen.getByTitle("Current version")).toHaveTextContent("0.1.0");
     expect(screen.queryByTitle("Latest version")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Check now" })).toHaveClass("ui-icon-button");
+    expect(screen.getByRole("button", { name: "Check now" })).not.toHaveTextContent("Check now");
     expect(screen.getByText("Finish updates after quitting")).toBeInTheDocument();
     expect(screen.queryByText(/quitting is not delayed/)).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Check now" }));

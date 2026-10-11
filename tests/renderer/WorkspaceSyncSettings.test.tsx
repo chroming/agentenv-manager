@@ -144,7 +144,9 @@ describe("Workspace Sync settings", () => {
     );
     expect(screen.getByRole("alert")).not.toHaveTextContent("hash mismatch");
     expect(screen.getByRole("button", { name: "Check" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Disconnect" })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: "Disconnect" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "More actions for Device Sync" }));
+    expect(screen.getByRole("menuitem", { name: "Disconnect" })).toBeEnabled();
   });
 
   it("replaces a stale success status when a manual check fails", async () => {

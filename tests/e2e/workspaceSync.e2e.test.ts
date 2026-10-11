@@ -91,6 +91,16 @@ describe("Workspace Sync desktop flow", () => {
     await section.getByLabel("Branch").fill("main");
     await section.getByRole("button", { name: "Connect repository" }).click();
     await expect.poll(() => section.getByText("Changes to publish").count()).toBe(1);
+    expect(await section.getByRole("button", { name: "Check", exact: true }).getAttribute("class")).toContain("ui-icon-button");
+    expect(await section.getByRole("button", { name: "Disconnect", exact: true }).count()).toBe(0);
+    await section.getByRole("button", { name: "More actions for Device Sync" }).click();
+    expect(await page.getByRole("menuitem", { name: "Disconnect", exact: true }).isVisible()).toBe(true);
+    await page.keyboard.press("Escape");
+    if (process.env.AGENTENV_CAPTURE_BUTTONS_DIR) {
+      await mkdir(process.env.AGENTENV_CAPTURE_BUTTONS_DIR, { recursive: true });
+      await page.mouse.move(0, 0);
+      await page.screenshot({ path: join(process.env.AGENTENV_CAPTURE_BUTTONS_DIR, "device-sync-920.png") });
+    }
 
     await section.getByRole("button", { name: "Publish" }).click();
     const review = page.getByRole("dialog", { name: "Review Device Sync changes" });

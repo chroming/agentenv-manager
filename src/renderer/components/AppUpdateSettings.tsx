@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import type { AgentEnvSettings, AppUpdateStatus } from "../../shared/types";
 import { useI18n } from "../i18n";
 import { SettingsPreferenceRow } from "./SettingsPreferenceRow";
-import { Button, ProgressBar, Switch } from "./ui";
+import { Button, IconButton, ProgressBar, Switch } from "./ui";
 import { InfoTip } from "./InfoTip";
 
 interface AppUpdateSettingsProps {
@@ -183,16 +183,17 @@ export const AppUpdateSettings = ({
             </Button>
           ) : null}
           {(!status || ["disabled", "idle", "checking", "up-to-date", "failed"].includes(status.phase)) ? (
-            <Button
+            <IconButton
               busy={pendingAction === "check" || (
                 !pendingAction && status?.phase === "checking"
               )}
               disabled={busy || working}
-              icon={<RefreshCw size={15} />}
+              variant="ghost"
+              label={status?.phase === "failed" ? t("Try again") : t("Check now")}
               onClick={() => void run("check", () => window.agentEnv.checkAppUpdate())}
             >
-              {status?.phase === "failed" ? t("Try again") : t("Check now")}
-            </Button>
+              <RefreshCw size={15} />
+            </IconButton>
           ) : null}
           </span>}
         />

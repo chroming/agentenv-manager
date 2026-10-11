@@ -187,6 +187,20 @@ afterEach(() => {
 });
 
 describe("ConversationWorkspace", () => {
+  it("copies the history location with local success and failure feedback", async () => {
+    const api = installApi();
+    render(<ConversationWorkspace targets={[target("codex", "Codex")]} />);
+    await screen.findByRole("button", { name: "History location" });
+    fireEvent.click(screen.getByRole("button", { name: "History location" }));
+    const dialog = screen.getByRole("dialog", { name: "History location" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Copy history location" }));
+    expect(await within(dialog).findByRole("button", { name: "Copied" })).toBeEnabled();
+    expect(api.copyText).toHaveBeenCalled();
+    api.copyText.mockRejectedValueOnce(new Error("Clipboard unavailable"));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Copied" }));
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("Clipboard unavailable");
+    expect(within(dialog).getByRole("button", { name: "Copy history location" })).toBeEnabled();
+  });
   it("keeps remote history read-only even when the same Agent is installed locally", async () => {
     const api = installApi();
     const remote: ConversationDetail = { ...detail, origin: {sourceKey:"remote-source",deviceId:"remote",deviceName:"Build machine",historyPath:"/home/demo/history.jsonl"} };
@@ -310,7 +324,7 @@ describe("ConversationWorkspace", () => {
     expect(actions).toHaveAttribute("data-control-density", "default");
     expect(workspace).toHaveClass("ui-button--default", "ui-button--secondary");
     expect(within(actions as HTMLElement).getByRole("button", { name: "Continue" }))
-      .toHaveClass("ui-button--default", "ui-button--primary");
+      .toHaveClass("ui-button--default", "ui-button--secondary");
     expect(within(actions as HTMLElement).getByRole("button", { name: "Copy conversation" }))
       .toHaveClass("ui-icon-button--default", "ui-icon-button--ghost");
   });

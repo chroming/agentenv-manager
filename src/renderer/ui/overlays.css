@@ -427,15 +427,15 @@
   padding: 12px 18px;
 }
 
-.preview-actions button,
-.capture-dialog__footer button,
-.library-drawer__footer button {
+.preview-actions .ui-button,
+.capture-dialog__footer .ui-button,
+.library-drawer__footer .ui-button {
   height: var(--control-height-dialog);
   min-height: var(--control-height-dialog);
 }
 
-.profile-form-dialog > .preview-actions button,
-.profile-form-dialog > .profile-dialog-actions button {
+.profile-form-dialog > .preview-actions .ui-button,
+.profile-form-dialog > .profile-dialog-actions .ui-button {
   height: var(--control-height-dialog);
   min-height: var(--control-height-dialog);
   width: auto;

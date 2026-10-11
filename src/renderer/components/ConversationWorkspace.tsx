@@ -298,7 +298,7 @@ const TargetMenu = ({
       <Button
         ref={buttonRef}
         className="conversation-continue-button"
-        variant="primary"
+        variant="secondary"
         type="button"
         disabled={disabled || busy || targets.length === 0}
         title={disabledReason}
@@ -579,6 +579,9 @@ export const ConversationWorkspace = ({
   const { t, formatDate, localeTag } = useI18n();
   const [historyStatus, setHistoryStatus] = useState<HistorySearchStatus>();
   const [sourceLocationOpen, setSourceLocationOpen] = useState(false);
+  const [locationCopy, setLocationCopy] = useState<"idle" | "busy" | "copied">("idle");
+  const [locationCopyError, setLocationCopyError] = useState("");
+  useEffect(() => { setLocationCopy("idle"); setLocationCopyError(""); }, [sourceLocationOpen]);
   const sourceLocationRef = useRef<HTMLElement>(null);
   useModalDialog({open:sourceLocationOpen,dialogRef:sourceLocationRef,onDismiss:()=>setSourceLocationOpen(false)});
   const [deviceFilter, setDeviceFilter] = useState("");
@@ -2171,8 +2174,15 @@ export const ConversationWorkspace = ({
             <dt>{t("History file")}</dt><dd className="selectable">{detail.origin?.historyPath ?? t("Unavailable")}</dd>
             <dt>{t("Messages")}</dt><dd>{detail.messageCount}</dd>
             <dt>{t("Size")}</dt><dd>{detail.sizeBytes === undefined ? t("Unavailable") : formatConversationSize(detail.sizeBytes)}</dd>
-          </dl></DialogBody>
-          <DialogFooter><Button onClick={()=>setSourceLocationOpen(false)}>{t("Close")}</Button><Button icon={<Copy size={16}/>} onClick={()=>void window.agentEnv.copyText([detail.origin?.connection,detail.workspacePath,detail.sourceId,detail.origin?.historyPath].filter(Boolean).join("\n"))}>{t("Copy history location")}</Button></DialogFooter>
+          </dl>{locationCopyError ? <p role="alert"><DiagnosticMessage message={locationCopyError} /></p> : null}</DialogBody>
+          <DialogFooter><Button onClick={()=>setSourceLocationOpen(false)}>{t("Close")}</Button>
+            <IconButton label={locationCopy === "copied" ? t("Copied") : t("Copy history location")} busy={locationCopy === "busy"} onClick={() => {
+              setLocationCopy("busy"); setLocationCopyError("");
+              void window.agentEnv.copyText([detail.origin?.connection,detail.workspacePath,detail.sourceId,detail.origin?.historyPath].filter(Boolean).join("\n"))
+                .then(() => setLocationCopy("copied"))
+                .catch((cause) => { setLocationCopy("idle"); setLocationCopyError(String(cause)); });
+            }}>{locationCopy === "copied" ? <Check size={16} /> : <Copy size={16} />}</IconButton>
+          </DialogFooter>
         </ModalFrame> : null}
         {review ? (
           <ModalFrame
