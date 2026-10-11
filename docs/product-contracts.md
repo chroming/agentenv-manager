@@ -410,6 +410,16 @@ and their findings explicitly marked unverified; they never become cleanup evide
 Unusable JSON, invalid fields and truncated service responses report distinct errors
 without private response content; prior saved results remain intact. No billed retries
 are automatic. Safe formatting differences do not discard otherwise useful analysis.
+Manual analysis reveals its result, setup requirement or error within the dialog scroll
+body. Cancellation is neutral; recoverable failures offer manual Retry, while explicit
+authentication/configuration failures offer the shared AI service setup. Repository-kept
+details link back to the repository keep action rather than exposing a disabled control.
+Worktree, Skill group and source searches temporarily expand matching groups without
+changing saved disclosure preferences; clearing search restores the user's layout.
+Batch results use shared semantic status controls: skipped is neutral, failed is error,
+verification warnings remain warning, and only fully successful batches emphasize Close.
+Worktree reasons carry translatable messages and parameters separately from original
+diagnostic detail. Localization must not change cleanup eligibility or safety predicates.
 Interrupted cleanup records are reconciled against the original directory and Git
 registration before Restore is offered. An interrupted restore can continue only when
 the partially restored directory still matches the recorded attempt; otherwise the

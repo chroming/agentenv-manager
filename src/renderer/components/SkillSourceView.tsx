@@ -1,4 +1,5 @@
 import { DiagnosticCopyButton } from "./ui/DiagnosticCopyButton";
+import { useSearchDisclosure } from "../hooks/useSearchDisclosure";
 import {
   useEffect,
   useMemo,
@@ -160,6 +161,7 @@ export const SkillSourceView = ({
     sort: "name", scopeFilter, sourceKindFilter, resultFilter
   });
   const [search, setSearch] = useState("");
+  const searchDisclosure = useSearchDisclosure(search);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [checking, setChecking] = useState<Set<string>>(new Set());
   const [checkingAll, setCheckingAll] = useState(false);
@@ -603,14 +605,14 @@ export const SkillSourceView = ({
     }
   };
 
-  const toggleExpanded = (sourceId: string) => {
+  const toggleExpanded = (sourceId: string) => searchDisclosure.toggle(sourceId, () => {
     setExpanded((current) => {
       const next = new Set(current);
       if (next.has(sourceId)) next.delete(sourceId);
       else next.add(sourceId);
       return next;
     });
-  };
+  });
 
   return (
     <section
@@ -725,7 +727,7 @@ export const SkillSourceView = ({
           </div>
         ) : null}
         {visibleGroups.map((group) => {
-          const isExpanded = expanded.has(group.sourceId);
+          const isExpanded = searchDisclosure.expanded(group.sourceId, expanded.has(group.sourceId));
           const isChecking = checking.has(group.sourceId) || activeCheckingSourceId === group.sourceId;
           const isSelected = mergeSelection.has(group.sourceId);
           const hasAttention = group.counts.updates + group.counts.new + group.counts.removed > 0;

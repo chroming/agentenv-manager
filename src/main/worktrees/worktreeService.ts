@@ -221,6 +221,11 @@ export const createWorktreeService = ({
     keptReason ??= repositoryKeptReason;
     const path = resolve(registration.path);
     const reasons: string[] = [];
+    const reasonDetails: NonNullable<WorktreeEntry["reasonDetails"]> = [];
+    const addReason = (raw: string, message = raw, values?: Record<string, string | number>, detail?: string) => {
+      reasons.push(raw);
+      reasonDetails.push({ message, values, detail });
+    };
     const changes: string[] = [];
     const ignored: string[] = [];
     let submodules = false;
@@ -232,13 +237,13 @@ export const createWorktreeService = ({
     try {
       exists = (await lstat(path)).isDirectory();
     } catch (error) {
-      if (!isMissingFileError(error)) reasons.push(`Could not inspect path: ${String(error)}`);
+      if (!isMissingFileError(error)) addReason(`Could not inspect path: ${String(error)}`, "Could not inspect path", undefined, String(error));
     }
     const main = path === resolve(mainPath);
-    if (main) reasons.push("Main working tree");
-    if (registration.locked) reasons.push(`Git lock: ${registration.locked}`);
-    if (registration.prunable) reasons.push(`Git registration: ${registration.prunable}`);
-    if (!exists) reasons.push("Directory is unavailable");
+    if (main) addReason("Main working tree");
+    if (registration.locked) addReason(`Git lock: ${registration.locked}`, "Git lock", undefined, registration.locked);
+    if (registration.prunable) addReason(`Git registration: ${registration.prunable}`, "Git registration needs review", undefined, registration.prunable);
+    if (!exists) addReason("Directory is unavailable");
     if (exists && !main) {
       try {
         const status = await readGit(runner,
@@ -249,28 +254,28 @@ export const createWorktreeService = ({
           if (record.startsWith("!! ")) ignored.push(record.slice(3));
           else changes.push(record);
         }
-        if (changes.length) reasons.push(`${changes.length} changed or untracked paths`);
+        if (changes.length) addReason(`${changes.length} changed or untracked paths`, "{{count}} changed or untracked paths", { count: changes.length });
         if (changes.some((record) => /^(?:DD|AU|UD|UA|DU|AA|UU) /.test(record))) {
-          reasons.push("Unresolved Git conflicts");
+          addReason("Unresolved Git conflicts");
           unsafeLocalState = true;
         }
-        if (ignored.length) reasons.push(`${ignored.length} ignored paths`);
+        if (ignored.length) addReason(`${ignored.length} ignored paths`, "{{count}} ignored paths", { count: ignored.length });
         // Gitlinks protect initialized and missing submodules without launching git-submodule.
         const modules = await readGit(runner, ["ls-files", "--stage", "-z"], {
           cwd: path, timeoutMs: 8_000, maxOutputBytes: 4_000_000, signal
         });
         submodules = modules.stdout.split("\0").some((record) => record.startsWith("160000 "));
-        if (submodules) reasons.push("Contains submodules");
+        if (submodules) addReason("Contains submodules");
         const gitDirResult = await readGit(runner, ["rev-parse", "--git-dir"], {
           cwd: path, timeoutMs: 8_000, maxOutputBytes: 32_000, signal
         });
         const gitDir = resolve(path, gitDirResult.stdout.trim());
         if ((await Promise.all(ACTIVE_WORKTREE_MARKERS.map((marker) => pathExists(join(gitDir, marker))))).some(Boolean)) {
-          reasons.push("Git operation in progress");
+          addReason("Git operation in progress");
           unsafeLocalState = true;
         }
         if (await hasNestedRepository(path, signal)) {
-          reasons.push("Contains a nested repository");
+          addReason("Contains a nested repository");
           unsafeLocalState = true;
         }
         if (measure) {
@@ -286,17 +291,17 @@ export const createWorktreeService = ({
             cwd: path, timeoutMs: 8_000, maxOutputBytes: 1_000_000, signal
           });
           if (!unique.stdout.trim()) {
-            reasons.push("Detached commit has no branch or tag reference");
+            addReason("Detached commit has no branch or tag reference");
             headNeedsProtection = true;
           }
         }
         integration = await withIntegrationEvidence(runner, path, base ?? await readIntegration(runner, commonDir), registration.head, signal);
-        if (!integration.head) reasons.push("Integration target is unavailable; confirm the task is finished");
-        else if (integration.ref === `refs/heads/${registration.branch}`) reasons.push("Integration target is this Worktree's own branch; confirm the task is finished");
-        else if (!integration.merged) reasons.push("Branch work is not confirmed in the integration target; confirm the task is finished");
+        if (!integration.head) addReason("Integration target is unavailable; confirm the task is finished");
+        else if (integration.ref === `refs/heads/${registration.branch}`) addReason("Integration target is this Worktree's own branch; confirm the task is finished");
+        else if (!integration.merged) addReason("Branch work is not confirmed in the integration target; confirm the task is finished");
       } catch (error) {
         signal?.throwIfAborted();
-        reasons.push(`Git check failed: ${repositoryDiscoveryIssue(path, error)}`);
+        addReason(`Git check failed: ${repositoryDiscoveryIssue(path, error)}`, "Git check failed", undefined, repositoryDiscoveryIssue(path, error));
       }
     }
     const state = keptReason || registration.locked ? "kept"
@@ -312,7 +317,7 @@ export const createWorktreeService = ({
       path, repositoryPath: resolve(mainPath), commonDir, head: registration.head,
       branch: registration.branch, main, detached: registration.detached,
       locked: registration.locked, prunable: registration.prunable, exists,
-      state, reasons, changes, ignored, submodules,
+      state, reasons, reasonDetails, changes, ignored, submodules,
       sizeBytes: measurement?.sizeBytes, modifiedAt: measurement?.modifiedAt,
       keptReason, repositoryKeptReason, cleanupReviewAvailable,
       manualReviewAvailable, headNeedsProtection, integration
@@ -556,6 +561,7 @@ export const createWorktreeService = ({
             if (!repositories.has(entry.commonDir) && !found.has(discoveredKey(entry.commonDir, entry.path))) {
               entries.push({ ...entry, state: "unavailable", cleanupReviewAvailable: false,
                 manualReviewAvailable: false,
+                reasonDetails: [...(entry.reasonDetails ?? entry.reasons.map((message) => ({ message }))), { message: "Could not refresh this repository; showing the last known state." }],
                 reasons: [...new Set([...entry.reasons, "Could not refresh this repository; showing the last known state."])] });
             }
           }

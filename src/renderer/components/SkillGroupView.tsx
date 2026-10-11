@@ -1,5 +1,6 @@
 import { FolderTree, Pencil, Plus, Trash2, SearchCheck } from "lucide-react";
 import { useMemo, useRef, useState } from "react";
+import { useSearchDisclosure } from "../hooks/useSearchDisclosure";
 import type {
   CreateSkillGroupInput,
   ResourceIconKey,
@@ -94,6 +95,7 @@ export const SkillGroupView = ({
   const [deleteCandidate, setDeleteCandidate] = useState<SkillGroup>();
   const [saving, setSaving] = useState(false);
   const [query, setQuery] = useState("");
+  const searchDisclosure = useSearchDisclosure(query);
   const [checkingGroup, setCheckingGroup] = useState<string>();
   const updatesById = new Map(updates.map((item) => [item.id, item]));
   const eligible = (skill: SkillLibraryEntry) => skill.globallyEnabled !== false && skill.updatePolicy === "tracked";
@@ -218,7 +220,7 @@ export const SkillGroupView = ({
           />
         ) : null}
         {visibleGroups.map((group) => {
-          const expanded = expandedIds.includes(group.id);
+          const expanded = searchDisclosure.expanded(group.id, expandedIds.includes(group.id));
           const memberSkills = group.skillIds.flatMap((id) => {
             const skill = skillsById.get(id);
             return skill ? [skill] : [];
@@ -279,11 +281,11 @@ export const SkillGroupView = ({
               )}
               id={group.id}
               nested
-              onToggle={() => setExpandedIds((current) =>
+              onToggle={() => searchDisclosure.toggle(group.id, () => setExpandedIds((current) =>
                 current.includes(group.id)
                   ? current.filter((id) => id !== group.id)
                   : [...current, group.id]
-              )}
+              ))}
               summary={[...(groupView.sort === "updates" ? [t(updateCount === 1 ? "{{count}} update" : "{{count}} updates", { count: updateCount })] : []),
                 t("{{count}} Skills", { count: group.skillIds.length })].join(" · ")}
               title={group.name}

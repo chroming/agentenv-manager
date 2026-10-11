@@ -264,6 +264,9 @@ describe("Worktrees desktop workflow", () => {
     const keptSettings = JSON.parse(await readFile(join(data, "worktree-locations.json"), "utf8"));
     expect(Object.values(keptSettings.keptRepositories)).toEqual(["Kept by user"]);
     if (process.env.AGENTENV_CAPTURE_WORKTREES_DIR) await page.screenshot({ path: join(process.env.AGENTENV_CAPTURE_WORKTREES_DIR, `worktrees-kept-${locale}-920.png`) });
+    await workspace.getByRole("button", { name: "long-name-with-uncommitted-work", exact: true }).click();
+    await page.getByRole("dialog").getByRole("button", { name: t("View repository"), exact: true }).click();
+    expect(await unkeep.evaluate((element) => document.activeElement === element)).toBe(true);
     await unkeep.click();
     await group.getByRole("button", { name: t("Keep repository"), exact: true }).waitFor();
     expect(await group.getByRole("checkbox").count()).toBe(9);
@@ -288,6 +291,10 @@ describe("Worktrees desktop workflow", () => {
     expect(await dirtyDialog.getByRole("checkbox").isChecked()).toBe(false);
     await analyze.click();
     await dirtyDialog.getByText("Keep the local experiments until their purpose is confirmed.", { exact: true }).waitFor();
+    expect(await dirtyDialog.getByText("Keep the local experiments until their purpose is confirmed.", { exact: true }).evaluate((element) => {
+      const box = element.getBoundingClientRect();
+      return box.top >= 0 && box.bottom <= window.innerHeight;
+    })).toBe(true);
     expect(calls).toBe(1);
     expect(await dirtyDialog.getByRole("checkbox").isChecked()).toBe(false);
     for (const [width, height] of [[920, 620], [1180, 728], [1440, 900]]) {

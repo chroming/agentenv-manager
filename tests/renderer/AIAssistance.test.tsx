@@ -24,6 +24,38 @@ const install = (cached = false, prefs = defaultAIPreferences()) => {
   return api;
 };
 describe("AI assistance surfaces", () => {
+  it("treats an explicitly cancelled request as neutral and keeps the previous analysis", async () => {
+    const api = install(true);
+    let reject!: (error: Error) => void;
+    api.generateAIAnalysis.mockImplementationOnce(() => new Promise((_, rejectRequest) => { reject = rejectRequest; }));
+    api.cancelAIAnalysis.mockImplementation(() => reject(new Error("Request cancelled")));
+    render(<AIAnalysisReview subject={{ kind: "comparison", runId: "cancel" }} />);
+    await screen.findByText("Adds a test");
+    fireEvent.click(screen.getByRole("button", { name: "Regenerate" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Stop" }));
+    await screen.findByText("Cancelled");
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(screen.getByText("Adds a test")).toBeInTheDocument();
+    expect(api.generateAIAnalysis).toHaveBeenCalledOnce();
+  });
+  it.each([
+    ["Invalid evidence", "Retry"],
+    ["AI service returned HTTP 429", "Retry"],
+    ["AI service returned HTTP 401", "Configure AI service"]
+  ])("offers the appropriate recovery for %s without automatically retrying", async (message, action) => {
+    const api = install();
+    api.generateAIAnalysis.mockRejectedValueOnce(new Error(message));
+    render(<AIAnalysisReview subject={{ kind: "comparison", runId: "recovery" }} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Analyze results" }));
+    await screen.findByRole("alert");
+    expect(screen.getByRole("button", { name: action })).toBeEnabled();
+    expect(api.generateAIAnalysis).toHaveBeenCalledTimes(1);
+    if (action === "Retry") {
+      fireEvent.click(screen.getByRole("button", { name: action }));
+      await screen.findByText("Adds a test");
+      expect(api.generateAIAnalysis).toHaveBeenCalledTimes(2);
+    }
+  });
   it("offers manual Worktree analysis, cancels on close and keeps another tree's result out", async () => {
     const api = install();
     const first = { kind: "worktree" as const, commonDir: "/repo/.git", path: "/tree" };

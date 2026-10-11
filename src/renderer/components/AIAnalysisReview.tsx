@@ -7,7 +7,7 @@ import { useI18n } from "../i18n";
 import { Button, DiagnosticMessage, DialogBody, DialogFooter, EmptyState, IconButton, Notice, TextAction } from "./ui";
 import { AIReviewHeading } from "./AIReviewHeading";
 import { SyntaxCodePreview } from "./SyntaxCodePreview";
-import { AIServiceForm } from "./SkillSummarySettings";
+import { AIServiceSetup } from "./AIServiceSetup";
 import { AIReviewFindings, splitAIReviewFindings } from "./AIReviewFindings";
 
 export const AIAnalysisReview = ({ subject, standalone = false, onClose, closeRef, actionsTarget }: {
@@ -31,10 +31,15 @@ export const AIAnalysisReview = ({ subject, standalone = false, onClose, closeRe
   const [evidence, setEvidence] = useState("");
   const active = useRef(true);
   const request = useRef("");
+  const cancelled = useRef(false);
+  const revealRequested = useRef(false);
+  const feedbackRef = useRef<HTMLDivElement>(null);
+  const [stopped, setStopped] = useState(false);
   const identity = JSON.stringify([subject, locale]);
   const currentIdentity = useRef(identity); currentIdentity.current = identity;
   useEffect(() => {
     active.current = true; setPreview(undefined); setError(""); setEvidence(""); setBusy(undefined); setConfiguring(false); setNeedsConfig(false);
+    revealRequested.current = false; setStopped(false);
     let valid = true;
     void window.agentEnv?.prepareAIAnalysis?.(subject, locale).then((value) => { if (valid) { setPreview(value); setRecord(value.cached); } })
       .catch((error) => { if (valid) setError(String(error)); });
@@ -43,9 +48,15 @@ export const AIAnalysisReview = ({ subject, standalone = false, onClose, closeRe
   useEffect(() => {
     if (!allowed && request.current) void window.agentEnv.cancelAIAnalysis(request.current);
   }, [allowed]);
+  useEffect(() => {
+    if (revealRequested.current && !busy && (error || needsConfig || record || stopped)) {
+      feedbackRef.current?.scrollIntoView?.({ block: "start", behavior: "instant" });
+      revealRequested.current = false;
+    }
+  }, [busy, error, needsConfig, record, stopped]);
   const prepare = async () => {
     if (!allowed || busy) return;
-    setBusy("loading"); setError("");
+    setBusy("loading"); setError(""); setStopped(false); cancelled.current = false; revealRequested.current = true;
     try {
       const value = await window.agentEnv.prepareAIAnalysis(subject, locale);
       const config = await window.agentEnv.readSkillSummaryConfig();
@@ -60,7 +71,10 @@ export const AIAnalysisReview = ({ subject, standalone = false, onClose, closeRe
           if (active.current && currentIdentity.current === identity) setRecord(generated);
         } finally { if (request.current === id) request.current = ""; }
       }
-    } catch (error) { if (active.current && currentIdentity.current === identity) setError(String(error)); }
+    } catch (error) { if (active.current && currentIdentity.current === identity) {
+      if (cancelled.current) setStopped(true);
+      else setError(String(error));
+    } }
     finally { if (active.current && currentIdentity.current === identity) setBusy(undefined); }
   };
   const action = subject.kind === "comparison" ? "Analyze results" : subject.kind === "duplicates" ? "Analyze differences" : subject.kind === "worktree" ? "Analyze retention" : "Analyze Profile";
@@ -71,9 +85,10 @@ export const AIAnalysisReview = ({ subject, standalone = false, onClose, closeRe
   const findings = [...(record?.findings ?? [])].sort((a, b) => priority[a.category] - priority[b.category])
     .map((finding) => ({ ...finding, risk: finding.category === "risk", note: finding.evidenceStatus === "unverified" ? t("Evidence could not be verified") : undefined }));
   const { visible: visibleFindings, remaining: remainingFindings } = splitAIReviewFindings(findings);
+  const configurationError = /AI service returned HTTP (401|403|404)\b|Configure the AI service in Settings first/.test(error);
   if (!allowed && !record && !standalone) return null;
   const actions = <>
-    {busy === "generating" ? <Button onClick={() => void window.agentEnv.cancelAIAnalysis(request.current)}>{t("Stop")}</Button> : null}
+    {busy === "generating" ? <Button onClick={() => { cancelled.current = true; void window.agentEnv.cancelAIAnalysis(request.current); }}>{t("Stop")}</Button> : null}
     {allowed && record ? <IconButton label={t("Regenerate")} busy={Boolean(busy)} disabled={configuring} onClick={() => void prepare()}><RotateCw size={15} /></IconButton>
       : allowed ? <Button variant={standalone && !record ? "primary" : "secondary"} icon={record ? <RotateCw size={15} /> : <Sparkles size={15} />} busy={Boolean(busy)} disabled={Boolean(busy || configuring)} onClick={() => void prepare()}>{t(record ? "Regenerate" : action)}</Button> : null}
   </>;
@@ -81,10 +96,11 @@ export const AIAnalysisReview = ({ subject, standalone = false, onClose, closeRe
   const content = <>
     {standalone && !record && !error && !configuring && !needsConfig ? <EmptyState icon={<Sparkles size={20} />} title={t("Review before applying")}
       description={t("Find conflicting instructions, resource gaps and practical improvements. Your Profile will not be changed.")} /> : null}
-    {error ? <Notice tone="warning" role="alert" actions={allowed && !configuring ? <Button onClick={() => setConfiguring(true)}>{t("Configure AI service")}</Button> : undefined}><DiagnosticMessage message={error} /></Notice> : null}
+    <div ref={feedbackRef} />
+    {stopped ? <Notice role="status">{t("Cancelled")}</Notice> : null}
+    {error ? <Notice tone="warning" role="alert" actions={allowed && !configuring ? <Button disabled={Boolean(busy)} onClick={() => configurationError ? setConfiguring(true) : void prepare()}>{t(configurationError ? "Configure AI service" : "Retry")}</Button> : undefined}><DiagnosticMessage message={error} /></Notice> : null}
     {preview?.cacheDamaged ? <Notice tone="warning">{t("Saved analysis is unreadable. Generate a new analysis; the old file will be preserved for diagnostics.")}</Notice> : null}
-    {needsConfig && !configuring ? <Notice actions={<Button onClick={() => setConfiguring(true)}>{t("Configure AI service")}</Button>}>{t("Configure the AI service before generating. No request has been sent.")}</Notice> : null}
-    {configuring ? <AIServiceForm onCancel={() => setConfiguring(false)} onSaved={() => { setConfiguring(false); setNeedsConfig(false); setError(""); }} /> : null}
+    {needsConfig || configuring ? <AIServiceSetup editing={configuring} onEditingChange={setConfiguring} onSaved={() => { setNeedsConfig(false); setError(""); }} /> : null}
     {record ? <div className="skill-summary-content">
       {(!preview || record.key !== preview.key) ? <Notice tone="warning">{t("Inputs changed. This is the previous analysis; regenerate to analyze the current content.")}</Notice> : null}
       {standalone ? <AIReviewHeading title={t("AI analysis")} actions={actions} /> : null}

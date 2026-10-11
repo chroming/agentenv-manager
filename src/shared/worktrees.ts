@@ -25,6 +25,7 @@ export interface WorktreeEntry {
   exists: boolean;
   state: WorktreeReviewState;
   reasons: string[];
+  reasonDetails?: Array<{ message: string; values?: Record<string, string | number>; detail?: string }>;
   changes: string[];
   ignored: string[];
   submodules: boolean;
