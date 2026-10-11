@@ -38,6 +38,18 @@ const planWithChanges = (count: number): SkillUpdatePlan => ({
 });
 
 describe("SkillUpdateDialog", () => {
+  it("separates Profile references, immediate linked changes and optional copy updates", () => {
+    const plan = planWithChanges(1);
+    plan.impact = {
+      profileNames: ["Development", "Review"],
+      linkedInstallCount: 1, linkedTargetIds: ["codex"],
+      copiedInstallCount: 2, copiedTargetIds: ["claude-code", "opencode"]
+    };
+    render(<SkillUpdateDialog plan={plan} onClose={vi.fn()} onConfirm={vi.fn()} />);
+    expect(screen.getByText(/Used by 2 Profiles.*1 linked Agent installs change immediately.*2 copied Agent installs will need Apply/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("switch", { name: "Also update Agent copies" }));
+    expect(screen.getByText(/Used by 2 Profiles.*1 linked Agent installs change immediately.*2 copied Agent installs update with this Library change/)).toBeInTheDocument();
+  });
   it("keeps Agent copy updates off by default and passes an explicit opt-in", () => {
     const onConfirm = vi.fn().mockResolvedValue({ status: "completed" as const });
     const plan = planWithChanges(1);

@@ -1,6 +1,5 @@
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
-import { createReadStream } from "node:fs";
 import { open, readdir, realpath, stat } from "node:fs/promises";
 import { basename, isAbsolute, join, relative } from "node:path";
 import { createInterface } from "node:readline";
@@ -11,6 +10,7 @@ import type {
   ConversationRole
 } from "../../shared/types";
 import type { AgentConversationCandidate } from "../targets/types";
+import { historyTextStream, retryHistoryRead } from "./historyFileReader";
 
 const execFileAsync = promisify(execFile);
 
@@ -172,8 +172,8 @@ export const candidateForFile = async (
     runtimeHome?: string;
   }
 ): Promise<AgentConversationCandidate> => {
-  const info = await stat(path);
-  const handle = await open(path, "r");
+  const handle = await retryHistoryRead(() => open(path, "r"));
+  const info = await handle.stat().catch(async (error) => { await handle.close(); throw error; });
   const sampleHash = async (position: number, length: number) => {
     if (length === 0) return createHash("sha256").digest("hex");
     const bytes = Buffer.allocUnsafe(length);
@@ -211,7 +211,7 @@ export const candidateForFile = async (
 };
 
 export const sourceIdFromFilename = (path: string) => {
-  const filename = basename(path).replace(/\.(?:jsonl|json|db)$/i, "");
+  const filename = basename(path).replace(/\.zst$/i, "").replace(/\.(?:jsonl|json|db)$/i, "");
   const uuid = filename.match(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/i);
   return uuid?.[0] ?? filename;
 };
@@ -221,21 +221,21 @@ export const forEachJsonLine = async (
   visitor: (record: unknown, index: number) => void,
   options: { start?: number } = {}
 ) => {
-  const input = createReadStream(path, {
-    encoding: "utf8",
-    start: options.start ?? 0
-  });
+  const input = historyTextStream(path, options.start ?? 0);
   const lines = createInterface({ input, crlfDelay: Infinity });
   let index = 0;
   try {
     for await (const line of lines) {
       const current = index++;
       if (!line.trim()) continue;
+      let record: unknown;
       try {
-        visitor(JSON.parse(line), current);
+        record = JSON.parse(line);
       } catch {
         // A malformed record does not invalidate the rest of an append-only transcript.
+        continue;
       }
+      visitor(record, current);
     }
   } finally {
     lines.close();

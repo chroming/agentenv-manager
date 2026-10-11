@@ -47,7 +47,7 @@ const MAX_CONTEXT_CHARACTERS = 120_000;
 const PREVIEW_TTL_MS = 10 * 60 * 1000;
 const HANDOFF_TTL_MS = 24 * 60 * 60 * 1000;
 // Increment when enabled Agent discovery roots or metadata change.
-const CONVERSATION_DISCOVERY_VERSION = "6";
+const CONVERSATION_DISCOVERY_VERSION = "7";
 
 interface PendingContinuation {
   preview: ConversationContinuationPreview;

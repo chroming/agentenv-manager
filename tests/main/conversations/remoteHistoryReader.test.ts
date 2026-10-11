@@ -4,6 +4,7 @@ import { appendFile, mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/prom
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { zstdCompressSync } from "node:zlib";
 import { afterEach, expect, it, vi } from "vitest";
 import { remoteHistoryScript, remoteHistoryRequest } from "../../../src/main/targets/conversations/remoteHistoryReader";
 import type { SshTransport } from "../../../src/main/remoteDevices/systemSshTransport";
@@ -25,6 +26,24 @@ const request = async (input: Record<string, unknown>) => {
   const {stdout} = await promisify(execFile)("python3",["-c",remoteHistoryScript,JSON.stringify(input)]);
   return JSON.parse(stdout);
 };
+it("discovers compressed Codex archives and decodes them locally without remote dependencies", async () => {
+  root = await mkdtemp(join(tmpdir(), "aem-remote-zstd-"));
+  await mkdir(join(root, "archived_sessions"));
+  const sid = "11111111-1111-4111-8111-111111111111";
+  const path = join(root, "archived_sessions", `rollout-${sid}.jsonl.zst`);
+  const content = '{"type":"session_meta","payload":{"id":"fixture"}}\n';
+  await writeFile(path, zstdCompressSync(content));
+  await writeFile(join(root, "session_index.jsonl"), JSON.stringify({ id: sid, thread_name: "Native title" }));
+  const source = { id: "s", deviceId: "remote", agentId: "codex", root, kind: "default" as const };
+  const transport = processTransport();
+  const device = { id: "remote", host: "fixture.invalid" } as RemoteDevice;
+  const signal = new AbortController().signal;
+  const inventory = await remoteHistoryRequest<{ records: any[] }>(transport, device, source, "scan", signal);
+  expect(inventory.records).toHaveLength(1);
+  expect(inventory.records[0].title).toBe("Native title");
+  const result = await remoteHistoryRequest<{ content: string }>(transport, device, source, "read", signal, inventory.records[0]);
+  expect(result.content).toBe(content);
+});
 it("includes only known Trae legacy history and keeps directory selections scoped", async () => {
   root = await mkdtemp(join(tmpdir(), "aem-trae-remote-"));
   const runtime = join(root, "cli");

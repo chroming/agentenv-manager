@@ -1,6 +1,7 @@
 import { chmod, mkdir, mkdtemp, readFile, rm, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, delimiter } from "node:path";
+import { zstdCompressSync } from "node:zlib";
 import electronPath from "electron";
 import { _electron as electron, type ElectronApplication } from "playwright-core";
 import { afterEach, expect, it } from "vitest";
@@ -12,6 +13,39 @@ let app: ElectronApplication | undefined;
 let root = "";
 afterEach(async () => { await app?.close().catch(() => undefined); if (root) await rm(root,{recursive:true,force:true}); });
 
+it("indexes WorkBuddy text histories only after consent and preserves original files", async () => {
+  root = await mkdtemp(join(tmpdir(), "aem-workbuddy-desktop-"));
+  const home = join(root, "home"), data = join(root, "data"), bin = join(root, "bin");
+  const folder = join(home, ".workbuddy/projects/example");
+  await mkdir(folder, { recursive: true });
+  await mkdir(data, { recursive: true });
+  await mkdir(bin, { recursive: true });
+  const path = join(folder, "session.jsonl");
+  const text = [
+    { type: "custom-title", customTitle: "WorkBuddy review fixture" },
+    { type: "message", role: "user", cwd: "/work/example", content: [{ type: "input_text", text: "Searchable WorkBuddy needle" }], timestamp: 1780000000000 }
+  ].map((record) => JSON.stringify(record)).join("\n");
+  await writeFile(path, text);
+  await writeFile(join(data, "settings.json"), JSON.stringify({ locale: "en", enabledTargetIds: [], telemetryEnabled: false, skillAutoCheckEnabled: false, agentDiscoveryVersion: 1, agentDiscoveryReviewedIds: [] }));
+  app = await electron.launch({ executablePath: electronPath as unknown as string, args: [`--user-data-dir=${join(root, "electron")}`, join(process.cwd(), "out/main/main.js")], env: { ...process.env, AGENTENV_AUTOMATION: "1", AGENTENV_HOME: home, AGENTENV_DATA_ROOT: data, AGENTENV_CACHE_ROOT: join(root, "cache"), AGENTENV_AUTOMATION_TARGET_PATH: bin } });
+  const page = await app.firstWindow();
+  await expect.poll(() => page.evaluate(() => window.agentEnv.readStartupStatus())).toEqual({ state: "ready" });
+  expect(await page.evaluate(() => window.agentEnv.searchConversations({ query: "WorkBuddy needle" }))).toEqual([]);
+  await page.evaluate(async () => {
+    const status = await window.agentEnv.conversationHistoryStatus();
+    const { deviceName, agentName, ...source } = status.availableSources.find((source) => source.agentId === "workbuddy" && source.deviceId === "local")!;
+    await window.agentEnv.configureConversationHistory({ version: 1, enabled: true, paused: false, sources: [source] });
+    await window.agentEnv.refreshConversations();
+  });
+  await expect.poll(async () => (await page.evaluate(() => window.agentEnv.listConversations({ query: "WorkBuddy needle" }))).total).toBe(1);
+  await page.reload();
+  await page.getByRole("complementary", { name: "Global navigation" }).getByRole("button", { name: "Conversations", exact: true }).click();
+  await page.getByRole("option", { name: /WorkBuddy review fixture/ }).click({ timeout: 5000 });
+  await page.getByText("/work/example", { exact: true }).waitFor();
+  expect(await page.getByRole("button", { name: "Open original", exact: true }).count()).toBe(0);
+  expect(await readFile(path, "utf8")).toBe(text);
+}, 30000);
+
 it.skipIf(process.platform === "win32")("requires opt-in, searches local and SSH sources, and clears cached results without touching histories", async () => {
   root = await mkdtemp(join(tmpdir(),"aem-history-desktop-"));
   const home = join(root,"home"), remoteHome = join(root,"remote"), data = join(root,"data"), bin = join(root,"bin");
@@ -19,16 +53,17 @@ it.skipIf(process.platform === "win32")("requires opt-in, searches local and SSH
   const sourceFiles: string[] = [];
   for (const [folder,label] of [[home,"Local"],[remoteHome,"Remote"]]) {
     const dir = join(folder!,".codex/sessions/2026/09/12"); await mkdir(dir,{recursive:true});
-    const file = join(dir,"rollout-same-session.jsonl"); sourceFiles.push(file);
-    await writeFile(file,[
+    const file = join(dir,label === "Local" ? "rollout-same-session.jsonl.zst" : "rollout-same-session.jsonl"); sourceFiles.push(file);
+    const content = [
       {type:"session_meta",payload:{id:"same-session",cwd:`/work/${label!.toLowerCase()}/example`}},
       {type:"response_item",payload:{type:"message",role:"user",content:[{type:"input_text",text:`${label} searchable history fixture`}]}},
       {type:"response_item",payload:{type:"message",role:"assistant",content:[{type:"output_text",text:"The needle appears at the end of this conversation."}]}}
-    ].map((v)=>JSON.stringify(v)).join("\n"));
+    ].map((v)=>JSON.stringify(v)).join("\n");
+    await writeFile(file, label === "Local" ? zstdCompressSync(content) : content);
     const modifiedAt = new Date(label === "Remote" ? "2026-09-01T10:00:00Z" : "2026-09-01T09:00:00Z");
     await utimes(file, modifiedAt, modifiedAt);
   }
-  const originals = await Promise.all(sourceFiles.map((p)=>readFile(p,"utf8")));
+  const originals = await Promise.all(sourceFiles.map((p)=>readFile(p)));
   const ssh = join(bin,"ssh");
   const scanGate = join(root, "scan-pending");
   await writeFile(scanGate, "pending");
@@ -119,7 +154,7 @@ it.skipIf(process.platform === "win32")("requires opt-in, searches local and SSH
   await dialog.getByRole("button",{name:"Save",exact:true}).click();
   await page.getByRole("button",{name:"Choose devices",exact:true}).waitFor();
   expect(await page.evaluate(()=>window.agentEnv.searchConversations({query:"needle"}))).toEqual([]);
-  expect(await Promise.all(sourceFiles.map((p)=>readFile(p,"utf8")))).toEqual(originals);
+  expect(await Promise.all(sourceFiles.map((p)=>readFile(p)))).toEqual(originals);
   for (const [locale,navLabel,sourcesLabel,searchLabel] of [["zh_CN","对话","选择设备","搜索对话"],["zh_TW","對話","選擇裝置","搜尋對話"]] as const) {
   await page.evaluate((locale)=>window.agentEnv.updateSettings({locale}),locale);
   await page.reload();

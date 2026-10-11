@@ -3,6 +3,7 @@ import type { RemoteDevice } from "../../../shared/types";
 import { z } from "zod";
 import type { HistorySource } from "../../../shared/conversationSearch";
 import { shellQuote, type SshTransport } from "../../remoteDevices/systemSshTransport";
+import { decodeHistoryBytes } from "../../conversations/historyFileReader";
 
 // Runs via stdin without installing a helper or writing remote files. SQLite reads
 // use one read transaction, including committed WAL content, never an immutable copy.
@@ -105,10 +106,10 @@ def scan():
             for name in sorted(files):
                 path = os.path.join(folder, name)
                 if not contained(path):
-                    if name.endswith('.jsonl'): issues.append('History link is outside the selected scope: '+path)
+                    if name.endswith('.jsonl') or (agent == 'codex' and name.endswith('.jsonl.zst')): issues.append('History link is outside the selected scope: '+path)
                     continue
                 try:
-                    if name.endswith('.jsonl'):
+                    if name.endswith('.jsonl') or (agent == 'codex' and name.endswith('.jsonl.zst')):
                         if agent.startswith('antigravity') and name != 'transcript.jsonl': continue
                         if name in ['history.jsonl','session_index.jsonl']: continue
                         actual = os.path.realpath(path)
@@ -117,7 +118,7 @@ def scan():
                         s = os.stat(path)
                         record = dict(path=path, version=stamp(path), size=s.st_size, updatedAt=iso(s.st_mtime*1000))
                         if agent == 'codex':
-                            sid = name[-42:-6]
+                            sid = (name[:-4] if name.endswith('.zst') else name)[-42:-6]
                             if titles.get(sid): record['title'] = titles[sid]
                         if agent.startswith('antigravity'):
                             sid = os.path.basename(os.path.dirname(os.path.dirname(os.path.dirname(path))))
@@ -267,7 +268,7 @@ export const remoteHistoryRequest = async <T>(transport: SshTransport, device: R
             digest.update(chunk);
             if (page.eof) {
               if (page.digest && digest.digest("hex") !== page.digest) throw new Error("History changed while reading; refresh again");
-              return { content: Buffer.concat(chunks).toString("utf8") } as T;
+              return { content: await decodeHistoryBytes(record?.path ?? "", Buffer.concat(chunks)) } as T;
             }
             identity = page.identity;
             snapshotSize = page.snapshotSize;

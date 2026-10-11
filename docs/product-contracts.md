@@ -104,7 +104,7 @@ Agent compatibility is capability-based, not one binary supported/unsupported cl
 - WorkBuddy settings, Skill enablement overrides, databases and journals, Connectors and credentials, Memory, plugins, and caches remain WorkBuddy-owned. Profile Apply MUST NOT modify them or use them as management authority. The read-only activation evidence used for an Agent-controlled Capture summary does not grant ownership.
 - WorkBuddy has no AgentEnv-managed Instructions or MCP capability. The UI MUST omit or mark those resource categories unavailable rather than presenting synthetic files or disabled controls as if they were configurable.
 - WorkBuddy supports Profile `manual` Skill invocation through a transformed managed copy using the documented `disable-model-invocation` and `user-invocable` frontmatter. Library bytes remain unchanged and the deployment MUST NOT be a live link.
-- WorkBuddy Conversation history, Workspace launch, SSH runtime, native resume, and Profile Compare remain unsupported until each has a verified public or locally stable contract and dedicated evidence. Application discovery alone MUST NOT imply these capabilities.
+- WorkBuddy Conversation history is partial: local `projects/**/*.jsonl` text histories and adjacent workspace metadata are readable after history-source consent. Database-only versions are explicitly reported as unsupported, never as a complete empty inventory. Workspace launch, SSH runtime, native resume, and Profile Compare remain unsupported. Application discovery alone MUST NOT imply these capabilities.
 
 ## 3. Normative Language And Implementation Status
 

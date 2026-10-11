@@ -1,9 +1,10 @@
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 import type { ConversationDetail } from "../../../shared/types";
 import type { AgentConversationCandidate } from "../types";
 import { createConversationDetail, visibleMessage } from "../../conversations/adapterUtils";
 import { parseRolloutConversation } from "./rolloutConversations";
 import { parseClaudeConversation } from "./claudeConversations";
+import { parseWorkBuddyConversation } from "./workbuddyConversations";
 import { parsePiConversation } from "./piConversations";
 import { opencodeDataDirs, parseOpenCodeExportMessages } from "./opencodeConversations";
 import { userRequestText } from "./antigravityConversations";
@@ -21,6 +22,7 @@ export const parseHistoryText = (agentId: string, name: string, candidate: Agent
   let detail: ConversationDetail;
   if (agentId === "codex" || agentId === "trae-cli") detail = parseRolloutConversation({ id: agentId, name }, candidate, content);
   else if (agentId === "claude-code") detail = parseClaudeConversation(candidate, content);
+  else if (agentId === "workbuddy") detail = parseWorkBuddyConversation(candidate, content);
   else if (agentId === "pi") detail = parsePiConversation(candidate, content, true);
   else if (agentId === "opencode") detail = createConversationDetail({ id: agentId, name }, candidate, parseOpenCodeExportMessages(JSON.parse(content)));
   else {
@@ -54,7 +56,9 @@ export const parseHistoryText = (agentId: string, name: string, candidate: Agent
 };
 
 export const historyReaderPolicy = (agentId: string) => ({
-  warnOnPartial: agentId === "trae-cli",
+  compressedJsonl: agentId === "codex",
+  warnOnPartial: agentId === "trae-cli" || agentId === "workbuddy",
+  textSnapshot: ["codex", "claude-code", "pi", "workbuddy"].includes(agentId),
   explicitRoots: agentId === "opencode" || agentId === "trae-cli" || agentId.startsWith("antigravity"),
   directoryJsonl: agentId !== "opencode" && !agentId.startsWith("antigravity"),
   allBranches: agentId === "pi"
@@ -77,6 +81,11 @@ export const additionalHistoryDirectoriesFor = (agentId: string, paths: {configD
 
 export const historyRootsFor = (agentId: string, homeDir: string, paths: {configDir: string; runtimeDir?: string}, local: boolean, environment: NodeJS.ProcessEnv = process.env): string[] => {
   if (!local) return defaultRemoteRoots[agentId] ? [defaultRemoteRoots[agentId]] : [];
+  if (agentId === "workbuddy") {
+    const value = environment.WORKBUDDY_CONFIG_DIR?.trim();
+    const extra = value?.startsWith("~/") ? join(homeDir, value.slice(2)) : value;
+    return [...new Set([paths.configDir, ...(extra && isAbsolute(extra) ? [extra] : [])])];
+  }
   if (agentId === "opencode") return opencodeDataDirs(homeDir, process.platform, environment);
   if (agentId === "trae-cli") return [...new Set([paths.runtimeDir, join(paths.configDir,"cli")].filter((s):s is string=>Boolean(s)))];
   if (agentId.startsWith("antigravity")) return [join(paths.configDir,"..",agentId === "antigravity-app" ? "antigravity" : "antigravity-cli")];

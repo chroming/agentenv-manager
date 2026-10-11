@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { AgentConversationCapability } from "../types";
+import { isHistoryTextFile } from "../../conversations/historyFileReader";
 import {
   candidateForFile,
   forEachJsonLine,
@@ -104,7 +105,7 @@ export const createCodexConversationCapability = (): AgentConversationCapability
         }
         for (const path of await listFilesRecursively(
           root.path,
-          (file) => file.endsWith(".jsonl"),
+          isHistoryTextFile,
           { onIssue: (message) => failures.push(message),
             shouldEnterDirectory: (_path, name) => !name.endsWith(".artifacts") && name !== "background-tasks" }
         )) {
@@ -164,8 +165,15 @@ export const createCodexConversationCapability = (): AgentConversationCapability
             cwd: conversation.workspacePath
           }
         : undefined,
-    move: ({ candidate, destinationPath }) =>
-      rewriteConversationJsonLines(candidate.source.locator, (record) => {
+    checkMove: async ({ candidate }) => {
+      if (candidate.source.locator.endsWith(".zst")) {
+        throw new Error("Compressed Codex history is read-only. Open the original conversation in Codex instead.");
+      }
+      return {};
+    },
+    move: ({ candidate, destinationPath }) => {
+      if (candidate.source.locator.endsWith(".zst")) throw new Error("Compressed Codex history is read-only");
+      return rewriteConversationJsonLines(candidate.source.locator, (record) => {
         if (record.type === "session_meta") {
           return setNestedString(record, ["payload", "cwd"], destinationPath);
         }
@@ -173,6 +181,7 @@ export const createCodexConversationCapability = (): AgentConversationCapability
           return setNestedString(record, ["payload", "cwd"], destinationPath);
         }
         return false;
-      })
+      });
+    }
   };
 };

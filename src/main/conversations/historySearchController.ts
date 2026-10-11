@@ -13,11 +13,24 @@ import type { AgentConversationCandidate } from "../targets/types";
 import type { ConversationIndexStore } from "./conversationIndexStore";
 import { writeAtomic } from "../fileUtils";
 import { candidateForFile, createConversationDetail, listFilesRecursively, sourceByteSize, sourceIdFromFilename } from "./adapterUtils";
+import { isHistoryTextFile, readHistoryText } from "./historyFileReader";
+import { collapseCompressedHistoryCopies } from "./compressedHistoryCopies";
 import { remoteHistoryRequest, type RemoteHistoryRecord } from "../targets/conversations/remoteHistoryReader";
 import { additionalHistoryDirectoriesFor, historyFilePath, historyReaderPolicy, historyRootsFor, historyScopeRoots, parseHistoryText } from "../targets/conversations/historySourceAdapter";
 
 const emptyConfig = (): HistorySearchConfig => ({ version: 1, enabled: false, paused: false, sources: [] });
 const keyFor = (source: Omit<HistorySource, "id">) => createHash("sha256").update(JSON.stringify(source)).digest("hex").slice(0, 24);
+
+const verifyLocalHistoryPath = async (source: HistorySource, candidate: AgentConversationCandidate) => {
+  const actual = await realpath(candidate.source.locator);
+  for (const root of historyScopeRoots(source.agentId, source.root, source.kind)) {
+    const approved = await realpath(root).catch(() => undefined);
+    if (!approved) continue;
+    const path = relative(approved, actual);
+    if (!isAbsolute(path) && path !== ".." && !path.startsWith("../") && !path.startsWith("..\\")) return;
+  }
+  throw new Error("History link changed or leaves the approved source. Add its destination in History sources.");
+};
 
 export const createHistorySearchController = async (options: {
   paths: AgentEnvPaths; registry: TargetRegistry; settings: SettingsStore;
@@ -49,6 +62,7 @@ export const createHistorySearchController = async (options: {
   let running: Promise<ConversationRefreshResult> | undefined;
   let disposed = false;
   let configuring = false;
+  const verifiedCompressionCopies = new Map<string, string | undefined>();
   const devices = () => options.devices?.list() ?? Promise.resolve([] as RemoteDevice[]);
   const allowedIds = () => config.enabled && !needsConsent ? config.sources.map((s) => s.id) : [];
   const available = async () => {
@@ -166,7 +180,7 @@ export const createHistorySearchController = async (options: {
             }
           } else if (source.kind === "directory" && reader.directoryJsonl) {
             if (!(await stat(source.root)).isDirectory()) throw new Error("History source must be a directory. Check its path in History sources.");
-            for (const path of await listFilesRecursively(source.root, (p) => p.endsWith(".jsonl"), { onIssue: (message) => coverage.issues.push(message) })) {
+            for (const path of await listFilesRecursively(source.root, (p) => p.endsWith(".jsonl") || (reader.compressedJsonl && isHistoryTextFile(p)), { onIssue: (message) => coverage.issues.push(message) })) {
               try { candidates.push(await candidateForFile(path, { recordId: sourceIdFromFilename(path), detailState: "full" })); }
               catch (error) { coverage.issues.push(`${path}: ${String(error)}`); }
             }
@@ -176,6 +190,23 @@ export const createHistorySearchController = async (options: {
             candidates = discovery.candidates;
             coverage.issues.push(...discovery.failures ?? []);
             if (!discovery.complete && !coverage.issues.length && !(source.kind === "default" && candidates.length === 0 && !options.index.hasSourceRecords(source.id))) coverage.issues.push("No complete history inventory was found at this location. Check the path or add another history directory.");
+          }
+          if (reader.compressedJsonl) {
+            candidates = await collapseCompressedHistoryCopies(candidates, async (candidate) => {
+              current();
+              if (source.deviceId !== "local") {
+                const response = await remoteHistoryRequest<{content: string}>(options.transport!, device!, source, "read", signal, remoteRecords.get(candidate.recordId));
+                return response.content;
+              }
+              await verifyLocalHistoryPath(source, candidate);
+              const text = await readHistoryText(candidate.source.locator);
+              await verifyLocalHistoryPath(source, candidate);
+              const after = await candidateForFile(candidate.source.locator, { recordId: candidate.recordId, detailState: candidate.detailState });
+              if (candidate.source.version !== after.source.version && !candidate.source.version.startsWith(after.source.version + ":")) {
+                throw new Error("History changed while comparing copies");
+              }
+              return text;
+            }, (message) => coverage.issues.push(message), verifiedCompressionCopies, source.id);
           }
           coverage.discovered = candidates.length;
           const seen = new Set<string>();
@@ -190,22 +221,8 @@ export const createHistorySearchController = async (options: {
               if (options.index.sourceVersion(id) === candidate.source.version) { result.unchanged++; coverage.indexed++; coverage.issues.push(...previousRecordIssues[id] ?? []); if (options.index.record(id).summary.detailState === "summary-only") coverage.summaryOnly++; continue; }
               let detail: ConversationDetail;
               let content: string | undefined;
-              const localJsonl = source.deviceId === "local" && candidate.source.locator.endsWith(".jsonl") && sourceByteSize(candidate.source.version) !== undefined;
-              const verifyLocalPath = async () => {
-                const actual = await realpath(candidate.source.locator);
-                const roots = historyScopeRoots(source.agentId, source.root, source.kind);
-                let contained = false;
-                for (const root of roots) {
-                  const approved = await realpath(root).catch(() => undefined);
-                  if (!approved) continue;
-                  const path = relative(approved, actual);
-                  if (!isAbsolute(path) && path !== ".." && !path.startsWith(`..${process.platform === "win32" ? "\\" : "/"}`)) contained = true;
-                }
-                if (!contained) {
-                  throw new Error("History link changed or leaves the approved source. Add its destination in History sources.");
-                }
-              };
-              if (localJsonl) await verifyLocalPath();
+              const localJsonl = source.deviceId === "local" && isHistoryTextFile(candidate.source.locator) && sourceByteSize(candidate.source.version) !== undefined;
+              if (localJsonl) await verifyLocalHistoryPath(source, candidate);
               if (source.deviceId !== "local") {
                 if (candidate.detailState === "summary-only") detail = createConversationDetail({id: source.agentId, name: adapter.descriptor.name}, candidate, [], {title: candidate.title, snippet: candidate.snippet});
                 else {
@@ -213,14 +230,14 @@ export const createHistorySearchController = async (options: {
                   content = response.content;
                   detail = parseHistoryText(source.agentId, adapter.descriptor.name, candidate, content);
                 }
-              } else if (source.kind === "directory" && reader.directoryJsonl) {
-                content = await readFile(candidate.source.locator, "utf8");
+              } else if ((source.kind === "directory" && reader.directoryJsonl) || (localJsonl && reader.textSnapshot)) {
+                content = await readHistoryText(candidate.source.locator);
                 detail = parseHistoryText(source.agentId, adapter.descriptor.name, candidate, content);
               } else {
                 detail = await adapter.conversations!.read(context, candidate);
                 if (candidate.source.locator.endsWith(".jsonl")) {
                   try {
-                    content = await readFile(candidate.source.locator, "utf8");
+                    content = await readHistoryText(candidate.source.locator);
                     const parsed = parseHistoryText(source.agentId, adapter.descriptor.name, candidate, content);
                     if (reader.allBranches) detail = parsed;
                     else detail.toolText = parsed.toolText;
@@ -232,10 +249,16 @@ export const createHistorySearchController = async (options: {
               if (content) {
                 const lines = content.split(/\r?\n/).filter((l) => l.trim());
                 const bad = lines.filter((l) => { try { JSON.parse(l); return false; } catch { return true; } }).length;
-                if (bad) coverage.issues.push(`${candidate.source.locator}: ${bad} unreadable records; readable messages were indexed.`);
+                if (bad) {
+                  const previous = (() => { try { return options.index.record(id); } catch { return undefined; } })();
+                  if (detail.messageCount === 0 || (previous && previous.summary.messageCount > detail.messageCount)) {
+                    throw new Error("History contains unreadable records. Cached messages are kept; refresh after the original history is readable.");
+                  }
+                  coverage.issues.push(`${candidate.source.locator}: ${bad} unreadable records; readable messages were indexed.`);
+                }
               }
               if (localJsonl) {
-                await verifyLocalPath();
+                await verifyLocalHistoryPath(source, candidate);
                 const after = await candidateForFile(candidate.source.locator, {recordId:candidate.recordId,detailState:candidate.detailState});
                 if (candidate.source.version !== after.source.version && !candidate.source.version.startsWith(after.source.version + ":")) {
                   throw new Error("History changed while reading. Cached text is kept; it will be retried on the next refresh.");

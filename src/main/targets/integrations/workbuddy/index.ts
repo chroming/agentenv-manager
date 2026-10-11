@@ -13,6 +13,7 @@ import {
   discoverSkillDirectories
 } from "../../shared/skillRuntime";
 import { pathExists } from "../../../fileUtils";
+import { createWorkBuddyConversationCapability } from "../../conversations/workbuddyConversations";
 
 const DEFAULT_STATE: TargetState = {
   formatVersion: 3,
@@ -154,6 +155,7 @@ export const workBuddyIntegration: AgentTargetIntegration = {
     }
   },
   skills,
+  conversations: createWorkBuddyConversationCapability(),
   profile: {
     createDefaultProfile: (id) => ({
       id,

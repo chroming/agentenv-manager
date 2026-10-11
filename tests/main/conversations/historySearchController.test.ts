@@ -7,6 +7,7 @@ import { createTargetRegistry } from "../../../src/main/targets/registry";
 import { createCodexTargetAdapter } from "../../../src/main/targets/codexTarget";
 import { createTraeCliTargetAdapter } from "../../../src/main/targets/integrations/trae-cli";
 import { DatabaseSync } from "node:sqlite";
+import { zstdCompressSync } from "node:zlib";
 import { createHistorySearchController } from "../../../src/main/conversations/historySearchController";
 import { createConversationIndexStore } from "../../../src/main/conversations/conversationIndexStore";
 import type { SettingsStore } from "../../../src/main/settingsStore";
@@ -36,14 +37,44 @@ const setup = async (transport?: SshTransport, configText?: string, trae = false
   cleanups.push(async () => index.close());
   const adapter = trae ? createTraeCliTargetAdapter() : createCodexTargetAdapter();
   const discover = vi.spyOn(adapter.conversations!,"discover");
+  const read = vi.spyOn(adapter.conversations!, "read");
   const settings = {readSettings: async () => ({ enabledTargetIds:[] })} as unknown as SettingsStore;
   const controller = await createHistorySearchController({paths, index, settings, registry:createTargetRegistry([adapter]), transport,
     devices:{list: async () => [{id:"remote",name:"Build machine",host:"example.invalid"}]} as unknown as RemoteDeviceStore});
   cleanups.push(async () => controller.dispose());
-  return {controller,index,paths,file,discover};
+  return {controller,index,paths,file,discover,read};
 };
 
 describe("explicit history search permissions", () => {
+  it("indexes compressed Codex histories, collapses matching representations and retains cached text on corruption", async () => {
+    const { controller, index, file } = await setup();
+    const compressed = `${file}.zst`;
+    await writeFile(compressed, zstdCompressSync(transcript));
+    const { deviceName, agentName, ...source } = (await controller.status()).availableSources.find((s) => s.deviceId === "local")!;
+    await controller.configure({ version: 1, enabled: true, paused: false, sources: [source] });
+    expect((await controller.refresh()).indexed).toBe(1);
+    expect(await index.search({ query: "unique history needle", historySourceIds: controller.allowedIds() })).toHaveLength(1);
+    await rm(file);
+    expect((await controller.refresh()).indexed).toBe(1);
+    expect(await index.search({ query: "unique history needle", historySourceIds: controller.allowedIds() })).toHaveLength(1);
+    await writeFile(compressed, "unfinished compression");
+    expect((await controller.refresh()).failures.length).toBeGreaterThan(0);
+    expect(await index.search({ query: "unique history needle", historySourceIds: controller.allowedIds() })).toHaveLength(1);
+    expect((await controller.status()).sources[0].phase).toBe("partial");
+  });
+
+  it("parses one text snapshot instead of invoking the adapter and rereading tool text", async () => {
+    const { controller, discover, read, index, file } = await setup();
+    const { deviceName, agentName, ...source } = (await controller.status()).availableSources.find((s) => s.deviceId === "local")!;
+    await controller.configure({ version: 1, enabled: true, paused: false, sources: [source] });
+    expect((await controller.refresh()).indexed).toBe(1);
+    expect(discover).toHaveBeenCalledTimes(1);
+    expect(read).not.toHaveBeenCalled();
+    expect((await controller.refresh()).unchanged).toBe(1);
+    await writeFile(file, "corrupt transcript");
+    expect((await controller.refresh()).failures.length).toBeGreaterThan(0);
+    expect(await index.search({ query: "unique history needle", historySourceIds: controller.allowedIds() })).toHaveLength(1);
+  });
   it("indexes known Trae legacy history, reparses outdated cache and retains searchable text on partial reads", async () => {
     const {controller,index,paths} = await setup(undefined, undefined, true);
     const legacy = join(paths.homeDir, ".trae/sessions");

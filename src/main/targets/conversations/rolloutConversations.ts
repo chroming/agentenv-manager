@@ -131,6 +131,7 @@ export const readRolloutConversation = async (
   const currentSize = sourceByteSize(candidate.source.version);
   const canResume = Boolean(
     previous &&
+    !candidate.source.locator.endsWith(".zst") &&
     previousSize !== undefined &&
     currentSize !== undefined &&
     currentSize > previousSize &&

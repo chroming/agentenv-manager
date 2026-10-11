@@ -65,7 +65,7 @@
         "antigravity": "supported",
         "antigravity-app": "supported",
         "trae-cli": "supported",
-        "pi": "supported", "workbuddy": "unsupported"
+        "pi": "supported", "workbuddy": "partial"
       },
       "states": {
         "idle": "No history collection before explicit source consent.",
@@ -82,6 +82,8 @@
       "evidence": {
         "domain": [
           "tests/main/conversations/historySearchController.test.ts",
+          "tests/main/conversations/historyFileReader.test.ts",
+          "tests/main/conversations/workbuddyConversations.test.ts",
           "tests/main/conversations/remoteHistoryReader.test.ts"
         ],
         "renderer": [
