@@ -344,8 +344,7 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
                 const next = collapsed.includes(commonDir) ? collapsed.filter((key) => key !== commonDir) : [...collapsed, commonDir];
                 setCollapsed(next); onUpdateUiState?.({ worktreeCollapsedRepositories: next });
               })} actions={<ControlGroup>
-              {sort === "size-desc" ? <CatalogSortMetric kind="size" label={t("Total size")} value={worktreeGroupMetric(entries, sort)} />
-                : sort === "modified-desc" || sort === "modified-asc" ? <CatalogSortMetric kind="date" label={sort === "modified-asc" ? t("Oldest modified") : t("Last modified")} value={worktreeGroupMetric(entries, sort)} /> : null}
+              <CatalogSortMetric kind="size" label={t("Total size")} value={worktreeGroupMetric(entries, "size-desc")} />
               {!kept && eligible.length > 0 ? <IconButton label={allSelected ? t("Clear Worktree selection") : t("Select all eligible Worktrees")}
                 variant="ghost" disabled={Boolean(busy) || !eligible.length} aria-pressed={allSelected}
                 onClick={() => setSelected((current) => {
@@ -359,9 +358,11 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
               key={entryKey(entry)} density="compact" appearance="plain" icon={entry.locked ? <LockKeyhole size={16} /> : <FolderGit2 size={16} />}
               title={<TextAction title={entry.path} onClick={() => review(entry)}>{nameFromPath(entry.path)}</TextAction>}
               description={<span className="selectable" title={entry.path}>{entry.path}</span>}
-              metadata={sort === "size-desc" ? <CatalogSortMetric kind="size" label={t("Size")} value={entry.sizeBytes} detail={entry.branch ?? entry.head} />
-                : sort === "modified-desc" || sort === "modified-asc" ? <CatalogSortMetric kind="date" label={t("Last modified")} value={entry.modifiedAt} detail={entry.branch ?? entry.head} />
-                : <span title={entry.branch ?? entry.head}>{entry.branch ?? (entry.detached ? t("Detached HEAD") : entry.head?.slice(0, 8))}</span>}
+              metadata={<span className="worktree-dialog__metrics">
+                <span title={entry.branch ?? entry.head}>{entry.branch ?? (entry.detached ? t("Detached HEAD") : entry.head?.slice(0, 8))}</span>
+                <CatalogSortMetric kind="size" label={t("Size")} value={entry.sizeBytes} />
+                {sort === "modified-desc" || sort === "modified-asc" ? <CatalogSortMetric compact kind="date" label={t("Last modified")} value={entry.modifiedAt} /> : null}
+              </span>}
               state={<InteractiveStatus size="metadata" tone={entry.state === "review" ? "warning" : "neutral"} title={reasonLabels(entry).join("\n")} reviewLabel={t("Review {{name}}", { name: nameFromPath(entry.path) })} onReview={() => review(entry)}
                 label={entry.main ? t("Main") : entry.state === "candidate" ? t("Clean") : entry.state === "kept" ? t("Kept") : entry.state === "review" ? t("Needs review") : t("Unavailable")} />}
               actions={<ControlGroup>

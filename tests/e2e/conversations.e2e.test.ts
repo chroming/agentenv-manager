@@ -487,7 +487,7 @@ describe("Conversations desktop workflow", () => {
     }
     await chooseConversationSort("Most messages");
     await expect.poll(() => page.locator(".conversation-list-item__title").first().textContent()).toBe(sortedConversationTitles.longest?.title);
-    expect(await page.locator(".conversation-list-item__metric").first().textContent()).toBe(`${sortedConversationTitles.longest?.messageCount} messages`);
+    expect(await page.locator(".conversation-list-item__message-count").first().textContent()).toBe(`${sortedConversationTitles.longest?.messageCount} messages`);
     for (const viewport of [{ width: 920, height: 620 }, { width: 1180, height: 728 }, { width: 1440, height: 900 }]) {
       await page.setViewportSize(viewport);
       expect(await page.locator(".conversation-list-item__metric").evaluateAll((elements) => elements.every((element) => {

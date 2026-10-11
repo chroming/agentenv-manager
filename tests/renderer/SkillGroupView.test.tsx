@@ -41,12 +41,14 @@ describe("SkillGroupView", () => {
       onCheckUpdates={onCheckUpdates} onUpdate={onUpdate} onCreate={vi.fn()} onRemove={vi.fn()} />);
     expect(screen.getAllByRole("button", { name: /^Toggle / }).map((button) => button.getAttribute("aria-label")))
       .toEqual(["Toggle Alpha", "Toggle Zebra"]);
+    expect(screen.getByText("1 update · 2 Skills")).toBeInTheDocument();
+    expect(screen.queryByText("0 updates · 2 Skills")).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: "Sort groups: Name" }));
     fireEvent.click(screen.getByRole("menuitemradio", { name: "Updates" }));
     expect(screen.getAllByRole("button", { name: /^Toggle / }).map((button) => button.getAttribute("aria-label")))
       .toEqual(["Toggle Zebra", "Toggle Alpha"]);
     expect(screen.getByText("1 update · 2 Skills")).toBeInTheDocument();
-    expect(screen.getByText("0 updates · 2 Skills")).toBeInTheDocument();
+    expect(screen.getByText("2 Skills")).toBeInTheDocument();
     expect(onCheckUpdates).not.toHaveBeenCalled();
     expect(onUpdate).not.toHaveBeenCalled();
   });

@@ -237,6 +237,11 @@
   grid-row: 1;
 }
 
+.skill-library-panel .library-source-cell:has(> .ui-catalog-sort-metric) {
+  grid-template-columns: minmax(0, 1fr) max-content;
+  column-gap: var(--space-2);
+}
+
 .skill-library-panel .skill-tag-cell {
   grid-column: 2;
   grid-row: 1;

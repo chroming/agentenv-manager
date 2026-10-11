@@ -25,6 +25,8 @@ describe("InstructionsWorkspace", () => {
     render(<InstructionsWorkspace blocks={[block, { ...block, id: "recent", name: "Recent", updatedAt: "2026-09-01", usedByProfiles: [] }]}
       loading={false} onCreate={vi.fn()} onImport={vi.fn()} onRefresh={onRefresh} onRemove={vi.fn()} onUpdate={vi.fn()} />);
     const list = screen.getByRole("list");
+    expect(list.querySelectorAll(".ui-selectable-row__status .ui-catalog-sort-metric")).toHaveLength(2);
+    expect(list.querySelector(".ui-selectable-row__description")).toBeNull();
     fireEvent.click(within(list).getByRole("button", { name: "Review rules" }));
     fireEvent.click(screen.getByRole("button", { name: "Sort Instructions: Name" }));
     fireEvent.click(screen.getByRole("menuitemradio", { name: "Recently modified" }));

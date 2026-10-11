@@ -1155,7 +1155,8 @@ describe("ConversationWorkspace", () => {
     chooseConversationSort("Most messages");
     expect(await screen.findByText("Long conversation")).toBeInTheDocument();
     expect(document.querySelector(".conversation-list-item__size")).toHaveTextContent("24 KB");
-    expect(document.querySelector(".conversation-list-item__metric")).toHaveTextContent("2 messages");
+    expect(document.querySelector(".conversation-list-item__message-count")).toHaveTextContent("2 messages");
+    expect(document.querySelector(".conversation-list-item__metric time")).not.toBeNull();
     expect(api.listConversations).toHaveBeenLastCalledWith({
       sort: "messages-desc",
       limit: 200

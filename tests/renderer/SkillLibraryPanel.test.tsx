@@ -170,7 +170,7 @@ describe("SkillLibraryPanel", () => {
     fireEvent.click(screen.getByRole("menuitemradio", { name: "Source updated" }));
     const rows = () => [...container.querySelectorAll(".library-table-row")];
     expect(rows().map((row) => row.querySelector(".library-skill-name-button")!.textContent)).toEqual(["New", "Old", "Unknown"]);
-    const compact = (value: string) => new Date(value).toLocaleString("en-US", { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+    const compact = (value: string) => new Date(value).toLocaleString("en-US", { month: "short", day: "numeric" });
     expect(rows().map((row) => row.querySelector(".ui-catalog-sort-metric")!.textContent)).toEqual([
       compact("2026-10-04T00:00:00Z"), compact("2026-09-01T00:00:00Z"), "Unavailable"
     ]);
@@ -178,7 +178,8 @@ describe("SkillLibraryPanel", () => {
     fireEvent.click(screen.getByRole("button", { name: "Sort Skills: Source updated" }));
     fireEvent.click(screen.getByRole("menuitemradio", { name: "Profile references" }));
     expect(rows().map((row) => row.querySelector(".ui-catalog-sort-metric")!.textContent)).toEqual(["2", "0", "0"]);
-    expect(container.querySelector(".library-table__head")).toHaveTextContent("Profile references");
+    expect(container.querySelector(".library-table__head")).toHaveTextContent("Source");
+    expect(rows().every((row) => row.querySelector(".library-source-primary"))).toBe(true);
     expect(onRefreshInventory).not.toHaveBeenCalled();
   });
   it("uses refreshed Skill metadata when opening settings from an existing inspector", async () => {

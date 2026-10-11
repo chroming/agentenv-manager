@@ -286,7 +286,7 @@ export const SkillGroupView = ({
                   ? current.filter((id) => id !== group.id)
                   : [...current, group.id]
               ))}
-              summary={[...(groupView.sort === "updates" ? [t(updateCount === 1 ? "{{count}} update" : "{{count}} updates", { count: updateCount })] : []),
+              summary={[...(updateCount > 0 ? [t(updateCount === 1 ? "{{count}} update" : "{{count}} updates", { count: updateCount })] : []),
                 t("{{count}} Skills", { count: group.skillIds.length })].join(" · ")}
               title={group.name}
               toggleLabel={t("Toggle {{name}}", { name: group.name })}

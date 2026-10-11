@@ -1830,7 +1830,7 @@ export const SkillLibraryPanel = ({ model, actions, onOpenLocalSkills, onRefresh
           <div className="library-table__head">
             <span>{t("Skill")}</span>
             {availableTags.length > 0 ? <span>{t("Tags")}</span> : null}
-            <span>{skillSort === "source-updated" ? t("Source updated") : skillSort === "references" ? t("Profile references") : t("Source")}</span>
+            <span>{t("Source")}</span>
             <span className="library-column-label catalog-status-heading">{t("Status")}</span>
             <span aria-label={t("More")} />
           </div>
@@ -1986,11 +1986,7 @@ export const SkillLibraryPanel = ({ model, actions, onOpenLocalSkills, onRefresh
                 </div>
                 {availableTags.length > 0 ? <SkillTagCell skill={skill} onSelect={(tag) => updateControls({ tagFilter: tag })} /> : null}
                 <div className="library-source-cell">
-                  {skillSort !== "name" ? (
-                    skillSort === "source-updated"
-                      ? <CatalogSortMetric kind="date" label={t("Source updated")} value={skill.upstream?.updatedAt} detail={[skillSourceLabel(skill), versionLabel].filter(Boolean).join(" · ")} />
-                      : <CatalogSortMetric kind="count" label={t("Profile references")} value={usageCount} detail={usageDetail} />
-                  ) : (skill.sourceType === "github" || skill.sourceType === "git") && /^https?:\/\//i.test(skill.source ?? "") ? (
+                  {(skill.sourceType === "github" || skill.sourceType === "git") && /^https?:\/\//i.test(skill.source ?? "") ? (
                     <TextAction
                       className="library-source-primary is-interactive"
                       type="button"
@@ -2033,6 +2029,11 @@ export const SkillLibraryPanel = ({ model, actions, onOpenLocalSkills, onRefresh
                       />
                     </span>
                   )}
+                  {skillSort !== "name" ? (
+                    skillSort === "source-updated"
+                      ? <CatalogSortMetric compact kind="date" label={t("Source updated")} value={skill.upstream?.updatedAt} detail={[skillSourceLabel(skill), versionLabel].filter(Boolean).join(" · ")} />
+                      : <CatalogSortMetric kind="count" label={t("Profile references")} value={usageCount} detail={usageDetail} />
+                  ) : null}
                 </div>
                 <div className="library-status-cell">
                   {availabilityIsChanging ? (

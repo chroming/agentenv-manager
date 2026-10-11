@@ -221,7 +221,7 @@ export const InstructionsWorkspace = ({
                   icon={<ResourceIcon iconKey={block.iconKey ?? "file"} size={17} />}
                   title={block.name}
                   titleEmphasis="selected"
-                  description={view.sort === "modified" ? <CatalogSortMetric kind="date" label={t("Last modified")} value={block.updatedAt} /> : undefined}
+                  status={<CatalogSortMetric compact kind="date" label={t("Last modified")} value={block.updatedAt} />}
                   tooltip={[block.name, block.description].filter(Boolean).join("\n")}
                   onSelect={() => setSelectedId(block.id)}
                   onContextMenu={(event: ReactMouseEvent<HTMLElement>) => {

@@ -66,3 +66,19 @@
   gap: var(--space-2);
   line-height: var(--line-height-body);
 }
+.worktree-dialog__metrics {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+}
+
+.worktree-dialog__metrics > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.worktree-dialog__metrics > .ui-catalog-sort-metric {
+  flex: 0 0 auto;
+}

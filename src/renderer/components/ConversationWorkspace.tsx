@@ -1832,9 +1832,6 @@ export const ConversationWorkspace = ({
                             text={item.title}
                           />
                           <span className="conversation-list-item__metric">
-                            {sort === "messages-desc" ? (
-                              t(item.messageCount === 1 ? "1 message" : "{{count}} messages", { count: item.messageCount })
-                            ) : (
                               <time
                                 aria-label={t("Last reply {{time}}", {
                                   time: formatDetailTime(item.updatedAt)
@@ -1846,7 +1843,6 @@ export const ConversationWorkspace = ({
                               >
                                 {formatListTime(item.updatedAt)}
                               </time>
-                            )}
                           </span>
                         </span>
                         {showSearchPreview ? (
@@ -1880,17 +1876,9 @@ export const ConversationWorkspace = ({
                           {sort === "messages-desc" ? (
                             <>
                               <span aria-hidden="true">·</span>
-                              <time
-                                aria-label={t("Last reply {{time}}", {
-                                  time: formatDetailTime(item.updatedAt)
-                                })}
-                                dateTime={item.updatedAt}
-                                title={t("Last reply {{time}}", {
-                                  time: formatDetailTime(item.updatedAt)
-                                })}
-                              >
-                                {formatListTime(item.updatedAt)}
-                              </time>
+                              <span className="conversation-list-item__message-count">
+                                {t(item.messageCount === 1 ? "1 message" : "{{count}} messages", { count: item.messageCount })}
+                              </span>
                             </>
                           ) : null}
                         </small>

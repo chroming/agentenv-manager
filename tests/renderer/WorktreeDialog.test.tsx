@@ -421,6 +421,8 @@ describe("WorktreeDialog", () => {
     ] });
     render(<WorktreeWorkspace onUpdateUiState={onUpdateUiState} />);
     await screen.findByText(clean.path);
+    expect(screen.getByLabelText("Total size: 101 B")).toHaveTextContent("101 B");
+    expect(screen.getByLabelText("Size: 1 B")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("checkbox", { name: "Select Worktree for review" }));
     fireEvent.click(screen.getByRole("button", { name: "Sort Worktrees: Name" }));
     fireEvent.click(screen.getByRole("menuitemradio", { name: "Largest size" }));
@@ -460,7 +462,9 @@ describe("WorktreeDialog", () => {
     expect(screen.getByLabelText("Total size: Unavailable")).toHaveTextContent("Unavailable");
     fireEvent.click(screen.getByRole("button", { name: "Sort Worktrees: Largest size" }));
     fireEvent.click(screen.getByRole("menuitemradio", { name: "Newest modified" }));
-    expect(screen.getAllByLabelText("Last modified: Unavailable")).toHaveLength(2);
+    expect(screen.getAllByLabelText("Last modified: Unavailable")).toHaveLength(1);
+    expect(screen.getByLabelText("Total size: Unavailable")).toBeInTheDocument();
+    expect(screen.getByLabelText("Size: 0 B")).toBeInTheDocument();
     expect(api.inventoryWorktrees).toHaveBeenCalledTimes(1);
   });
 
