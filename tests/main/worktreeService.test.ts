@@ -43,6 +43,37 @@ const fixture = async () => {
 };
 
 describe("worktree inventory and cleanup", () => {
+  it("refreshes known registrations without repeating discovery or size measurement", async () => {
+    const { root, repo, service } = await fixture();
+    const measure = vi.spyOn(snapshot, "measureWorktreeTree");
+    await service.inventory();
+    const reads = measure.mock.calls.length;
+    const extra = join(root, "extra");
+    await run("git", ["-C", repo, "worktree", "add", "-b", "extra", extra]);
+    const refreshed = await service.inventory("background");
+    expect(refreshed.entries.some((entry) => entry.path === extra)).toBe(true);
+    expect(measure.mock.calls.length).toBe(reads + 1);
+    await service.inventory();
+    expect(measure.mock.calls.length).toBe(reads + 3);
+  });
+
+  it("shares concurrent scans and persists a display-only inventory across restart", async () => {
+    const { root, linked, runner, service } = await fixture();
+    const first = service.inventory();
+    expect(service.inventory()).toBe(first);
+    const inventory = await first;
+    expect(await service.cachedInventory()).toMatchObject({ inventory, fresh: true, scanning: false });
+    const restarted = createWorktreeService({ appDataRoot: join(root, "data"), homeDir: join(root, "home"),
+      projectStore: { listLocalRootPaths: async () => [] } as unknown as ProjectStore,
+      resolveRunner: async () => runner });
+    expect(await restarted.cachedInventory()).toMatchObject({ inventory: JSON.parse(JSON.stringify(inventory)), fresh: false });
+    const entry = inventory.entries.find((item) => item.path === linked)!;
+    await expect(restarted.preview(entry.commonDir, linked)).rejects.toThrow("Refresh Worktrees");
+    await service.setKeep(entry.commonDir, linked, "Keep");
+    expect(await service.cachedInventory()).toMatchObject({ fresh: false });
+    expect((await service.inventory("background")).entries.find((item) => item.path === linked)?.state).toBe("kept");
+  });
+
   it("does not infer integration from a sibling branch, tag or recovery reference", async () => {
     const { repo, linked, service } = await fixture();
     await writeFile(join(linked, "README.md"), "unfinished\n");
@@ -940,7 +971,7 @@ describe("worktree inventory and cleanup", () => {
     await expect(service.preview(previous.commonDir, linked)).rejects.toThrow("Refresh Worktrees");
   });
 
-  it("does not let a superseded scan clear the latest cleanup eligibility", async () => {
+  it("joins an in-flight scan and retains its cleanup eligibility", async () => {
     const { root, linked, runner } = await fixture();
     let releaseOld!: () => void;
     const oldRead = new Promise<void>((resolve) => { releaseOld = resolve; });
@@ -953,11 +984,12 @@ describe("worktree inventory and cleanup", () => {
       resolveRunner: async () => runner
     });
     const oldScan = service.inventory();
-    const oldOutcome = expect(oldScan).rejects.toThrow("Worktree scan cancelled");
     await vi.waitFor(() => expect(listLocalRootPaths).toHaveBeenCalledOnce());
-    const current = await service.inventory();
+    const joined = service.inventory();
+    expect(joined).toBe(oldScan);
     releaseOld();
-    await oldOutcome;
+    const current = await joined;
+    expect(listLocalRootPaths).toHaveBeenCalledOnce();
     const entry = current.entries.find((item) => item.path === linked)!;
     expect((await service.preview(entry.commonDir, linked)).entry.path).toBe(linked);
   });

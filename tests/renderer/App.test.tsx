@@ -409,6 +409,7 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
     selectComparisonWorkspace: vi.fn().mockResolvedValue(undefined),
     selectProjectFolder: vi.fn().mockResolvedValue(undefined),
     selectWorktreeScanRoot: vi.fn().mockResolvedValue(undefined),
+    cachedWorktreeInventory: vi.fn().mockResolvedValue({ fresh: false, scanning: false }),
     inventoryWorktrees: vi.fn().mockResolvedValue({ scanRoots: [], configuredRoots: [], entries: [], issues: [], incomplete: false, scannedAt: "2026-09-24T00:00:00.000Z" }),
     cancelWorktreeScan: vi.fn().mockResolvedValue(undefined),
     addWorktreeScanRoot: vi.fn().mockResolvedValue(undefined),

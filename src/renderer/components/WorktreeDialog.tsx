@@ -60,12 +60,12 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
 
   useModalDialog({ open: open && (presentation === "dialog" || view !== "list"), dialogRef, initialFocusRef: closeRef, focusKey: view, onDismiss: dismiss, dismissDisabled: Boolean(busy) && busy !== "scan" });
 
-  const refresh = async (visible = true) => {
+  const refresh = async (visible = true, background = false) => {
     const request = ++scanRequest.current;
     if (visible) { setBusy("scan"); setError(""); }
     setSelected([]);
     try {
-      const result = await window.agentEnv.inventoryWorktrees();
+      const result = await window.agentEnv.inventoryWorktrees(background ? "background" : undefined);
       if (request !== scanRequest.current) return;
       if (!("cancelled" in result)) setInventory(result);
       if (!("cancelled" in result)) return result;
@@ -79,11 +79,20 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
   };
   useEffect(() => {
     if (!open) return;
+    let active = true;
     setView("list");
-    void refresh();
+    void (async () => {
+      try {
+        const cached = await window.agentEnv.cachedWorktreeInventory();
+        if (!active) return;
+        if (cached.inventory) setInventory(cached.inventory);
+        if (cached.fresh && !cached.scanning) return;
+      } catch { /* A cache read failure must not prevent a real scan. */ }
+      if (active) await refresh(true, true);
+    })();
     return () => {
+      active = false;
       ++scanRequest.current;
-      void window.agentEnv.cancelWorktreeScan();
     };
   }, [open]);
 
@@ -137,7 +146,7 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
         entry.commonDir, entry.path, entry.keptReason ? undefined : "Kept by user"
       );
       dismissReview();
-      await refresh(false);
+      await refresh(false, true);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally {
@@ -168,7 +177,7 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
     setError("");
     try {
       await window.agentEnv.setWorktreeIntegrationRef(entry.commonDir, ref || undefined);
-      const latest = await refresh(false);
+      const latest = await refresh(false, true);
       if (latest) setDetail(latest.entries.find((value) => entryKey(value) === entryKey(entry)));
       setManualConfirm(false);
     } catch (cause) {

@@ -145,7 +145,8 @@ export interface AgentEnvApi {
   selectComparisonWorkspace(): Promise<string | undefined>;
   selectProjectFolder(): Promise<string | undefined>;
   selectWorktreeScanRoot(): Promise<string | undefined>;
-  inventoryWorktrees(): Promise<import("./worktrees").WorktreeScanResult>;
+  cachedWorktreeInventory(): Promise<{ inventory?: import("./worktrees").WorktreeInventory; fresh: boolean; scanning: boolean }>;
+  inventoryWorktrees(mode?: "background"): Promise<import("./worktrees").WorktreeScanResult>;
   cancelWorktreeScan(): Promise<void>;
   addWorktreeScanRoot(path: string): Promise<void>;
   removeWorktreeScanRoot(path: string): Promise<void>;

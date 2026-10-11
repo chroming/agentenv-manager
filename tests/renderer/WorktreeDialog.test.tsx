@@ -25,6 +25,7 @@ const inventory: WorktreeInventory = {
 
 const installApi = () => {
   const api = {
+    cachedWorktreeInventory: vi.fn().mockResolvedValue({ inventory: undefined as WorktreeInventory | undefined, fresh: false, scanning: false }),
     inventoryWorktrees: vi.fn().mockResolvedValue(inventory),
     cancelWorktreeScan: vi.fn().mockResolvedValue(undefined),
     setWorktreeIntegrationRef: vi.fn().mockResolvedValue(undefined),
@@ -49,6 +50,29 @@ afterEach(() => {
 });
 
 describe("WorktreeDialog", () => {
+  it("reuses fresh results on reopen and still permits an explicit refresh", async () => {
+    const api = installApi();
+    api.cachedWorktreeInventory.mockResolvedValue({ inventory, fresh: true, scanning: false });
+    const first = render(<WorktreeWorkspace />);
+    await screen.findByText(clean.path);
+    first.unmount();
+    render(<WorktreeWorkspace />);
+    await screen.findByText(clean.path);
+    expect(api.inventoryWorktrees).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Refresh Worktrees" }));
+    await waitFor(() => expect(api.inventoryWorktrees).toHaveBeenCalledTimes(1));
+  });
+
+  it("keeps a stale snapshot visible while its background refresh runs", async () => {
+    const api = installApi();
+    api.cachedWorktreeInventory.mockResolvedValue({ inventory, fresh: false, scanning: true });
+    api.inventoryWorktrees.mockImplementation(() => new Promise(() => {}));
+    render(<WorktreeWorkspace />);
+    await screen.findByText(clean.path);
+    expect(screen.queryByText("Scanning Worktrees...")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Refresh Worktrees" })).toHaveAttribute("aria-busy", "true");
+  });
+
   it("excludes a freshly changed review-needed tree from batch confirmation", async () => {
     const api = installApi();
     api.previewWorktreeCleanup.mockResolvedValue({ previewId: "changed", entry: { ...clean, state: "review", reasons: ["New work"] }, fingerprint: "b".repeat(64), checkedAt: inventory.scannedAt, backupRequired: false, forceRequired: false, savedWorkspace: false });
@@ -239,24 +263,21 @@ describe("WorktreeDialog", () => {
     expect(within(result).getByText(/Recovery copies are retained/)).toBeInTheDocument();
   });
 
-  it("keeps the current scan busy when StrictMode cancels the previous mount", async () => {
+  it("starts only one scan in StrictMode and does not cancel it on unmount", async () => {
     const api = installApi();
-    let cancelFirst!: () => void;
     let completeCurrent!: (value: WorktreeInventory) => void;
     api.inventoryWorktrees
-      .mockImplementationOnce(() => new Promise((_, reject) => {
-        cancelFirst = () => reject(new Error("Worktree scan cancelled"));
-      }))
       .mockImplementationOnce(() => new Promise((resolve) => { completeCurrent = resolve; }));
-    api.cancelWorktreeScan.mockImplementationOnce(async () => cancelFirst());
-    render(<StrictMode><WorktreeWorkspace /></StrictMode>);
-    await waitFor(() => expect(api.inventoryWorktrees).toHaveBeenCalledTimes(2));
+    const view = render(<StrictMode><WorktreeWorkspace /></StrictMode>);
+    await waitFor(() => expect(api.inventoryWorktrees).toHaveBeenCalledTimes(1));
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Stop scanning" })).toBeInTheDocument();
     await act(async () => completeCurrent(inventory));
     await screen.findByText("/projects/_worktrees/clean");
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Refresh Worktrees" })).toBeInTheDocument();
+    view.unmount();
+    expect(api.cancelWorktreeScan).not.toHaveBeenCalled();
   });
 
   it("retains the complete inventory when the user stops a refresh", async () => {
@@ -287,8 +308,10 @@ describe("WorktreeDialog", () => {
       .mockImplementationOnce(() => new Promise((resolve) => { completeCurrent = resolve; }));
     const onClose = vi.fn();
     const { rerender } = render(<WorktreeDialog open onClose={onClose} />);
+    await waitFor(() => expect(api.inventoryWorktrees).toHaveBeenCalledTimes(1));
     rerender(<WorktreeDialog open={false} onClose={onClose} />);
     rerender(<WorktreeDialog open onClose={onClose} />);
+    await waitFor(() => expect(api.inventoryWorktrees).toHaveBeenCalledTimes(2));
     await act(async () => completeOld(inventory));
     expect(screen.queryByText("/projects/_worktrees/clean")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Stop scanning" })).toBeInTheDocument();

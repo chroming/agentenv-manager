@@ -7,6 +7,7 @@ export const registerWorktreeIpc = (
   { diagnosticHandle, handleMutation }: Pick<IpcRegistrationHandles, "diagnosticHandle" | "handleMutation">,
   service: WorktreeService
 ) => {
+  diagnosticHandle("worktrees:cached-inventory", () => service.cachedInventory());
   diagnosticHandle("dialog:select-worktree-scan-root", async (event) => {
     const owner = BrowserWindow.fromWebContents(event.sender);
     const options: Electron.OpenDialogOptions = {
@@ -17,9 +18,9 @@ export const registerWorktreeIpc = (
     const result = owner ? await dialog.showOpenDialog(owner, options) : await dialog.showOpenDialog(options);
     return result.canceled ? undefined : result.filePaths[0];
   });
-  diagnosticHandle("worktrees:inventory", async (): Promise<WorktreeScanResult> => {
+  diagnosticHandle("worktrees:inventory", async (_event, mode?: unknown): Promise<WorktreeScanResult> => {
     try {
-      return await service.inventory();
+      return await service.inventory(mode === "background" ? "background" : undefined);
     } catch (error) {
       if (error instanceof WorktreeScanCancelledError) return { cancelled: true };
       throw error;

@@ -104,6 +104,12 @@ describe("Worktrees desktop workflow", () => {
     await page.getByRole("button", { name: t("Worktrees"), exact: true }).click();
     const workspace = page.locator(".worktree-workspace");
     await workspace.getByText(linked).waitFor();
+    const beforeReopen = await page.evaluate(() => window.agentEnv.cachedWorktreeInventory());
+    expect(beforeReopen.fresh).toBe(true);
+    await page.getByRole("button", { name: t("Agents"), exact: true }).click();
+    await page.getByRole("button", { name: t("Worktrees"), exact: true }).click();
+    await workspace.getByText(linked).waitFor();
+    expect(await page.evaluate(() => window.agentEnv.cachedWorktreeInventory())).toEqual(beforeReopen);
     const scanLifecycle = await page.evaluate(async () => {
       const [superseded, current] = await Promise.all([
         window.agentEnv.inventoryWorktrees(), window.agentEnv.inventoryWorktrees()
@@ -119,14 +125,14 @@ describe("Worktrees desktop workflow", () => {
         refreshedPaths: "cancelled" in refreshed ? [] : refreshed.entries.map((entry) => entry.path)
       };
     });
-    expect(scanLifecycle.superseded).toEqual({ cancelled: true });
+    expect(scanLifecycle.superseded).toMatchObject({ entries: expect.arrayContaining([expect.objectContaining({ path: linked })]) });
     expect(scanLifecycle.stopped).toEqual({ cancelled: true });
     expect(scanLifecycle.currentPaths).toContain(linked);
     expect(scanLifecycle.refreshedPaths).toContain(linked);
     const runtimeEvents = (await readFile(join(root, "logs", "runtime.jsonl"), "utf8"))
       .trim().split("\n").map((line) => JSON.parse(line));
     const scanEvents = runtimeEvents.filter((event) => event.action === "worktrees:inventory");
-    expect(scanEvents.filter((event) => event.outcome === "cancelled")).toHaveLength(2);
+    expect(scanEvents.filter((event) => event.outcome === "cancelled")).toHaveLength(1);
     expect(scanEvents.some((event) => event.error)).toBe(false);
     for (const viewport of [{ width: 920, height: 620 }, { width: 1180, height: 728 }, { width: 1440, height: 900 }]) {
       await page.setViewportSize(viewport);

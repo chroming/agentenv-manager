@@ -17,6 +17,7 @@ import type { GitCommandRunOptions, GitCommandRunner } from "../skillSources/git
 import { copyWorktreeVerified, fingerprintWorktreeTree, hashWorktreeTree, measureWorktreeTree } from "./worktreeSnapshot";
 import { findRepositoryAncestor, repositoryDiscoveryDirectories, repositoryDiscoveryIssue, worktreeDiscoveryCandidates, WORKTREE_SCAN_SKIP_DIRECTORIES } from "./worktreeDiscovery";
 import { readWorktreeAnalysis } from "./worktreeAnalysis";
+import { createWorktreeInventoryCache } from "./worktreeInventoryCache";
 import {
   ACTIVE_WORKTREE_MARKERS, readIntegration, readMainGitState, readRepositoryRefs, readWorktreeGitState,
   reviewFingerprint, withIntegrationEvidence
@@ -122,7 +123,8 @@ export class WorktreeScanCancelledError extends Error {
 }
 
 export interface WorktreeService {
-  inventory(): Promise<WorktreeInventory>;
+  cachedInventory(): Promise<{ inventory?: WorktreeInventory; fresh: boolean; scanning: boolean }>;
+  inventory(mode?: "background"): Promise<WorktreeInventory>;
   addScanRoot(path: string): Promise<void>;
   removeScanRoot(path: string): Promise<void>;
   setKeep(commonDir: string, path: string, reason?: string): Promise<void>;
@@ -149,6 +151,11 @@ export const createWorktreeService = ({
   const settingsPath = join(appDataRoot, "worktree-locations.json");
   const recoveryRoot = join(appDataRoot, "worktree-recovery");
   let scanController: AbortController | undefined;
+  let scanPromise: Promise<WorktreeInventory> | undefined;
+  let scanMode: "background" | undefined;
+  const inventoryCache = createWorktreeInventoryCache(join(appDataRoot, "worktree-inventory-cache.json"));
+  let lastDiscoveryAt = 0;
+  const measurements = new Map<string, { at: number; value: Awaited<ReturnType<typeof measureWorktreeTree>> }>();
   const issuedPreviews = new Map<string, {
     commonDir: string; path: string; fingerprint: string; forceRequired: boolean; issuedAt: number;
     reviewHash: string;
@@ -205,7 +212,8 @@ export const createWorktreeService = ({
     keptReason?: string,
     signal?: AbortSignal,
     measure = true,
-    base?: WorktreeIntegration
+    base?: WorktreeIntegration,
+    reuseMeasurement = false
   ): Promise<WorktreeEntry> => {
     const path = resolve(registration.path);
     const reasons: string[] = [];
@@ -261,7 +269,14 @@ export const createWorktreeService = ({
           reasons.push("Contains a nested repository");
           unsafeLocalState = true;
         }
-        if (measure) measurement = await measureWorktreeTree(path, signal);
+        if (measure) {
+          const cached = measurements.get(path);
+          if (reuseMeasurement && cached && Date.now() - cached.at < 15 * 60_000) measurement = cached.value;
+          else {
+            measurement = await measureWorktreeTree(path, signal);
+            measurements.set(path, { at: Date.now(), value: measurement });
+          }
+        }
         if (registration.detached) {
           const unique = await readGit(runner, ["for-each-ref", "--format=%(refname)", "--contains", registration.head ?? "HEAD"], {
             cwd: path, timeoutMs: 8_000, maxOutputBytes: 1_000_000, signal
@@ -312,7 +327,8 @@ export const createWorktreeService = ({
       settings.kept[keepKey(commonDir, resolve(path))], undefined, false, integration);
   };
 
-  return {
+  const service: WorktreeService = {
+    cachedInventory: async () => ({ ...await inventoryCache.read(), scanning: Boolean(scanPromise) }),
     setIntegrationRef: async (commonDir, ref) => {
       if (![...discovered].some((key) => key.startsWith(`${commonDir}\0`))) throw new Error("Refresh Worktrees before choosing an integration target");
       const integration = await readIntegration(await git(), commonDir);
@@ -355,7 +371,7 @@ export const createWorktreeService = ({
       else delete kept[key];
       await saveSettings({ ...current, kept });
     },
-    inventory: async () => {
+    inventory: async (mode) => {
       scanController?.abort(new WorktreeScanCancelledError());
       const controller = new AbortController();
       scanController = controller;
@@ -389,6 +405,10 @@ export const createWorktreeService = ({
         ))];
         const configuredRoots = await canonicalRoots(settings.scanRoots);
         const scanRoots = await canonicalRoots([...configuredRoots, ...builtinRoots, ...projects]);
+        const previous = (await inventoryCache.read()).inventory;
+        const reuseRepositories = mode === "background" && previous && !previous.incomplete &&
+          Date.now() - lastDiscoveryAt < 30 * 60_000 &&
+          JSON.stringify([...scanRoots].sort()) === JSON.stringify([...previous.scanRoots].sort());
         const canonicalDataRoot = await realpath(appDataRoot).catch((error) => {
           if (isMissingFileError(error)) return resolve(appDataRoot);
           throw error;
@@ -402,8 +422,21 @@ export const createWorktreeService = ({
         let count = 0;
         const runner = await git();
         controller.signal.throwIfAborted();
-        const queues = scanRoots.map((path) => [path]);
-        for (const [index, root] of scanRoots.entries()) {
+        const queues = scanRoots.map((path) => reuseRepositories ? [] as string[] : [path]);
+        if (reuseRepositories) {
+          for (const commonDir of new Set(previous.entries.map((entry) => entry.commonDir))) {
+            controller.signal.throwIfAborted();
+            try {
+              const registered = await readRegistration(runner, commonDir, controller.signal);
+              repositories.add(commonDir);
+              for (const registration of registered) inspections.push({ commonDir, registration, mainPath: registered[0].path });
+            } catch (error) {
+              controller.signal.throwIfAborted();
+              issues.push(repositoryDiscoveryIssue(commonDir, error));
+            }
+          }
+        }
+        for (const [index, root] of (reuseRepositories ? [] : scanRoots).entries()) {
           controller.signal.throwIfAborted();
           try {
             const rootPath = await findRepositoryAncestor(root, controller.signal);
@@ -493,7 +526,7 @@ export const createWorktreeService = ({
               const index = nextInspection++;
               const { commonDir, registration, mainPath } = inspections[index];
               const entry = await inspect(runner, commonDir, registration, mainPath,
-                settings.kept[keepKey(commonDir, resolve(registration.path))], controller.signal, true, integrationByRepo.get(commonDir));
+                settings.kept[keepKey(commonDir, resolve(registration.path))], controller.signal, true, integrationByRepo.get(commonDir), mode === "background");
               entries[index] = entry;
               found.add(discoveredKey(commonDir, entry.path));
             }
@@ -503,6 +536,9 @@ export const createWorktreeService = ({
         controller.signal.throwIfAborted();
         discovered.clear();
         for (const key of found) discovered.add(key);
+        const visiblePaths = new Set(entries.map((entry) => entry.path));
+        for (const path of measurements.keys()) if (!visiblePaths.has(path)) measurements.delete(path);
+        if (!reuseRepositories) lastDiscoveryAt = Date.now();
         return {
           scanRoots, configuredRoots, builtinRoots: [...new Set(builtinRoots)], entries, issues,
           incomplete: issues.length > 0,
@@ -800,4 +836,38 @@ export const createWorktreeService = ({
       return restored;
     }
   };
+  const scan = service.inventory;
+  service.inventory = (mode) => {
+    if (scanPromise) {
+      if (!mode && scanMode === "background") return scanPromise.then(() => service.inventory());
+      return scanPromise;
+    }
+    scanMode = mode;
+    inventoryCache.markStale();
+    scanPromise = (async () => {
+      try {
+        const result = await scan(mode);
+        await inventoryCache.save(result);
+        return result;
+      } finally { scanPromise = undefined; }
+    })();
+    return scanPromise;
+  };
+  const guard = <A extends unknown[], R>(operation: (...args: A) => Promise<R>, keepDisplay = false) => async (...args: A) => {
+    service.cancelScan();
+    await scanPromise?.catch(() => undefined);
+    await inventoryCache.invalidate(keepDisplay);
+    if (!keepDisplay) {
+      measurements.clear();
+      lastDiscoveryAt = 0;
+    }
+    return operation(...args);
+  };
+  service.addScanRoot = guard(service.addScanRoot);
+  service.removeScanRoot = guard(service.removeScanRoot);
+  service.setKeep = guard(service.setKeep, true);
+  service.setIntegrationRef = guard(service.setIntegrationRef, true);
+  service.remove = guard(service.remove);
+  service.restore = guard(service.restore);
+  return service;
 };

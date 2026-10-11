@@ -324,7 +324,16 @@ Group metrics use the currently filtered inventory. Sorting changes only local `
 not worktrees, Git metadata, Workspace references or sync data.
 Git's worktree registration is the source of truth for linked and main worktrees;
 directory names alone are never proof. The inventory reports its scan scope and failures.
-Stopping a scan, leaving Worktrees, or superseding a scan is a normal cancellation,
+Leaving Worktrees does not cancel its main-process scan. Concurrent requests join one
+scan; reopening within five minutes reuses the completed result. A validated local
+display snapshot survives restarts, but is always stale on restart and cannot restore
+cleanup eligibility. Stale results remain visible during background refresh. Background
+refresh can reuse discovered repositories for thirty minutes when roots are unchanged,
+but rereads Git worktree registrations and safety state. Display-only size measurements
+can be reused for fifteen minutes; explicit Refresh performs full discovery and measurement.
+Changing roots or removing/restoring worktrees invalidates cached inventory. Keep and
+integration decisions invalidate freshness without requiring directory rediscovery.
+Explicitly stopping a scan is a normal cancellation,
 recorded as `cancelled` without a diagnostic issue or error notice. Cancelled scans never
 publish partial inventories or cleanup eligibility. The renderer retains its last complete
 inventory and only the current request may update its inventory, error, or busy state.
