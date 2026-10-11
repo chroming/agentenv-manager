@@ -8,7 +8,7 @@ import {
   waitFor,
   within
 } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   ConversationWorkspace,
   invalidateConversationListPrefetch,
@@ -180,9 +180,24 @@ const openConversationFilters = () => {
   fireEvent.click(screen.getByRole("button", { name: /Filter conversations/ }));
 };
 
+const originalScrollDescriptor = Object.getOwnPropertyDescriptor(HTMLElement.prototype, "scrollIntoView");
+const browserScrollIntoView = vi.fn();
+beforeEach(() => {
+  browserScrollIntoView.mockClear();
+  Object.defineProperty(HTMLElement.prototype, "scrollIntoView", {
+    configurable: true,
+    value: browserScrollIntoView
+  });
+});
+
 afterEach(() => {
   invalidateConversationListPrefetch();
   cleanup();
+  if (originalScrollDescriptor) {
+    Object.defineProperty(HTMLElement.prototype, "scrollIntoView", originalScrollDescriptor);
+  } else {
+    delete (HTMLElement.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+  }
   vi.restoreAllMocks();
 });
 
@@ -566,6 +581,9 @@ describe("ConversationWorkspace", () => {
     }));
     expect(await screen.findByTestId("conversation-message-a1"))
       .toHaveClass("is-search-match");
+    await waitFor(() => expect(browserScrollIntoView).toHaveBeenCalledWith({
+      behavior: "smooth", block: "center"
+    }));
   });
 
   it("loads, searches, copies, and continues a full conversation", async () => {
