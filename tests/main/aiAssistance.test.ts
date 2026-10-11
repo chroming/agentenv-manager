@@ -64,6 +64,16 @@ describe("AI assistance privacy gates", () => {
   });
 });
 describe("immutable AI analyses", () => {
+  it("retains useful analysis with unverifiable evidence instead of rejecting all findings", async () => {
+    const f = await fixture();
+    f.request.mockResolvedValue({ choices: [{ finish_reason: "stop", message: { content: JSON.stringify({
+      overview: "Review local changes", findings: [{ category: "risk", detail: "Work may be lost", suggestion: "", evidence: ["not-supplied"] }], limitations: []
+    }) } }] });
+    const record = await f.service.generate(f.args);
+    expect(record.findings[0]).toMatchObject({ evidence: [], evidenceStatus: "unverified" });
+    expect(record.partial).toBe(true);
+    expect((await f.service.prepare(subject, "en")).cached).toEqual(record);
+  });
   it("caches worktree advice against evidence and never treats it as cleanup authorization", async () => {
     const f = await fixture();
     const worktree = { kind: "worktree" as const, commonDir: "/repo/.git", path: "/tree" };
@@ -203,9 +213,9 @@ describe("immutable AI analyses", () => {
     const f = await fixture(); await f.config.saveConfig({ endpoint: "http://localhost/new", model: "fixture" });
     await expect(f.service.generate(f.args)).rejects.toThrow("service changed"); expect(f.request).not.toHaveBeenCalled();
   });
-  it.each(["length", "invalid-evidence"])("preserves old results after %s regeneration failure", async (failure) => {
+  it.each(["length", "invalid-fields"])("preserves old results after %s regeneration failure", async (failure) => {
     const f = await fixture(); const old = await f.service.generate(f.args);
-    f.request.mockResolvedValue({ choices: [{ finish_reason: failure === "length" ? "length" : "stop", message: { content: JSON.stringify({ overview: "Wrong", findings: [{ category: "risk", detail: "Unknown", suggestion: "", evidence: ["not-supplied"] }], limitations: [] }) } }] });
+    f.request.mockResolvedValue({ choices: [{ finish_reason: failure === "length" ? "length" : "stop", message: { content: JSON.stringify({ overview: "Wrong", findings: [{ category: "invalid", detail: "Unknown", suggestion: "", evidence: ["not-supplied"] }], limitations: [] }) } }] });
     await expect(f.service.generate({ ...f.args, regenerate: true })).rejects.toThrow("Previous results are kept");
     expect((await f.service.prepare(subject, "en")).cached).toEqual(old);
   });

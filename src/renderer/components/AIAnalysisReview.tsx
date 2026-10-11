@@ -1,16 +1,17 @@
 import { useEffect, useRef, useState, type Ref } from "react";
+import { createPortal } from "react-dom";
 import { RotateCw, Sparkles } from "lucide-react";
 import type { AIAnalysisSubject, AIAnalysisPreview, AIAnalysisRecord } from "../../shared/aiAssistance";
 import { useAIPreferences } from "../hooks/useAIPreferences";
 import { useI18n } from "../i18n";
-import { Button, DialogBody, DialogFooter, EmptyState, IconButton, Notice, TextAction } from "./ui";
+import { Button, DiagnosticMessage, DialogBody, DialogFooter, EmptyState, IconButton, Notice, TextAction } from "./ui";
 import { AIReviewHeading } from "./AIReviewHeading";
 import { SyntaxCodePreview } from "./SyntaxCodePreview";
 import { AIServiceForm } from "./SkillSummarySettings";
 import { AIReviewFindings, splitAIReviewFindings } from "./AIReviewFindings";
 
-export const AIAnalysisReview = ({ subject, standalone = false, onClose, closeRef }: {
-  subject: AIAnalysisSubject; standalone?: boolean; onClose?(): void; closeRef?: Ref<HTMLButtonElement>;
+export const AIAnalysisReview = ({ subject, standalone = false, onClose, closeRef, actionsTarget }: {
+  subject: AIAnalysisSubject; standalone?: boolean; onClose?(): void; closeRef?: Ref<HTMLButtonElement>; actionsTarget?: HTMLElement | null;
 }) => {
   const { t, locale, formatDate } = useI18n();
   const prefs = useAIPreferences();
@@ -64,11 +65,11 @@ export const AIAnalysisReview = ({ subject, standalone = false, onClose, closeRe
   };
   const action = subject.kind === "comparison" ? "Analyze results" : subject.kind === "duplicates" ? "Analyze differences" : subject.kind === "worktree" ? "Analyze retention" : "Analyze Profile";
   const heading = subject.kind === "duplicates" ? "Duplicate Skill analysis" : subject.kind === "worktree" ? "Worktree retention analysis" : "AI analysis";
-  const partialMessage = subject.kind === "worktree" ? "Partial analysis: some local evidence is unavailable or omitted. Check the scope before deciding." : "Partial analysis: long content is truncated. Only the displayed scope is analyzed.";
+  const partialMessage = "Partial analysis: some evidence is unavailable or could not be verified.";
   const shownDocument = record?.documents.find((doc) => doc.id === evidence);
   const priority = { risk: 0, suggestion: 1, observation: 2 };
   const findings = [...(record?.findings ?? [])].sort((a, b) => priority[a.category] - priority[b.category])
-    .map((finding) => ({ ...finding, risk: finding.category === "risk" }));
+    .map((finding) => ({ ...finding, risk: finding.category === "risk", note: finding.evidenceStatus === "unverified" ? t("Evidence could not be verified") : undefined }));
   const { visible: visibleFindings, remaining: remainingFindings } = splitAIReviewFindings(findings);
   if (!allowed && !record && !standalone) return null;
   const actions = <>
@@ -80,7 +81,7 @@ export const AIAnalysisReview = ({ subject, standalone = false, onClose, closeRe
   const content = <>
     {standalone && !record && !error && !configuring && !needsConfig ? <EmptyState icon={<Sparkles size={20} />} title={t("Review before applying")}
       description={t("Find conflicting instructions, resource gaps and practical improvements. Your Profile will not be changed.")} /> : null}
-    {error ? <Notice tone="warning" role="alert" actions={allowed && !configuring ? <Button onClick={() => setConfiguring(true)}>{t("Configure AI service")}</Button> : undefined}>{error}</Notice> : null}
+    {error ? <Notice tone="warning" role="alert" actions={allowed && !configuring ? <Button onClick={() => setConfiguring(true)}>{t("Configure AI service")}</Button> : undefined}><DiagnosticMessage message={error} /></Notice> : null}
     {preview?.cacheDamaged ? <Notice tone="warning">{t("Saved analysis is unreadable. Generate a new analysis; the old file will be preserved for diagnostics.")}</Notice> : null}
     {needsConfig && !configuring ? <Notice actions={<Button onClick={() => setConfiguring(true)}>{t("Configure AI service")}</Button>}>{t("Configure the AI service before generating. No request has been sent.")}</Notice> : null}
     {configuring ? <AIServiceForm onCancel={() => setConfiguring(false)} onSaved={() => { setConfiguring(false); setNeedsConfig(false); setError(""); }} /> : null}
@@ -104,7 +105,8 @@ export const AIAnalysisReview = ({ subject, standalone = false, onClose, closeRe
     <DialogBody><div className="skill-summary-content">{content}</div></DialogBody>
     <DialogFooter>{record ? closeAction : <>{closeAction}{actions}</>}</DialogFooter>
   </> : <section className="skill-summary-review skill-summary-review--embedded" aria-label={t("AI analysis")}>
-    <AIReviewHeading title={record ? t(heading) : undefined} actions={actions} />
+    {actionsTarget ? createPortal(actions, actionsTarget) : null}
+    {record || !actionsTarget ? <AIReviewHeading title={record ? t(heading) : undefined} actions={actionsTarget ? undefined : actions} /> : null}
     {content}
   </section>;
 };

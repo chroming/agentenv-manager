@@ -14,7 +14,7 @@ export interface AIAnalysisCoverage { total: number; included: number; truncated
 export interface AIAnalysisRecord {
   schemaVersion: 1; key: string; kind: AIAnalysisKind; locale: string;
   generatedAt: string; endpoint: string; model: string; overview: string;
-  findings: Array<{ category: "observation" | "suggestion" | "risk"; title?: string; detail: string; suggestion: string; evidence: string[] }>;
+  findings: Array<{ category: "observation" | "suggestion" | "risk"; title?: string; detail: string; suggestion: string; evidence: string[]; evidenceStatus?: "unverified" }>;
   limitations: string[]; documents: AIAnalysisDocument[]; partial: boolean;
   coverage?: AIAnalysisCoverage;
 }

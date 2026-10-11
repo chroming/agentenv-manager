@@ -29,6 +29,7 @@ const installApi = () => {
     inventoryWorktrees: vi.fn().mockResolvedValue(inventory),
     cancelWorktreeScan: vi.fn().mockResolvedValue(undefined),
     setWorktreeIntegrationRef: vi.fn().mockResolvedValue(undefined),
+    setWorktreeRepositoryKeep: vi.fn().mockResolvedValue(undefined),
     selectWorktreeScanRoot: vi.fn().mockResolvedValue(undefined),
     previewWorktreeCleanup: vi.fn().mockResolvedValue({
       previewId: "review-1", entry: clean, fingerprint: "b".repeat(64),
@@ -50,6 +51,20 @@ afterEach(() => {
 });
 
 describe("WorktreeDialog", () => {
+  it("collapses repositories and keeps the whole repository rather than visible rows", async () => {
+    const api = installApi();
+    const update = vi.fn();
+    render(<WorktreeWorkspace onUpdateUiState={update} />);
+    const trigger = await screen.findByRole("button", { name: "app" });
+    fireEvent.click(trigger);
+    expect(screen.queryByText(clean.path)).not.toBeInTheDocument();
+    expect(update).toHaveBeenCalledWith({ worktreeCollapsedRepositories: [clean.commonDir] });
+    fireEvent.click(screen.getByRole("button", { name: "Keep repository" }));
+    await waitFor(() => expect(api.setWorktreeRepositoryKeep).toHaveBeenCalledWith(clean.commonDir, "Kept by user"));
+    fireEvent.click(trigger);
+    expect(await screen.findByText(clean.path)).toBeInTheDocument();
+  });
+
   it("reuses fresh results on reopen and still permits an explicit refresh", async () => {
     const api = installApi();
     api.cachedWorktreeInventory.mockResolvedValue({ inventory, fresh: true, scanning: false });

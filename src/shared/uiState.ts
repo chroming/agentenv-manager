@@ -17,6 +17,7 @@ export const UiStateSchema = z.object({
   agentOrder: z.array(SafeIdSchema).default([]),
   workspaceOrder: z.array(SafeIdSchema).default([]),
   worktreeSort: WorktreeSortSchema.optional(),
+  worktreeCollapsedRepositories: z.array(z.string()).optional(),
   catalogViews: CatalogViewsSchema.optional(),
   workspaceAgentSelections: z.record(SafeIdSchema, SafeIdSchema).default({})
 }).strict();

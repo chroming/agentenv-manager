@@ -1,7 +1,7 @@
 import {
   AlertTriangle, ArrowLeft, Check, CircleStop, Copy, FolderGit2, GitBranch,
   FolderSearch, History, LoaderCircle, LockKeyhole, Maximize2, Minimize2, Plus,
-  RotateCcw, Trash2, X
+  RotateCcw, Trash2, X, Bookmark, BookmarkX
 } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type {
@@ -17,7 +17,7 @@ import {
   AlignedResourceList, Badge, Button, CatalogSortMetric, ChoiceInput, ControlGroup, DetailList,
   DiagnosticMessage, DialogBody, DialogFooter, DialogHeader, EmptyState, IconButton,
   InteractiveStatus, ModalFrame, Notice, OperationStatusBar, PathListPreview, RefreshAction, ResourceRow, SectionLabel,
-  SearchField, SortMenu, TextAction, CatalogToolbar, CatalogFilters, FilterReset, SelectField
+  SearchField, SortMenu, TextAction, CatalogToolbar, CatalogFilters, FilterReset, SelectField, ResourceDisclosureSection
 } from "./ui";
 import { AIAnalysisReview } from "./AIAnalysisReview";
 
@@ -28,7 +28,7 @@ const totalBytes = (values: Array<number | undefined>) =>
 type CleanupResult = { path: string; error?: string; skipped?: boolean; verificationWarnings?: string[]; sizeBytes?: number; reclaimedSizeBytes?: number };
 
 interface WorktreeSortPreference {
-  uiState?: Pick<UiState, "worktreeSort">;
+  uiState?: Pick<UiState, "worktreeSort" | "worktreeCollapsedRepositories">;
   onUpdateUiState?(update: UiStateUpdate): void;
 }
 
@@ -54,6 +54,8 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
   const [filter, setFilter] = useState<"all" | "review" | "kept">("all");
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<WorktreeSort>(uiState?.worktreeSort ?? "name");
+  const [collapsed, setCollapsed] = useState<string[]>(uiState?.worktreeCollapsedRepositories ?? []);
+  const [aiActionsTarget, setAiActionsTarget] = useState<HTMLDivElement | null>(null);
   useEffect(() => setSort(uiState?.worktreeSort ?? "name"), [uiState?.worktreeSort]);
   const dismissReview = () => { setView("list"); setError(""); setMaximized(false); };
   const dismiss = presentation === "dialog" ? onClose : dismissReview;
@@ -152,6 +154,14 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
     } finally {
       setBusy("");
     }
+  };
+  const setRepositoryKeep = async (commonDir: string, kept: boolean) => {
+    setBusy(commonDir); setError("");
+    try {
+      await window.agentEnv.setWorktreeRepositoryKeep(commonDir, kept ? undefined : "Kept by user");
+      await refresh(false, true);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
+    finally { setBusy(""); }
   };
   const prepare = async (entries: WorktreeEntry[], allowDirty = false, batch = false) => {
     setBusy("preview");
@@ -307,10 +317,15 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
           {entriesByRepo.map(([commonDir, entries]) => {
             const eligible = entries.filter(isBatchCleanupCandidate);
             const allSelected = eligible.length > 0 && eligible.every((entry) => selected.includes(entryKey(entry)));
-            return <section className="worktree-dialog__group" key={commonDir}>
-            <div className="worktree-dialog__group-header">
-            <SectionLabel className="worktree-dialog__group-title" tone="muted" icon={<GitBranch size={15} />} count={entries.length}><span className="selectable" title={entries[0].repositoryPath}>{nameFromPath(entries[0].repositoryPath)}</span></SectionLabel>
-            <ControlGroup>
+            const kept = entries.some((entry) => Boolean(entry.repositoryKeptReason));
+            return <ResourceDisclosureSection className="worktree-dialog__group" key={commonDir} id={commonDir}
+              appearance="list" density="compact" panelScrollOwner="child" icon={<GitBranch size={15} />}
+              title={nameFromPath(entries[0].repositoryPath)} toggleLabel={nameFromPath(entries[0].repositoryPath)}
+              summary={kept ? t("Kept") : String(entries.length)} summaryTitle={entries[0].repositoryPath}
+              expanded={!collapsed.includes(commonDir)} onToggle={() => {
+                const next = collapsed.includes(commonDir) ? collapsed.filter((key) => key !== commonDir) : [...collapsed, commonDir];
+                setCollapsed(next); onUpdateUiState?.({ worktreeCollapsedRepositories: next });
+              }} actions={<ControlGroup>
               {sort === "size-desc" ? <CatalogSortMetric kind="size" label={t("Total size")} value={worktreeGroupMetric(entries, sort)} />
                 : sort === "modified-desc" || sort === "modified-asc" ? <CatalogSortMetric kind="date" label={sort === "modified-asc" ? t("Oldest modified") : t("Last modified")} value={worktreeGroupMetric(entries, sort)} /> : null}
               <Button aria-label={allSelected ? t("Clear Worktree selection") : t("Select all eligible Worktrees")}
@@ -319,8 +334,8 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
                   const keys = new Set(eligible.map(entryKey));
                   return allSelected ? current.filter((key) => !keys.has(key)) : [...new Set([...current, ...keys])];
                 })}>{allSelected ? t("Clear selection") : t("Select clean")}</Button>
-            </ControlGroup>
-            </div>
+              <IconButton label={t(kept ? "Remove repository keep marker" : "Keep repository")} variant="ghost" busy={busy === commonDir} disabled={Boolean(busy)} onClick={() => void setRepositoryKeep(commonDir, kept)}>{kept ? <BookmarkX size={15} /> : <Bookmark size={15} />}</IconButton>
+            </ControlGroup>}>
             <AlignedResourceList actionTrack="compact" className="worktree-dialog__entries">
             {entries.map((entry) => <ResourceRow
               key={entryKey(entry)} density="compact" appearance="plain" icon={entry.locked ? <LockKeyhole size={16} /> : <FolderGit2 size={16} />}
@@ -341,7 +356,7 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
               </ControlGroup>}
             />)}
             </AlignedResourceList>
-          </section>; })}
+          </ResourceDisclosureSection>; })}
         </>;
   const reviewBody = <div className="worktree-dialog__detail">
         {failure}
@@ -376,7 +391,7 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
           {detail.reasons.length ? <Notice tone="warning" icon={<AlertTriangle size={15} />}>{detail.reasons.join(" · ")}</Notice> : <Notice tone="info" icon={<Check size={15} />}>{t("No local file changes found. Review the purpose of this worktree before removing it.")}</Notice>}
           {detail.changes.length ? <section><SectionLabel as="h4" count={detail.changes.length}>{t("Changed and untracked paths")}</SectionLabel><PathListPreview paths={detail.changes} /></section> : null}
           {detail.ignored.length ? <section><SectionLabel as="h4" count={detail.ignored.length}>{t("Ignored paths")}</SectionLabel><PathListPreview paths={detail.ignored} /></section> : null}
-          {!detail.main && detail.exists ? <AIAnalysisReview subject={{ kind: "worktree", commonDir: detail.commonDir, path: detail.path }} /> : null}
+          {!detail.main && detail.exists ? <AIAnalysisReview actionsTarget={aiActionsTarget} subject={{ kind: "worktree", commonDir: detail.commonDir, path: detail.path }} /> : null}
           {detail.manualReviewAvailable && !detail.cleanupReviewAvailable && !detail.keptReason ? <label className="worktree-dialog__confirmation">
             <ChoiceInput type="checkbox" checked={manualConfirm} onChange={(event) => setManualConfirm(event.target.checked)} />
             <span>{t("I reviewed this worktree and want to remove its local contents after a verified recovery copy is saved.")}</span>
@@ -440,7 +455,8 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
           <Button disabled={Boolean(busy)} onClick={dismissReview}>{t("Cancel")}</Button>
           <Button variant="danger" icon={<Trash2 size={15} />} busy={busy === "remove"} disabled={Boolean(busy)} onClick={() => void clean()}>{previews.length === 1 ? t("Remove Worktree") : t("Remove Worktrees")}</Button>
         </> : view === "detail" && detail ? <>
-          {!detail.main ? <Button size="compact" busy={busy === "keep"} disabled={Boolean(busy)} onClick={() => void setKeep(detail)}>{detail.keptReason ? t("Remove keep marker") : t("Keep Worktree")}</Button> : null}
+          <ControlGroup ref={setAiActionsTarget} />
+          {!detail.main ? <Button busy={busy === "keep"} disabled={Boolean(busy || detail.repositoryKeptReason)} onClick={() => void setKeep(detail)}>{detail.repositoryKeptReason ? t("Kept by repository") : detail.keptReason ? t("Remove keep marker") : t("Keep Worktree")}</Button> : null}
           {detail.manualReviewAvailable && !detail.keptReason ? <Button icon={<Trash2 size={15} />} disabled={Boolean(busy) || (!detail.cleanupReviewAvailable && !manualConfirm)} busy={busy === "preview"} onClick={() => void prepare([detail], !detail.cleanupReviewAvailable)}>{t("Review cleanup")}</Button> : null}
         </> : <Button disabled={Boolean(busy) && busy !== "scan"} onClick={dismiss}>{t("Close")}</Button>}
       </DialogFooter>;

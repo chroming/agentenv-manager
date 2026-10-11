@@ -28,6 +28,7 @@ const SettingsSchema = z.object({
   formatVersion: z.literal(1),
   scanRoots: z.array(z.string()),
   kept: z.record(z.string(), z.string()),
+  keptRepositories: z.record(z.string(), z.string()).default({}),
   integrationRefs: z.record(z.string(), z.string()).default({})
 }).strict();
 const RecoverySchema = z.object({
@@ -128,6 +129,7 @@ export interface WorktreeService {
   addScanRoot(path: string): Promise<void>;
   removeScanRoot(path: string): Promise<void>;
   setKeep(commonDir: string, path: string, reason?: string): Promise<void>;
+  setRepositoryKeep(commonDir: string, reason?: string): Promise<void>;
   setIntegrationRef(commonDir: string, ref?: string): Promise<void>;
   preview(commonDir: string, path: string, allowDirty?: boolean): Promise<WorktreeCleanupPreview>;
   remove(preview: WorktreeCleanupPreview): Promise<WorktreeRecoveryRecord>;
@@ -213,8 +215,10 @@ export const createWorktreeService = ({
     signal?: AbortSignal,
     measure = true,
     base?: WorktreeIntegration,
-    reuseMeasurement = false
+    reuseMeasurement = false,
+    repositoryKeptReason?: string
   ): Promise<WorktreeEntry> => {
+    keptReason ??= repositoryKeptReason;
     const path = resolve(registration.path);
     const reasons: string[] = [];
     const changes: string[] = [];
@@ -310,7 +314,7 @@ export const createWorktreeService = ({
       locked: registration.locked, prunable: registration.prunable, exists,
       state, reasons, changes, ignored, submodules,
       sizeBytes: measurement?.sizeBytes, modifiedAt: measurement?.modifiedAt,
-      keptReason, cleanupReviewAvailable,
+      keptReason, repositoryKeptReason, cleanupReviewAvailable,
       manualReviewAvailable, headNeedsProtection, integration
     };
   };
@@ -324,7 +328,7 @@ export const createWorktreeService = ({
     const settings = await readSettings();
     const integration = await readIntegration(runner, commonDir, settings.integrationRefs[commonDir]);
     return inspect(runner, commonDir, target, entries[0].path,
-      settings.kept[keepKey(commonDir, resolve(path))], undefined, false, integration);
+      settings.kept[keepKey(commonDir, resolve(path))], undefined, false, integration, false, settings.keptRepositories[commonDir]);
   };
 
   const service: WorktreeService = {
@@ -370,6 +374,15 @@ export const createWorktreeService = ({
       if (reason?.trim()) kept[key] = reason.trim().slice(0, 200);
       else delete kept[key];
       await saveSettings({ ...current, kept });
+    },
+    setRepositoryKeep: async (commonDir, reason) => {
+      if (![...discovered].some((key) => key.startsWith(`${commonDir}\0`))) throw new Error("Refresh Worktrees before changing a keep decision");
+      await readRegistration(await git(), commonDir);
+      const current = await readSettings();
+      const keptRepositories = { ...current.keptRepositories };
+      if (reason?.trim()) keptRepositories[commonDir] = reason.trim().slice(0, 200);
+      else delete keptRepositories[commonDir];
+      await saveSettings({ ...current, keptRepositories });
     },
     inventory: async (mode) => {
       scanController?.abort(new WorktreeScanCancelledError());
@@ -526,7 +539,7 @@ export const createWorktreeService = ({
               const index = nextInspection++;
               const { commonDir, registration, mainPath } = inspections[index];
               const entry = await inspect(runner, commonDir, registration, mainPath,
-                settings.kept[keepKey(commonDir, resolve(registration.path))], controller.signal, true, integrationByRepo.get(commonDir), mode === "background");
+                settings.kept[keepKey(commonDir, resolve(registration.path))], controller.signal, true, integrationByRepo.get(commonDir), mode === "background", settings.keptRepositories[commonDir]);
               entries[index] = entry;
               found.add(discoveredKey(commonDir, entry.path));
             }
@@ -877,6 +890,7 @@ export const createWorktreeService = ({
   service.addScanRoot = guard(service.addScanRoot);
   service.removeScanRoot = guard(service.removeScanRoot);
   service.setKeep = guard(service.setKeep, true);
+  service.setRepositoryKeep = guard(service.setRepositoryKeep, true);
   service.setIntegrationRef = guard(service.setIntegrationRef, true);
   service.remove = guard(service.remove);
   service.restore = guard(service.restore);

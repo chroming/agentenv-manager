@@ -322,6 +322,11 @@ unavailable). Main trees are excluded from group metrics. Missing or partial gro
 measurements and unknown row measurements sort last; metric ties use name ordering.
 Group metrics use the currently filtered inventory. Sorting changes only local `ui-state.json`,
 not worktrees, Git metadata, Workspace references or sync data.
+Repository groups reuse the shared disclosure; collapse state is device-local UI data.
+A repository keep marker uses its canonical common Git directory and applies to current
+and future linked worktrees, including filtered-out rows. Removing that marker preserves
+individual keep decisions. Keep markers are checked again during cleanup, not trusted
+from cached inventory or an older preview. Keeping a repository never modifies Git files.
 Git's worktree registration is the source of truth for linked and main worktrees;
 directory names alone are never proof. The inventory reports its scan scope and failures.
 An incomplete refresh preserves previous rows for unreadable repositories within the same
@@ -399,6 +404,12 @@ and unavailable target evidence are explicitly partial.
 Untracked/ignored bodies are excluded; missing evidence is explicit. Results are saved
 only under app-owned ai-analyses. AI never selects trees, approves removal, changes
 keep markers, writes Git data, or weakens Preview/Remove safeguards.
+The manual analysis action stays in the review dialog's fixed footer, outside the scroll
+body. AI evidence must reference supplied document IDs. Unknown references are dropped
+and their findings explicitly marked unverified; they never become cleanup evidence.
+Unusable JSON, invalid fields and truncated service responses report distinct errors
+without private response content; prior saved results remain intact. No billed retries
+are automatic. Safe formatting differences do not discard otherwise useful analysis.
 Interrupted cleanup records are reconciled against the original directory and Git
 registration before Restore is offered. An interrupted restore can continue only when
 the partially restored directory still matches the recorded attempt; otherwise the

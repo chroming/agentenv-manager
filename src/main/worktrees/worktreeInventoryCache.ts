@@ -14,7 +14,7 @@ const inventorySchema = z.object({
     exists: z.boolean(), state: z.enum(["candidate", "review", "kept", "unavailable"]),
     reasons: strings, changes: strings, ignored: strings, submodules: z.boolean(),
     sizeBytes: z.number().nonnegative().optional(), modifiedAt: z.string().optional(),
-    keptReason: z.string().optional(), cleanupReviewAvailable: z.boolean(),
+    keptReason: z.string().optional(), repositoryKeptReason: z.string().optional(), cleanupReviewAvailable: z.boolean(),
     manualReviewAvailable: z.boolean(), headNeedsProtection: z.boolean(),
     integration: z.object({ ref: z.string().optional(), head: z.string().optional(),
       merged: z.boolean().optional(), explicit: z.boolean(), choices: strings }).optional()

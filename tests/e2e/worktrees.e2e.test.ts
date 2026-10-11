@@ -154,10 +154,11 @@ describe("Worktrees desktop workflow", () => {
             return state.scrollWidth <= state.clientWidth + 1 && Math.abs(frame.top + frame.height / 2 - status.top - status.height / 2) <= 1;
           }),
           groupActions: [...element.querySelectorAll<HTMLElement>(".worktree-dialog__group")].map((group) => {
-            const action = group.querySelector(".worktree-dialog__group-header button")!.getBoundingClientRect();
-            const checkbox = group.querySelector('input[type="checkbox"]')!.getBoundingClientRect();
-            const title = group.querySelector(".worktree-dialog__group-title")!.getBoundingClientRect();
-            return { rightDelta: action.right - checkbox.right, centerDelta: title.top + title.height / 2 - action.top - action.height / 2 };
+            const actions = group.querySelector(".ui-resource-disclosure__actions")!.getBoundingClientRect();
+            const title = group.querySelector(".ui-resource-disclosure__trigger")!.getBoundingClientRect();
+            const bounds = group.getBoundingClientRect();
+            return { fits: actions.right <= bounds.right && title.right <= actions.left + 1,
+              centered: Math.abs(title.top + title.height / 2 - actions.top - actions.height / 2) <= 1 };
           })
         };
       });
@@ -165,10 +166,19 @@ describe("Worktrees desktop workflow", () => {
       expect(geometry.bodyFits).toBe(true);
       expect(geometry.aligned).toBe(true);
       expect(geometry.stateFits).toBe(true);
-      expect(geometry.groupActions).toEqual(geometry.groupActions.map(() => ({ rightDelta: 0, centerDelta: 0 })));
+      expect(geometry.groupActions).toEqual(geometry.groupActions.map(() => ({ fits: true, centered: true })));
       const typography = await readInterfaceTypography(page);
       expect(typography.violations).toEqual([]);
-      expect(typography.headings.length).toBeGreaterThan(0);
+      const headings = workspace.locator(".ui-resource-disclosure__title");
+      expect(await headings.count()).toBeGreaterThan(0);
+      expect(await headings.evaluateAll((elements) => {
+        const tokens = getComputedStyle(document.documentElement);
+        return elements.every((element) => {
+          const style = getComputedStyle(element);
+          return style.fontSize === tokens.getPropertyValue("--font-size-body").trim() &&
+            style.fontWeight === tokens.getPropertyValue("--font-weight-medium").trim();
+        });
+      })).toBe(true);
       const captureDir = process.env.AGENTENV_CAPTURE_WORKTREES_DIR;
       if (captureDir) {
         await mkdir(captureDir, { recursive: true });
@@ -217,7 +227,7 @@ describe("Worktrees desktop workflow", () => {
         const metric = element.getBoundingClientRect();
         return element.scrollWidth <= element.clientWidth + 1 && Math.abs(row.y + row.height / 2 - metric.y - metric.height / 2) <= 1;
       }))).toBe(true);
-      expect(await workspace.locator(".worktree-dialog__group-header .ui-catalog-sort-metric").count()).toBeGreaterThan(0);
+      expect(await workspace.locator(".worktree-dialog__group .ui-resource-disclosure__actions .ui-catalog-sort-metric").count()).toBeGreaterThan(0);
       if (process.env.AGENTENV_CAPTURE_WORKTREES_DIR) {
         await page.mouse.move(0, 0);
         await page.evaluate(() => { if (document.activeElement instanceof HTMLElement) document.activeElement.blur(); });
@@ -232,6 +242,10 @@ describe("Worktrees desktop workflow", () => {
     await expectCatalogToolbar(workspace.locator(".ui-catalog-toolbar"), "wide");
     await workspace.getByRole("checkbox", { name: t("Select Worktree for review") }).first().uncheck();
     const group = workspace.locator(".worktree-dialog__group").first();
+    const disclosure = group.locator(".ui-resource-disclosure__trigger");
+    await disclosure.click();
+    expect(await group.locator(".ui-resource-row").count()).toBe(0);
+    await disclosure.click();
     await group.getByRole("button", { name: t("Select all eligible Worktrees"), exact: true }).click();
     expect(await group.getByRole("checkbox", { checked: true }).count()).toBe(9);
     expect(await group.locator(".ui-resource-row").filter({ hasText: "locked-worktree" }).getByRole("checkbox").count()).toBe(0);
@@ -243,6 +257,16 @@ describe("Worktrees desktop workflow", () => {
     expect(await batchDialog.locator(".ui-resource-row__state .ui-catalog-sort-metric").count()).toBe(9);
     await batchDialog.getByRole("button", { name: t("Cancel"), exact: true }).click();
     await group.getByRole("button", { name: t("Clear Worktree selection"), exact: true }).click();
+    await group.getByRole("button", { name: t("Keep repository"), exact: true }).click();
+    const unkeep = group.getByRole("button", { name: t("Remove repository keep marker"), exact: true });
+    await unkeep.waitFor();
+    expect(await group.getByRole("checkbox").count()).toBe(0);
+    const keptSettings = JSON.parse(await readFile(join(data, "worktree-locations.json"), "utf8"));
+    expect(Object.values(keptSettings.keptRepositories)).toEqual(["Kept by user"]);
+    if (process.env.AGENTENV_CAPTURE_WORKTREES_DIR) await page.screenshot({ path: join(process.env.AGENTENV_CAPTURE_WORKTREES_DIR, `worktrees-kept-${locale}-920.png`) });
+    await unkeep.click();
+    await group.getByRole("button", { name: t("Keep repository"), exact: true }).waitFor();
+    expect(await group.getByRole("checkbox").count()).toBe(9);
     await workspace.getByRole("button", { name: t("Scan locations") }).click();
     const scope = page.getByRole("dialog", { name: t("Scan locations") });
     await scope.getByText(join(home, ".codex", "worktrees"), { exact: true }).waitFor();
@@ -255,7 +279,12 @@ describe("Worktrees desktop workflow", () => {
     const dirtyDialog = page.getByRole("dialog");
     const analyze = dirtyDialog.getByRole("button", { name: t("Analyze retention"), exact: true });
     await analyze.waitFor();
+    expect(await analyze.evaluate((element) => {
+      const box = element.getBoundingClientRect();
+      return Boolean(element.closest(".ui-dialog-footer")) && box.top >= 0 && box.bottom <= window.innerHeight;
+    })).toBe(true);
     expect(calls).toBe(0);
+    if (process.env.AGENTENV_CAPTURE_WORKTREES_DIR) await page.screenshot({ path: join(process.env.AGENTENV_CAPTURE_WORKTREES_DIR, `worktree-analysis-entry-${locale}-920.png`) });
     expect(await dirtyDialog.getByRole("checkbox").isChecked()).toBe(false);
     await analyze.click();
     await dirtyDialog.getByText("Keep the local experiments until their purpose is confirmed.", { exact: true }).waitFor();

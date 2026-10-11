@@ -31,6 +31,7 @@ export interface WorktreeEntry {
   sizeBytes?: number;
   modifiedAt?: string;
   keptReason?: string;
+  repositoryKeptReason?: string;
   cleanupReviewAvailable: boolean;
   manualReviewAvailable: boolean;
   headNeedsProtection: boolean;

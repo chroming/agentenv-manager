@@ -43,6 +43,26 @@ const fixture = async () => {
 };
 
 describe("worktree inventory and cleanup", () => {
+  it("keeps a repository across restart and new worktrees without erasing individual decisions", async () => {
+    const { root, repo, linked, service, runner } = await fixture();
+    const entry = (await service.inventory()).entries.find((item) => item.path === linked)!;
+    const preview = await service.preview(entry.commonDir, linked);
+    await service.setKeep(entry.commonDir, linked, "Individual decision");
+    await service.setRepositoryKeep(entry.commonDir, "Repository decision");
+    await expect(service.remove(preview)).rejects.toThrow();
+    const extra = join(root, "extra");
+    await run("git", ["-C", repo, "worktree", "add", "-b", "extra", extra]);
+    const restarted = createWorktreeService({ appDataRoot: join(root, "data"), homeDir: join(root, "home"),
+      projectStore: { listLocalRootPaths: async () => [] } as unknown as ProjectStore, resolveRunner: async () => runner });
+    const kept = await restarted.inventory();
+    expect(kept.entries.find((item) => item.path === extra)).toMatchObject({ state: "kept", repositoryKeptReason: "Repository decision" });
+    await expect(restarted.preview(entry.commonDir, extra)).rejects.toThrow();
+    await restarted.setRepositoryKeep(entry.commonDir);
+    const unkept = await restarted.inventory();
+    expect(unkept.entries.find((item) => item.path === linked)).toMatchObject({ state: "kept", keptReason: "Individual decision" });
+    expect(unkept.entries.find((item) => item.path === extra)).toMatchObject({ state: "candidate", repositoryKeptReason: undefined });
+  });
+
   it("retains unreadable repository rows without retaining cleanup authorization", async () => {
     const { linked, runner, service } = await fixture();
     const previous = await service.inventory();

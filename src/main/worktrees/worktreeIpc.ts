@@ -34,6 +34,8 @@ export const registerWorktreeIpc = (
   handleMutation("worktrees:remove-root", (_event, path: unknown) => service.removeScanRoot(String(path)));
   handleMutation("worktrees:set-keep", (_event, commonDir: unknown, path: unknown, reason: unknown) =>
     service.setKeep(String(commonDir), String(path), reason === undefined ? undefined : String(reason)));
+  handleMutation("worktrees:set-repository-keep", (_event, commonDir: unknown, reason: unknown) =>
+    service.setRepositoryKeep(String(commonDir), reason === undefined ? undefined : String(reason)));
   handleMutation("worktrees:set-integration-ref", (_event, commonDir: unknown, ref: unknown) =>
     service.setIntegrationRef(String(commonDir), ref === undefined ? undefined : String(ref)));
   handleMutation("worktrees:remove", (_event, preview: WorktreeCleanupPreview) => service.remove(preview));
