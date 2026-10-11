@@ -1,6 +1,7 @@
 import { createReadStream } from "node:fs";
 import * as zlib from "node:zlib";
 import { Readable } from "node:stream";
+import { validateZstdFrames } from "./zstdFrameValidation";
 
 // Read retries belong to observation, never to a cached mutation precondition.
 export const retryHistoryRead = async <T>(read: () => Promise<T>, platform = process.platform): Promise<T> => {
@@ -27,7 +28,7 @@ export const historyTextStream = (path: string, start = 0) => {
   if (path.endsWith(".zst") && start !== 0) throw new Error("Compressed history cannot be resumed at a byte offset");
   const decoder = path.endsWith(".zst") ? decompress() : undefined;
   const source = createReadStream(path, { start });
-  return decoder ? source.compose(decoder) : source;
+  return decoder ? source.compose(validateZstdFrames).compose(decoder) : source;
 };
 
 // Bound decoded bytes too: a small compressed file can expand far beyond its size.
@@ -50,5 +51,5 @@ export const readHistoryText = (path: string, maxBytes = 256 * 1024 * 1024) =>
 
 export const decodeHistoryBytes = (path: string, bytes: Buffer, maxBytes = 256 * 1024 * 1024) => {
   const input = Readable.from([bytes]);
-  return collectText(path.endsWith(".zst") ? input.compose(decompress()) : input, maxBytes);
+  return collectText(path.endsWith(".zst") ? input.compose(validateZstdFrames).compose(decompress()) : input, maxBytes);
 };

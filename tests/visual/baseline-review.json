@@ -18,48 +18,48 @@
   "files": [
     {
       "file": "worktree-analysis-en-1180x728.png",
-      "sha256": "c414e3351c591fb5c33799339ccc4e8355e70ebea2c825c212b6a33ee3273c1e",
-      "reviewReason": "Manual retention advice stays separate from cleanup authorization; three locales and three sizes verified in isolated Electron."
+      "sha256": "908ffc1480d0b0cc141bb83ac5b203ad8ce96f8fa70d38291d90256bb71172d9",
+      "reviewReason": "Reviewed 2026-10-11: current isolated Electron capture; retention advice, confirmation checkbox and footer remain visible at 920/1180/1440 in all three locales. No threshold changes."
     },
     {
       "file": "worktree-analysis-en-1440x900.png",
-      "sha256": "36740a7bb8183cf50622849a50e3fa54a8be928cb43ab390c91f249e31c76338",
-      "reviewReason": "Manual retention advice stays separate from cleanup authorization; three locales and three sizes verified in isolated Electron."
+      "sha256": "ac0abe170c8e08c402a0b89e3b79e10bf44df71c3da1fa00ecb12bccec68b741",
+      "reviewReason": "Reviewed 2026-10-11: current isolated Electron capture; retention advice, confirmation checkbox and footer remain visible at 920/1180/1440 in all three locales. No threshold changes."
     },
     {
       "file": "worktree-analysis-en-920x620.png",
-      "sha256": "b22ceb28d91bf1607b6e829a3d185729bb98cccc051715914fdc6c470da15a19",
-      "reviewReason": "Manual retention advice stays separate from cleanup authorization; three locales and three sizes verified in isolated Electron."
+      "sha256": "a349d2b15ce458b58073861ad9a7eaacdb5308057faf32089208e10a34835d1d",
+      "reviewReason": "Reviewed 2026-10-11: current isolated Electron capture; retention advice, confirmation checkbox and footer remain visible at 920/1180/1440 in all three locales. No threshold changes."
     },
     {
       "file": "worktree-analysis-zh_CN-1180x728.png",
-      "sha256": "d8b1b6d6acceaf8af9e9463185a899482e089fc481334ee113ed473036ad2e1d",
-      "reviewReason": "Manual retention advice stays separate from cleanup authorization; three locales and three sizes verified in isolated Electron."
+      "sha256": "0e0bbc501adc30fff2cecda5f926819318cac53949085cd1ff69a178f8291c3c",
+      "reviewReason": "Reviewed 2026-10-11: current isolated Electron capture; retention advice, confirmation checkbox and footer remain visible at 920/1180/1440 in all three locales. No threshold changes."
     },
     {
       "file": "worktree-analysis-zh_CN-1440x900.png",
-      "sha256": "99839913afbd1a1543659bbb2eb82ecca5447b7ecb14e58e02dc101e5e42fa28",
-      "reviewReason": "Manual retention advice stays separate from cleanup authorization; three locales and three sizes verified in isolated Electron."
+      "sha256": "3ef0d665cbf229d4179bdd31e133eff93abe6233f6d0e1e87b038dd30c5f699e",
+      "reviewReason": "Reviewed 2026-10-11: current isolated Electron capture; retention advice, confirmation checkbox and footer remain visible at 920/1180/1440 in all three locales. No threshold changes."
     },
     {
       "file": "worktree-analysis-zh_CN-920x620.png",
-      "sha256": "46cbf834e17e5c11d607250444414a707a24a933e202921c4a57a6de94fb2430",
-      "reviewReason": "Manual retention advice stays separate from cleanup authorization; three locales and three sizes verified in isolated Electron."
+      "sha256": "c895ce34c9bf4d5edaa50413156759f2bfeaa0c130bdbdb33a73189b2d95a3d5",
+      "reviewReason": "Reviewed 2026-10-11: current isolated Electron capture; retention advice, confirmation checkbox and footer remain visible at 920/1180/1440 in all three locales. No threshold changes."
     },
     {
       "file": "worktree-analysis-zh_TW-1180x728.png",
-      "sha256": "ec3117ab7b7214800c0cde30248f77381204a31baf15dcbfb33bd2a5d8cd1f3e",
-      "reviewReason": "Manual retention advice stays separate from cleanup authorization; three locales and three sizes verified in isolated Electron."
+      "sha256": "3498ff2ff88637c8a2edfd9d90ee1f5437469505eb61b1e485f0a5825d290133",
+      "reviewReason": "Reviewed 2026-10-11: current isolated Electron capture; retention advice, confirmation checkbox and footer remain visible at 920/1180/1440 in all three locales. No threshold changes."
     },
     {
       "file": "worktree-analysis-zh_TW-1440x900.png",
-      "sha256": "941cba6e2861234d62c20b2768c0ca20c4cb84b33ab2a3743d67a2b4108855cb",
-      "reviewReason": "Manual retention advice stays separate from cleanup authorization; three locales and three sizes verified in isolated Electron."
+      "sha256": "97fe432325734bb4e60b494dfb1b34f998ae6134e5154695d5c61bc62cbccc5b",
+      "reviewReason": "Reviewed 2026-10-11: current isolated Electron capture; retention advice, confirmation checkbox and footer remain visible at 920/1180/1440 in all three locales. No threshold changes."
     },
     {
       "file": "worktree-analysis-zh_TW-920x620.png",
-      "sha256": "96ecba61ba177d7fc2ba7896e703a2c5cc4b5dcc2cdfe15813b974e55070919a",
-      "reviewReason": "Manual retention advice stays separate from cleanup authorization; three locales and three sizes verified in isolated Electron."
+      "sha256": "c4875c59e5011a517c4bdcd04d717e7b4a11f0881fbb5d3768dc455b410f20df",
+      "reviewReason": "Reviewed 2026-10-11: current isolated Electron capture; retention advice, confirmation checkbox and footer remain visible at 920/1180/1440 in all three locales. No threshold changes."
     },
     {
       "file": "skill-invocation-920.png",
@@ -524,6 +524,12 @@
       "artifactFingerprint": "1130841943b1b3a713618840b13ab9b19e3e7652dd277181a1ae39f271085bd9",
       "scope": "Nine Worktree retention screenshots across en/zh_CN/zh_TW and 920/1180/1440; AI settings at 920. Other reviewed images remain unchanged.",
       "method": "Isolated Electron, real temporary Git fixtures, mock AI, alignment and containment assertions, rendered pixel inspection.",
+      "thresholdsChanged": false
+    },
+    {
+      "reviewedAt": "2026-10-11",
+      "scope": "Nine Worktree retention screenshots only; other baseline images unchanged.",
+      "method": "Three isolated Electron locale tests passed, with geometry assertions and individual pixel inspection of all nine captures.",
       "thresholdsChanged": false
     }
   ],

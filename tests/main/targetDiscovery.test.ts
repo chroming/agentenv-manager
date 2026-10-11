@@ -282,7 +282,7 @@ describe("target discovery", () => {
       "skillsDir"
     ]);
     expect(workBuddy?.conversationCapabilities).toMatchObject({
-      history: { state: "unsupported" },
+      history: { state: "available" },
       openOriginal: { state: "unsupported" },
       continue: { state: "degraded" }
     });

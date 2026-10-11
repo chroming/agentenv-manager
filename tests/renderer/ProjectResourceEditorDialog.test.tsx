@@ -154,7 +154,7 @@ describe("ProjectResourceEditorDialog", () => {
       content: "# New project rules\n"
     }));
     expect(onClose).not.toHaveBeenCalled();
-    expect(within(dialog).getByLabelText("Preview of AGENTS.md"))
+    expect(await within(dialog).findByLabelText("Preview of AGENTS.md"))
       .toHaveTextContent("New project rules");
   });
 });
