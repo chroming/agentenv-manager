@@ -427,6 +427,12 @@ trees follow other trees within their repository. User sorting still applies wit
 each partition. Ignore changes cleanup eligibility, not scan coverage or Git files.
 Repository batch selection uses a shared icon button with an explicit tooltip and
 accessible name; ignored repositories omit that inapplicable action.
+The ignored-repository section defaults to collapsed and shows its repository count.
+Search expands it transiently; explicit navigation from a kept tree reveals the target
+repository. The filter is Excluded, covering both individual keeps and repository ignores.
+Repositories without eligible rows omit batch selection. Review selection uses a check
+icon, reserving trash icons for actual removal. Skill-source ignore and unignore commands
+are both available in the candidate menu, in addition to the ignored status shortcut.
 Interrupted cleanup records are reconciled against the original directory and Git
 registration before Restore is offered. An interrupted restore can continue only when
 the partially restored directory still matches the recorded attempt; otherwise the

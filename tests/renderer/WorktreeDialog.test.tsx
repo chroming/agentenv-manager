@@ -58,7 +58,13 @@ describe("WorktreeDialog", () => {
     api.inventoryWorktrees.mockResolvedValue({ ...inventory, entries: [ignored, kept, clean, dirty] });
     const { container } = render(<WorktreeWorkspace />);
     await screen.findByText("Ignored repositories");
-    const groups = [...container.querySelectorAll("[data-resource-disclosure-id]")];
+    expect(screen.queryByRole("button", { name: "Stop ignoring repository" })).toBeNull();
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search Worktrees" }), { target: { value: "/a/tree" } });
+    expect(screen.getByRole("button", { name: "Stop ignoring repository" })).toBeEnabled();
+    fireEvent.change(screen.getByRole("searchbox", { name: "Search Worktrees" }), { target: { value: "" } });
+    expect(screen.queryByRole("button", { name: "Stop ignoring repository" })).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Ignored repositories" }));
+    const groups = [...container.querySelectorAll('[data-resource-disclosure-id]:not([data-resource-disclosure-id="ignored-repositories"])')];
     expect(groups.map((group) => group.getAttribute("data-resource-disclosure-id"))).toEqual([clean.commonDir, ignored.commonDir]);
     expect(within(groups[0] as HTMLElement).getByRole("button", { name: "Select all eligible Worktrees" }).textContent).toBe("");
     expect(within(groups[1] as HTMLElement).queryByRole("button", { name: "Select all eligible Worktrees" })).toBeNull();
@@ -183,7 +189,7 @@ describe("WorktreeDialog", () => {
     fireEvent.click(within(result).getAllByRole("button", { name: "Close" }).at(-1)!);
     expect(screen.getByText(second.path)).toBeInTheDocument();
     expect(screen.queryByText(clean.path)).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Select all eligible Worktrees" })).toBeDisabled();
+    expect(screen.queryByRole("button", { name: "Select all eligible Worktrees" })).toBeNull();
   });
 
   it("stops the failed repository, leaves later entries unexecuted, and continues independent repositories", async () => {
@@ -434,7 +440,7 @@ describe("WorktreeDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Filters/ }));
     fireEvent.change(screen.getByRole("combobox", { name: "Worktree filter" }), { target: { value: "kept" } });
     fireEvent.keyDown(document, { key: "Escape" });
-    expect(screen.getByText("No kept Worktrees")).toBeInTheDocument();
+    expect(screen.getByText("No excluded Worktrees")).toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", { name: /^Filters/ }));
     fireEvent.click(screen.getByRole("button", { name: "Clear filters" }));
     fireEvent.keyDown(document, { key: "Escape" });
@@ -526,7 +532,7 @@ describe("WorktreeDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: /^Filters/ }));
     fireEvent.change(screen.getByRole("combobox", { name: "Worktree filter" }), { target: { value: "kept" } });
     fireEvent.keyDown(document, { key: "Escape" });
-    expect(screen.getByText("No kept Worktrees")).toBeInTheDocument();
+    expect(screen.getByText("No excluded Worktrees")).toBeInTheDocument();
     expect(screen.queryByText("No Worktrees found")).not.toBeInTheDocument();
   });
 

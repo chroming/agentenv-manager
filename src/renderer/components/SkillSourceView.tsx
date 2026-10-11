@@ -14,6 +14,7 @@ import {
   CircleAlert,
   Copy,
   EyeOff,
+  Eye,
   ExternalLink,
   GitMerge,
   LoaderCircle,
@@ -1039,11 +1040,13 @@ export const SkillSourceView = ({
                           reviewLabel={candidate.state === "new" ? t("Add") : candidate.state === "ignored" ? t("Unignore") : t("Update {{name}}", { name: candidate.libraryId ?? candidate.name })}
                         />
                         <div className="skill-source-candidate-action">
-                          {(candidate.state === "new" && onSetCandidateIgnored) || (candidate.state === "removed" && candidate.libraryId) ?
+                          {(["new", "ignored"].includes(candidate.state) && onSetCandidateIgnored) || (candidate.state === "removed" && candidate.libraryId) ?
                             <ToolbarOverflowMenu variant="ghost" label={t("More actions for {{name}}", { name: candidate.name })}
                               menuLabel={t("Actions for {{name}}", { name: candidate.name })}
                               disabled={Boolean(operation) || Boolean(updateActivity) || activeCheckingAll || checking.size > 0}
-                              items={candidate.state === "new" ? [{ id: "ignore",
+                              items={candidate.state === "ignored" ? [{ id: "unignore", label: t("Unignore"), icon: <Eye size={14} />,
+                                onSelect: () => void setCandidateIgnored(group, candidate, false)
+                              }] : candidate.state === "new" ? [{ id: "ignore",
                                 label: t("Ignore {{name}} for this source", { name: candidate.name }),
                                 icon: <EyeOff size={14} />,
                                 onSelect: () => void setCandidateIgnored(group, candidate, true)

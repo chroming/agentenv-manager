@@ -588,6 +588,9 @@ describe("SkillSourceView", () => {
       ignored: false
     }));
     expect(onAdd).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "More actions for testing" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Unignore" }));
+    await waitFor(() => expect(onSetCandidateIgnored).toHaveBeenLastCalledWith({ sourceId: group.sourceId, sourceSubpath: "testing", ignored: false }));
   });
 
   it("animates the action that is waiting for an update preview", async () => {

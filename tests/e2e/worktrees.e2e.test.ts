@@ -258,6 +258,11 @@ describe("Worktrees desktop workflow", () => {
     await batchDialog.getByRole("button", { name: t("Cancel"), exact: true }).click();
     await group.getByRole("button", { name: t("Clear Worktree selection"), exact: true }).click();
     await group.getByRole("button", { name: t("Ignore repository"), exact: true }).click();
+    const ignoredSection = workspace.getByRole("button", { name: t("Ignored repositories"), exact: true });
+    await ignoredSection.waitFor();
+    expect(await ignoredSection.getAttribute("aria-expanded")).toBe("false");
+    if (process.env.AGENTENV_CAPTURE_WORKTREES_DIR) await page.screenshot({ path: join(process.env.AGENTENV_CAPTURE_WORKTREES_DIR, `worktrees-ignored-collapsed-${locale}-920.png`) });
+    await ignoredSection.click();
     const unkeep = group.getByRole("button", { name: t("Stop ignoring repository"), exact: true });
     await unkeep.waitFor();
     expect(await group.getByRole("checkbox").count()).toBe(0);
