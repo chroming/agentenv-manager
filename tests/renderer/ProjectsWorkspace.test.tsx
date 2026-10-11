@@ -185,6 +185,7 @@ describe("ProjectsWorkspace", () => {
     api.listProjects.mockResolvedValue([project, second]);
     const view = render(<ProjectsWorkspace targets={[target]} />);
     await screen.findByRole("button", { name: "Open in OpenCode" });
+    await waitFor(() => expect(screen.getByRole("button", { name: "More Workspace actions" })).toBeEnabled());
     let finish!: (value: typeof base) => void;
     api.inspectProject.mockImplementation((id: string) => id === project.id
       ? new Promise((resolve) => { finish = resolve; })
