@@ -51,6 +51,23 @@ afterEach(() => {
 });
 
 describe("WorktreeDialog", () => {
+  it("moves ignored repositories below active ones and keeps selection icon-only", async () => {
+    const api = installApi();
+    const ignored: WorktreeEntry = { ...clean, commonDir: "/a/.git", repositoryPath: "/a", path: "/a/tree", state: "kept", keptReason: "Kept by user", repositoryKeptReason: "Kept by user" };
+    const kept: WorktreeEntry = { ...clean, path: "/projects/_worktrees/aaa-kept", state: "kept", keptReason: "Kept by user" };
+    api.inventoryWorktrees.mockResolvedValue({ ...inventory, entries: [ignored, kept, clean, dirty] });
+    const { container } = render(<WorktreeWorkspace />);
+    await screen.findByText("Ignored repositories");
+    const groups = [...container.querySelectorAll("[data-resource-disclosure-id]")];
+    expect(groups.map((group) => group.getAttribute("data-resource-disclosure-id"))).toEqual([clean.commonDir, ignored.commonDir]);
+    expect(within(groups[0] as HTMLElement).getByRole("button", { name: "Select all eligible Worktrees" }).textContent).toBe("");
+    expect(within(groups[1] as HTMLElement).queryByRole("button", { name: "Select all eligible Worktrees" })).toBeNull();
+    expect(within(groups[1] as HTMLElement).getByRole("button", { name: "Stop ignoring repository" })).toBeEnabled();
+    const rows = groups[0].querySelectorAll(".ui-resource-row");
+    expect(rows[rows.length - 1]).toHaveTextContent("aaa-kept");
+    fireEvent.click(screen.getByRole("button", { name: "Stop ignoring repository" }));
+    await waitFor(() => expect(api.setWorktreeRepositoryKeep).toHaveBeenCalledWith(ignored.commonDir, undefined));
+  });
   it("collapses repositories and keeps the whole repository rather than visible rows", async () => {
     const api = installApi();
     const update = vi.fn();
@@ -59,7 +76,7 @@ describe("WorktreeDialog", () => {
     fireEvent.click(trigger);
     expect(screen.queryByText(clean.path)).not.toBeInTheDocument();
     expect(update).toHaveBeenCalledWith({ worktreeCollapsedRepositories: [clean.commonDir] });
-    fireEvent.click(screen.getByRole("button", { name: "Keep repository" }));
+    fireEvent.click(screen.getByRole("button", { name: "Ignore repository" }));
     await waitFor(() => expect(api.setWorktreeRepositoryKeep).toHaveBeenCalledWith(clean.commonDir, "Kept by user"));
     fireEvent.click(trigger);
     expect(await screen.findByText(clean.path)).toBeInTheDocument();

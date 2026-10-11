@@ -257,8 +257,8 @@ describe("Worktrees desktop workflow", () => {
     expect(await batchDialog.locator(".ui-resource-row__state .ui-catalog-sort-metric").count()).toBe(9);
     await batchDialog.getByRole("button", { name: t("Cancel"), exact: true }).click();
     await group.getByRole("button", { name: t("Clear Worktree selection"), exact: true }).click();
-    await group.getByRole("button", { name: t("Keep repository"), exact: true }).click();
-    const unkeep = group.getByRole("button", { name: t("Remove repository keep marker"), exact: true });
+    await group.getByRole("button", { name: t("Ignore repository"), exact: true }).click();
+    const unkeep = group.getByRole("button", { name: t("Stop ignoring repository"), exact: true });
     await unkeep.waitFor();
     expect(await group.getByRole("checkbox").count()).toBe(0);
     const keptSettings = JSON.parse(await readFile(join(data, "worktree-locations.json"), "utf8"));
@@ -268,7 +268,7 @@ describe("Worktrees desktop workflow", () => {
     await page.getByRole("dialog").getByRole("button", { name: t("View repository"), exact: true }).click();
     expect(await unkeep.evaluate((element) => document.activeElement === element)).toBe(true);
     await unkeep.click();
-    await group.getByRole("button", { name: t("Keep repository"), exact: true }).waitFor();
+    await group.getByRole("button", { name: t("Ignore repository"), exact: true }).waitFor();
     expect(await group.getByRole("checkbox").count()).toBe(9);
     await workspace.getByRole("button", { name: t("Scan locations") }).click();
     const scope = page.getByRole("dialog", { name: t("Scan locations") });

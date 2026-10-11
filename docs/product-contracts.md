@@ -420,6 +420,13 @@ Batch results use shared semantic status controls: skipped is neutral, failed is
 verification warnings remain warning, and only fully successful batches emphasize Close.
 Worktree reasons carry translatable messages and parameters separately from original
 diagnostic detail. Localization must not change cleanup eligibility or safety predicates.
+Repository exclusion is presented as Ignore repository (EyeOff), reversible with
+Stop ignoring repository (Eye), rather than a bookmark/favorite. Ignored repositories
+follow active repositories under a quiet Ignored repositories label; individually kept
+trees follow other trees within their repository. User sorting still applies within
+each partition. Ignore changes cleanup eligibility, not scan coverage or Git files.
+Repository batch selection uses a shared icon button with an explicit tooltip and
+accessible name; ignored repositories omit that inapplicable action.
 Interrupted cleanup records are reconciled against the original directory and Git
 registration before Restore is offered. An interrupted restore can continue only when
 the partially restored directory still matches the recorded attempt; otherwise the

@@ -1,9 +1,9 @@
 import {
   AlertTriangle, ArrowLeft, Check, CircleStop, Copy, FolderGit2, GitBranch,
   FolderSearch, History, LoaderCircle, LockKeyhole, Maximize2, Minimize2, Plus,
-  RotateCcw, Trash2, X, Bookmark, BookmarkX
+  RotateCcw, Trash2, X, Eye, EyeOff, ListChecks, ListX
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import type {
   WorktreeCleanupPreview, WorktreeEntry, WorktreeInventory, WorktreeRecoveryRecord
 } from "../../shared/worktrees";
@@ -123,7 +123,8 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
     }
     return sortWorktreeGroups(
       [...groups].filter(([, rows]) => rows.some((entry) => !entry.main)), sort
-    );
+    ).map(([key, rows]): [string, WorktreeEntry[]] => [key, [...rows].sort((a, b) => Number(a.state === "kept") - Number(b.state === "kept"))])
+      .sort((a, b) => Number(a[1].some((entry) => Boolean(entry.repositoryKeptReason))) - Number(b[1].some((entry) => Boolean(entry.repositoryKeptReason))));
   }, [inventory, filter, query, sort]);
 
   const addLocation = async () => {
@@ -327,27 +328,30 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
           {entriesByRepo.length === 0 && busy !== "scan" ? <EmptyState icon={<FolderGit2 size={25} />}
             title={filter === "all" ? t("No Worktrees found") : filter === "review" ? t("No Worktrees to review") : t("No kept Worktrees")}
             description={filter === "all" ? t("Add a scan location to look for local Git working directories.") : undefined} /> : null}
-          {entriesByRepo.map(([commonDir, entries]) => {
+          {entriesByRepo.map(([commonDir, entries], groupIndex) => {
             const eligible = entries.filter(isBatchCleanupCandidate);
             const allSelected = eligible.length > 0 && eligible.every((entry) => selected.includes(entryKey(entry)));
             const kept = entries.some((entry) => Boolean(entry.repositoryKeptReason));
-            return <ResourceDisclosureSection className="worktree-dialog__group" key={commonDir} id={commonDir}
+            const firstIgnored = kept && (groupIndex === 0 || !entriesByRepo[groupIndex - 1][1].some((entry) => Boolean(entry.repositoryKeptReason)));
+            return <Fragment key={commonDir}>
+            {firstIgnored ? <SectionLabel tone="muted" icon={<EyeOff size={15} />}>{t("Ignored repositories")}</SectionLabel> : null}
+            <ResourceDisclosureSection className="worktree-dialog__group" id={commonDir}
               appearance="list" density="compact" panelScrollOwner="child" icon={<GitBranch size={15} />}
               title={nameFromPath(entries[0].repositoryPath)} toggleLabel={nameFromPath(entries[0].repositoryPath)}
-              summary={kept ? t("Kept") : String(entries.length)} summaryTitle={entries[0].repositoryPath}
+              summary={kept ? t("Ignored") : String(entries.length)} summaryTitle={entries[0].repositoryPath}
               expanded={searchDisclosure.expanded(commonDir, !collapsed.includes(commonDir))} onToggle={() => searchDisclosure.toggle(commonDir, () => {
                 const next = collapsed.includes(commonDir) ? collapsed.filter((key) => key !== commonDir) : [...collapsed, commonDir];
                 setCollapsed(next); onUpdateUiState?.({ worktreeCollapsedRepositories: next });
               })} actions={<ControlGroup>
               {sort === "size-desc" ? <CatalogSortMetric kind="size" label={t("Total size")} value={worktreeGroupMetric(entries, sort)} />
                 : sort === "modified-desc" || sort === "modified-asc" ? <CatalogSortMetric kind="date" label={sort === "modified-asc" ? t("Oldest modified") : t("Last modified")} value={worktreeGroupMetric(entries, sort)} /> : null}
-              <Button aria-label={allSelected ? t("Clear Worktree selection") : t("Select all eligible Worktrees")}
-                variant="ghost" size="compact" disabled={Boolean(busy) || !eligible.length} aria-pressed={allSelected}
+              {!kept ? <IconButton label={allSelected ? t("Clear Worktree selection") : t("Select all eligible Worktrees")}
+                variant="ghost" disabled={Boolean(busy) || !eligible.length} aria-pressed={allSelected}
                 onClick={() => setSelected((current) => {
                   const keys = new Set(eligible.map(entryKey));
                   return allSelected ? current.filter((key) => !keys.has(key)) : [...new Set([...current, ...keys])];
-                })}>{allSelected ? t("Clear selection") : t("Select clean")}</Button>
-              <IconButton data-repository-keep label={t(kept ? "Remove repository keep marker" : "Keep repository")} variant="ghost" busy={busy === commonDir} disabled={Boolean(busy)} onClick={() => void setRepositoryKeep(commonDir, kept)}>{kept ? <BookmarkX size={15} /> : <Bookmark size={15} />}</IconButton>
+                })}>{allSelected ? <ListX size={15} /> : <ListChecks size={15} />}</IconButton> : null}
+              <IconButton data-repository-keep label={t(kept ? "Stop ignoring repository" : "Ignore repository")} variant="ghost" busy={busy === commonDir} disabled={Boolean(busy)} onClick={() => void setRepositoryKeep(commonDir, kept)}>{kept ? <Eye size={15} /> : <EyeOff size={15} />}</IconButton>
             </ControlGroup>}>
             <AlignedResourceList actionTrack="compact" className="worktree-dialog__entries">
             {entries.map((entry) => <ResourceRow
@@ -369,7 +373,7 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
               </ControlGroup>}
             />)}
             </AlignedResourceList>
-          </ResourceDisclosureSection>; })}
+          </ResourceDisclosureSection></Fragment>; })}
         </>;
   const reviewBody = <div className="worktree-dialog__detail">
         {failure}
@@ -471,7 +475,7 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
           <Button variant="danger" icon={<Trash2 size={15} />} busy={busy === "remove"} disabled={Boolean(busy)} onClick={() => void clean()}>{previews.length === 1 ? t("Remove Worktree") : t("Remove Worktrees")}</Button>
         </> : view === "detail" && detail ? <>
           <ControlGroup ref={setAiActionsTarget} />
-          {detail.repositoryKeptReason ? <ControlGroup><InteractiveStatus size="metadata" label={t("Kept by repository")} />
+          {detail.repositoryKeptReason ? <ControlGroup><InteractiveStatus size="metadata" label={t("Repository ignored")} />
             <TextAction disabled={Boolean(busy)} onClick={() => { setQuery(""); setFilter("all"); setRepositoryFocus(detail.commonDir); dismissReview(); }}>{t("View repository")}</TextAction></ControlGroup>
             : !detail.main ? <Button busy={busy === "keep"} disabled={Boolean(busy)} onClick={() => void setKeep(detail)}>{detail.keptReason ? t("Remove keep marker") : t("Keep Worktree")}</Button> : null}
           {detail.manualReviewAvailable && !detail.keptReason ? <Button icon={<Trash2 size={15} />} disabled={Boolean(busy) || (!detail.cleanupReviewAvailable && !manualConfirm)} busy={busy === "preview"} onClick={() => void prepare([detail], !detail.cleanupReviewAvailable)}>{t("Review cleanup")}</Button> : null}
