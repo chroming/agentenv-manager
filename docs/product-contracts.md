@@ -358,13 +358,24 @@ selection. Main, locked, missing, and submodule worktrees are not cleanup candid
 Detached commits without another ref receive a recovery ref before removal.
 An operation cannot claim success until the directory and Git registration are both
 verified absent. Recovery must not overwrite a path created after cleanup.
-Each repository offers selection of all currently visible Clean (`candidate`)
-trees. Cleanup-preview capability alone is not batch eligibility: trees with
+The list and each repository offer selection of all Clean (`candidate`) trees
+within the current search/filter scope, including collapsed groups. Selection
+controls remain visible when no candidates qualify, but are disabled; partial
+selection uses the native indeterminate state. The list shows selected count and
+size, with unknown measurements never treated as zero, plus the count requiring
+individual review. Changing search/filter or refreshing clears selection.
+Cleanup-preview capability alone is not batch eligibility: trees with
 unconfirmed branch work (`review`) require individual review even when Git permits
 a non-force removal. Main, detached, dirty, ignored-content, locked, kept and unsafe
-trees stay excluded. Row checkboxes and repository selection share the same predicate.
+trees stay excluded, including all trees in an ignored repository. Row, repository,
+and global selection share the same predicate.
 Selection is not removal authorization or proof of code integration. Each tree is
 revalidated during Preview and again during Remove.
+Batch cleanup can stop after the current tree finishes its transaction. Remaining
+trees are marked Not run, without interrupting an active backup or Git removal.
+User-requested stops are distinguished from repository-level failure skips.
+Selection and cleanup never trigger AI analysis; retention analysis remains an
+explicit single-worktree action.
 Batch eligibility requires an unchanged clean tree whose HEAD is contained in a named
 integration target. The device-local target defaults to origin/HEAD, then local main/master;
 review can explicitly choose another local or remote branch. The Worktree's own branch,

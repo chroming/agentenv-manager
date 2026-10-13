@@ -41,7 +41,7 @@ export interface WorktreeEntry {
 
 export const isBatchCleanupCandidate = (entry: WorktreeEntry): boolean =>
   entry.state === "candidate" && entry.cleanupReviewAvailable && entry.exists &&
-  !entry.main && !entry.keptReason && !entry.locked && !entry.prunable &&
+  !entry.main && !entry.keptReason && !entry.repositoryKeptReason && !entry.locked && !entry.prunable &&
   !entry.detached && !entry.headNeedsProtection && !entry.submodules &&
   entry.reasons.length === 0 && entry.changes.length === 0 && entry.ignored.length === 0;
 

@@ -55,6 +55,14 @@ it("opts aligned selection lanes into flush margins without changing native inpu
   expect(aligned).not.toHaveAttribute("alignment");
 });
 
+it("renders native mixed selection and clears it when the selection becomes complete", () => {
+  const { rerender } = render(<ChoiceInput type="checkbox" aria-label="Select group" checked={false} indeterminate onChange={() => undefined} />);
+  expect(screen.getByRole("checkbox", { name: "Select group" })).toBePartiallyChecked();
+  rerender(<ChoiceInput type="checkbox" aria-label="Select group" checked indeterminate={false} onChange={() => undefined} />);
+  expect(screen.getByRole("checkbox", { name: "Select group" })).toBeChecked();
+  expect(screen.getByRole("checkbox", { name: "Select group" })).not.toBePartiallyChecked();
+});
+
 it("keeps compact headings semantic and renders path previews as selectable plain text", () => {
   const { container } = render(<>
     <SectionLabel as="h4" count={0} icon={<RefreshCw />} title="Full repository path">Changed paths</SectionLabel>

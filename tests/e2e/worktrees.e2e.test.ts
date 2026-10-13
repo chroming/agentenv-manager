@@ -246,17 +246,35 @@ describe("Worktrees desktop workflow", () => {
     await disclosure.click();
     expect(await group.locator(".ui-resource-row").count()).toBe(0);
     await disclosure.click();
-    await group.getByRole("button", { name: t("Select all eligible Worktrees"), exact: true }).click();
-    expect(await group.getByRole("checkbox", { checked: true }).count()).toBe(9);
+    await group.getByRole("checkbox", { name: t("Select all eligible Worktrees"), exact: true }).click();
+    expect(await group.getByRole("checkbox", { name: t("Select Worktree for review"), checked: true }).count()).toBe(9);
+    const globalSelection = workspace.getByRole("checkbox", { name: t("Select all cleanup candidates in this view"), exact: true });
+    expect(await globalSelection.isChecked()).toBe(true);
+    await globalSelection.uncheck();
+    expect(await group.getByRole("checkbox", { name: t("Select Worktree for review"), checked: true }).count()).toBe(0);
+    await globalSelection.check();
+    for (const width of [920, 1180, 1440]) {
+      await page.setViewportSize({ width, height: width === 920 ? 620 : 900 });
+      const selectionRow = workspace.locator(".ui-resource-row").filter({
+        has: page.getByRole("checkbox", { name: t("Select all cleanup candidates in this view"), exact: true })
+      });
+      expect(await selectionRow.evaluate((row) => [...row.querySelectorAll<HTMLElement>("button, input, .ui-resource-row__metadata")]
+        .every((element) => {
+          const bounds = element.getBoundingClientRect();
+          return element.scrollWidth <= element.clientWidth + 1 && bounds.left >= 0 && bounds.right <= window.innerWidth;
+        }))).toBe(true);
+      if (process.env.AGENTENV_CAPTURE_WORKTREES_DIR) await page.screenshot({ path: join(process.env.AGENTENV_CAPTURE_WORKTREES_DIR, `worktrees-selected-${locale}-${width}.png`) });
+    }
+    await page.setViewportSize({ width: 920, height: 620 });
     expect(await group.locator(".ui-resource-row").filter({ hasText: "locked-worktree" }).getByRole("checkbox").count()).toBe(0);
     expect(await group.locator(".ui-resource-row").filter({ hasText: "long-name-with-uncommitted-work" }).getByRole("checkbox").count()).toBe(0);
     expect(await group.locator(".ui-resource-row").filter({ hasText: "needs-review" }).getByRole("checkbox").count()).toBe(0);
-    await workspace.getByRole("button", { name: `${t("Review selected")} (9)`, exact: true }).click();
+    await workspace.getByRole("button", { name: `${t("Review cleanup")} (9)`, exact: true }).click();
     const batchDialog = page.getByRole("dialog");
     await batchDialog.getByText(t("Selected size"), { exact: true }).waitFor();
     expect(await batchDialog.locator(".ui-resource-row__state .ui-catalog-sort-metric").count()).toBe(9);
     await batchDialog.getByRole("button", { name: t("Cancel"), exact: true }).click();
-    await group.getByRole("button", { name: t("Clear Worktree selection"), exact: true }).click();
+    await group.getByRole("checkbox", { name: t("Select all eligible Worktrees"), exact: true }).click();
     await group.getByRole("button", { name: t("Ignore repository"), exact: true }).click();
     const ignoredSection = workspace.getByRole("button", { name: t("Ignored repositories"), exact: true });
     await ignoredSection.waitFor();
@@ -274,7 +292,7 @@ describe("Worktrees desktop workflow", () => {
     expect(await unkeep.evaluate((element) => document.activeElement === element)).toBe(true);
     await unkeep.click();
     await group.getByRole("button", { name: t("Ignore repository"), exact: true }).waitFor();
-    expect(await group.getByRole("checkbox").count()).toBe(9);
+    expect(await group.getByRole("checkbox", { name: t("Select Worktree for review") }).count()).toBe(9);
     await workspace.getByRole("button", { name: t("Scan locations") }).click();
     const scope = page.getByRole("dialog", { name: t("Scan locations") });
     await scope.getByText(join(home, ".codex", "worktrees"), { exact: true }).waitFor();

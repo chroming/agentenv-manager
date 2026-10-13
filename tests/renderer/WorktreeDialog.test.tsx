@@ -51,6 +51,70 @@ afterEach(() => {
 });
 
 describe("WorktreeDialog", () => {
+  it("selects candidates across collapsed repositories, reports exclusions and exposes mixed selection", async () => {
+    const api = installApi();
+    const second = { ...clean, path: "/projects/_worktrees/second", sizeBytes: 2048 };
+    const other = { ...clean, commonDir: "/other/.git", repositoryPath: "/other", path: "/other/tree" };
+    const ignored = { ...other, path: "/ignored/tree", commonDir: "/ignored/.git", repositoryPath: "/ignored", repositoryKeptReason: "Keep" };
+    api.inventoryWorktrees.mockResolvedValue({ ...inventory, entries: [clean, second, dirty, other, ignored] });
+    render(<WorktreeWorkspace />);
+    const all = await screen.findByRole("checkbox", { name: "Select all cleanup candidates in this view" });
+    fireEvent.click(screen.getAllByRole("checkbox", { name: "Select Worktree for review" })[0]);
+    expect(all).toBePartiallyChecked();
+    const group = screen.getByRole("button", { name: "app" }).closest("section")!;
+    expect(within(group).getByRole("checkbox", { name: "Select all eligible Worktrees" })).toBePartiallyChecked();
+    fireEvent.click(screen.getByRole("button", { name: "app" }));
+    fireEvent.click(all);
+    expect(all).toBeChecked();
+    expect(screen.getByText("3 selected · 4.0 KB")).toBeInTheDocument();
+    expect(screen.getByText("1 need review")).toBeInTheDocument();
+    fireEvent.click(all);
+    expect(screen.getByRole("button", { name: "Review cleanup (0)" })).toBeDisabled();
+    fireEvent.change(screen.getByRole("searchbox"), { target: { value: "/other/tree" } });
+    fireEvent.click(screen.getByRole("checkbox", { name: "Select all cleanup candidates in this view" }));
+    expect(screen.getByText("1 selected · 1.0 KB")).toBeInTheDocument();
+    expect(api.previewWorktreeCleanup).not.toHaveBeenCalled();
+  });
+
+  it("keeps group and global selection visible but disabled when everything needs individual review", async () => {
+    const api = installApi();
+    api.inventoryWorktrees.mockResolvedValue({ ...inventory, entries: [dirty] });
+    render(<WorktreeWorkspace />);
+    expect(await screen.findByRole("checkbox", { name: "Select all cleanup candidates in this view" })).toBeDisabled();
+    expect(screen.getByRole("checkbox", { name: "Select all eligible Worktrees" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Review cleanup (0)" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "dirty" })).toBeEnabled();
+  });
+
+  it("finishes the active removal before stopping and leaves subsequent trees untouched", async () => {
+    const api = installApi();
+    const second = { ...clean, path: "/projects/_worktrees/second" };
+    const entries = [clean, second];
+    api.inventoryWorktrees.mockResolvedValue({ ...inventory, entries });
+    api.previewWorktreeCleanup.mockImplementation(async (_commonDir, path) => ({
+      previewId: path, entry: entries.find((entry) => entry.path === path)!, fingerprint: "b".repeat(64),
+      checkedAt: inventory.scannedAt, backupRequired: false, forceRequired: false, savedWorkspace: false
+    }));
+    let finish!: (result: { status: string; sourceSizeBytes: number; reclaimedSizeBytes: number }) => void;
+    api.removeWorktree.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    render(<WorktreeWorkspace />);
+    fireEvent.click(await screen.findByRole("checkbox", { name: "Select all cleanup candidates in this view" }));
+    fireEvent.click(screen.getByRole("button", { name: "Review cleanup (2)" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Remove Worktrees" }));
+    const dialog = screen.getByRole("dialog", { name: "Cleanup results" });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Stop after current" }));
+    expect(within(dialog).getByText("Finishing the current Worktree before stopping...")).toBeInTheDocument();
+    expect(within(dialog).getAllByRole("button", { name: "Close" }).every((button) => (button as HTMLButtonElement).disabled)).toBe(true);
+    await act(async () => finish({ status: "removed", sourceSizeBytes: 1024, reclaimedSizeBytes: 1024 }));
+    expect(api.removeWorktree).toHaveBeenCalledTimes(1);
+    expect(within(dialog).getByText("Not run")).toBeInTheDocument();
+    expect(within(dialog).getByText("Cleanup stopped. Remaining Worktrees were not changed.")).toBeInTheDocument();
+    expect(within(dialog).queryByText(/affected repository/)).not.toBeInTheDocument();
+    fireEvent.click(within(dialog).getAllByRole("button", { name: "Close" }).at(-1)!);
+    expect(screen.queryByText(clean.path)).not.toBeInTheDocument();
+    expect(screen.getByText(second.path)).toBeInTheDocument();
+  });
+
   it("moves ignored repositories below active ones and keeps selection icon-only", async () => {
     const api = installApi();
     const ignored: WorktreeEntry = { ...clean, commonDir: "/a/.git", repositoryPath: "/a", path: "/a/tree", state: "kept", keptReason: "Kept by user", repositoryKeptReason: "Kept by user" };
@@ -66,8 +130,8 @@ describe("WorktreeDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Ignored repositories" }));
     const groups = [...container.querySelectorAll('[data-resource-disclosure-id]:not([data-resource-disclosure-id="ignored-repositories"])')];
     expect(groups.map((group) => group.getAttribute("data-resource-disclosure-id"))).toEqual([clean.commonDir, ignored.commonDir]);
-    expect(within(groups[0] as HTMLElement).getByRole("button", { name: "Select all eligible Worktrees" }).textContent).toBe("");
-    expect(within(groups[1] as HTMLElement).queryByRole("button", { name: "Select all eligible Worktrees" })).toBeNull();
+    expect(within(groups[0] as HTMLElement).getByRole("checkbox", { name: "Select all eligible Worktrees" }).textContent).toBe("");
+    expect(within(groups[1] as HTMLElement).queryByRole("checkbox", { name: "Select all eligible Worktrees" })).toBeNull();
     expect(within(groups[1] as HTMLElement).getByRole("button", { name: "Stop ignoring repository" })).toBeEnabled();
     const rows = groups[0].querySelectorAll(".ui-resource-row");
     expect(rows[rows.length - 1]).toHaveTextContent("aaa-kept");
@@ -115,8 +179,8 @@ describe("WorktreeDialog", () => {
     const api = installApi();
     api.previewWorktreeCleanup.mockResolvedValue({ previewId: "changed", entry: { ...clean, state: "review", reasons: ["New work"] }, fingerprint: "b".repeat(64), checkedAt: inventory.scannedAt, backupRequired: false, forceRequired: false, savedWorkspace: false });
     render(<WorktreeWorkspace />);
-    fireEvent.click(await screen.findByRole("button", { name: "Select all eligible Worktrees" }));
-    fireEvent.click(screen.getByRole("button", { name: "Review selected (1)" }));
+    fireEvent.click(await screen.findByRole("checkbox", { name: "Select all eligible Worktrees" }));
+    fireEvent.click(screen.getByRole("button", { name: "Review cleanup (1)" }));
     expect(await screen.findByRole("alert")).toHaveTextContent("now needs individual review");
     expect(screen.queryByRole("button", { name: "Remove Worktree" })).not.toBeInTheDocument();
     expect(api.removeWorktree).not.toHaveBeenCalled();
@@ -128,8 +192,8 @@ describe("WorktreeDialog", () => {
       { ...clean, path: "/projects/_worktrees/safe", state: "candidate" }, reviewed
     ] });
     render(<WorktreeWorkspace />);
-    fireEvent.click(await screen.findByRole("button", { name: "Select all eligible Worktrees" }));
-    const checked = [...document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')].filter((input) => input.checked);
+    fireEvent.click(await screen.findByRole("checkbox", { name: "Select all eligible Worktrees" }));
+    const checked = screen.getAllByRole("checkbox", { name: "Select Worktree for review" }).filter((input) => (input as HTMLInputElement).checked);
     expect(checked).toHaveLength(1);
     expect(checked[0].closest(".ui-resource-row")).not.toHaveTextContent(clean.path);
   });
@@ -141,11 +205,11 @@ describe("WorktreeDialog", () => {
     render(<WorktreeWorkspace />);
     await screen.findByText(clean.path);
     const group = screen.getByText("app", { exact: true }).closest("section")!;
-    fireEvent.click(within(group).getByRole("button", { name: "Select all eligible Worktrees" }));
-    expect(within(group).getByRole("checkbox")).toBeChecked();
-    expect(screen.getAllByRole("checkbox").filter((input) => (input as HTMLInputElement).checked)).toHaveLength(1);
-    fireEvent.click(within(group).getByRole("button", { name: "Clear Worktree selection" }));
-    expect(within(group).getByRole("checkbox")).not.toBeChecked();
+    fireEvent.click(within(group).getByRole("checkbox", { name: "Select all eligible Worktrees" }));
+    expect(within(group).getByRole("checkbox", { name: "Select Worktree for review" })).toBeChecked();
+    expect(screen.getAllByRole("checkbox", { name: "Select Worktree for review" }).filter((input) => (input as HTMLInputElement).checked)).toHaveLength(1);
+    fireEvent.click(within(group).getByRole("checkbox", { name: "Select all eligible Worktrees" }));
+    expect(within(group).getByRole("checkbox", { name: "Select Worktree for review" })).not.toBeChecked();
   });
 
   it("shows reviewed sizes and finishes cleanup without waiting for an unrelated full scan", async () => {
@@ -178,8 +242,8 @@ describe("WorktreeDialog", () => {
     api.removeWorktree.mockResolvedValueOnce({ status: "removed", sourceSizeBytes: 1024, reclaimedSizeBytes: 1024 })
       .mockRejectedValueOnce(new Error("Changed after review"));
     render(<WorktreeWorkspace />);
-    fireEvent.click(await screen.findByRole("button", { name: "Select all eligible Worktrees" }));
-    fireEvent.click(screen.getByRole("button", { name: "Review selected (2)" }));
+    fireEvent.click(await screen.findByRole("checkbox", { name: "Select all eligible Worktrees" }));
+    fireEvent.click(screen.getByRole("button", { name: "Review cleanup (2)" }));
     const confirm = await screen.findByRole("dialog", { name: "Remove 2 Worktrees?" });
     expect(confirm.querySelector(".ui-detail-list")).toHaveTextContent("Selected size3.0 KB");
     fireEvent.click(within(confirm).getByRole("button", { name: "Remove Worktrees" }));
@@ -189,7 +253,7 @@ describe("WorktreeDialog", () => {
     fireEvent.click(within(result).getAllByRole("button", { name: "Close" }).at(-1)!);
     expect(screen.getByText(second.path)).toBeInTheDocument();
     expect(screen.queryByText(clean.path)).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Select all eligible Worktrees" })).toBeNull();
+    expect(screen.getByRole("checkbox", { name: "Select all eligible Worktrees" })).toBeDisabled();
   });
 
   it("stops the failed repository, leaves later entries unexecuted, and continues independent repositories", async () => {
@@ -205,8 +269,8 @@ describe("WorktreeDialog", () => {
     api.removeWorktree.mockRejectedValueOnce(new Error("Repository needs review"));
     render(<WorktreeWorkspace />);
     await screen.findByText(clean.path);
-    for (const button of screen.getAllByRole("button", { name: "Select all eligible Worktrees" })) fireEvent.click(button);
-    fireEvent.click(screen.getByRole("button", { name: "Review selected (3)" }));
+    for (const button of screen.getAllByRole("checkbox", { name: "Select all eligible Worktrees" })) fireEvent.click(button);
+    fireEvent.click(screen.getByRole("button", { name: "Review cleanup (3)" }));
     fireEvent.click(await screen.findByRole("button", { name: "Remove Worktrees" }));
     const results = await screen.findByRole("dialog", { name: "Cleanup results" });
     await within(results).findByText("Not run");
@@ -226,8 +290,8 @@ describe("WorktreeDialog", () => {
     }));
     api.removeWorktree.mockResolvedValue({ status: "removed", sourceSizeBytes: 1024, reclaimedSizeBytes: 1024, verificationWarnings: ["Main repository changed"] });
     render(<WorktreeWorkspace />);
-    fireEvent.click(await screen.findByRole("button", { name: "Select all eligible Worktrees" }));
-    fireEvent.click(screen.getByRole("button", { name: "Review selected (2)" }));
+    fireEvent.click(await screen.findByRole("checkbox", { name: "Select all eligible Worktrees" }));
+    fireEvent.click(screen.getByRole("button", { name: "Review cleanup (2)" }));
     fireEvent.click(await screen.findByRole("button", { name: "Remove Worktrees" }));
     const results = await screen.findByRole("dialog", { name: "Cleanup results" });
     await within(results).findByText("Not run");
