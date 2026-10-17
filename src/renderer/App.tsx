@@ -71,7 +71,7 @@ import { AppUpdateSettings } from "./components/AppUpdateSettings";
 import { TelemetryConsentDialog } from "./components/TelemetryConsentDialog";
 import { SkillManagementMigrationDialog } from "./components/SkillManagementMigrationDialog";
 import { TelemetrySettings } from "./components/TelemetrySettings";
-import { BackupManagerDialog } from "./components/BackupManagerDialog";
+import { BackupRecoveryManager } from "./components/BackupRecoveryManager";
 import { DataSettingsSection } from "./components/DataSettingsSection";
 import { DiagnosticIssueDialog } from "./components/DiagnosticIssueDialog";
 import { GitHubConnectionSettings } from "./components/GitHubConnectionSettings";
@@ -4569,6 +4569,8 @@ const AppContent = ({
             <>
             <DataSettingsSection
               backupRetentionDays={skillSettings.backupRetentionDays}
+              deletedConversationRetentionDays={skillSettings.deletedConversationRetentionDays}
+              onDeletedConversationRetentionChange={(deletedConversationRetentionDays) => { void updateSkillSettings({ deletedConversationRetentionDays }); }}
               busy={busy}
               freshness={freshnessStates.backups}
               inventory={managedBackups}
@@ -4597,28 +4599,12 @@ const AppContent = ({
             </div>
             </div>
             {backupManagerOpen ? (
-              <BackupManagerDialog
+              <BackupRecoveryManager
+                controller={backupRecovery}
                 busy={busy}
-                cleanupConfirm={backupCleanupConfirm}
-                deleteCandidate={backupDeleteCandidate}
+                onBusyChange={setBusy}
                 dialogRef={appModalDialogRef}
                 initialFocusRef={appModalInitialFocusRef}
-                inventory={managedBackups}
-                inventoryLoading={managedBackupsLoading}
-                notice={backupManagerNotice}
-                preview={managedBackupPreview}
-                previewCandidate={backupPreviewCandidate}
-                previewLoading={managedBackupPreviewLoading}
-                formatBytes={formatBytes}
-                formatDate={formatDate}
-                onBackOrClose={backupRecovery.actions.closeManager}
-                onCancelCleanup={backupRecovery.actions.cancelCleanup}
-                onCancelDelete={backupRecovery.actions.cancelDelete}
-                onCleanup={() => void backupRecovery.actions.cleanupBackups()}
-                onDelete={() => void backupRecovery.actions.deleteSelectedBackup()}
-                onOpenCleanupConfirm={backupRecovery.actions.openCleanupConfirm}
-                onOpenDelete={backupRecovery.actions.openDelete}
-                onPreview={(item) => void backupRecovery.actions.previewBackup(item)}
               />
             ) : null}
             {dataRestorePreview ? (

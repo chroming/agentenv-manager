@@ -1207,6 +1207,9 @@ const createServices = async (
     return loadedConversationService;
   };
   const conversationService: ConversationService = {
+    previewDelete: (id) => loadConversationService().then((service) => service.previewDelete(id)),
+    delete: (id) => loadConversationService().then((service) => service.delete(id)),
+    restoreDeleted: (id) => loadConversationService().then((service) => service.restoreDeleted(id)),
     historyStatus: () => loadConversationService().then((service) => service.historyStatus()),
     configureHistory: (config, clearRemoved) => loadConversationService().then((service) => service.configureHistory(config, clearRemoved)),
     list: (input) => loadConversationService().then((service) => service.list(input)),
@@ -1485,7 +1488,7 @@ const initializeServices = () => {
         const runBackupCleanup = async () => {
           await services.mutationCoordinator.runExclusive("Clean up backups", async () => {
             const settings = await services.settingsStore.readSettings();
-            if (settings.backupRetentionDays !== null) {
+            if (settings.backupRetentionDays !== null || settings.deletedConversationRetentionDays !== null) {
               await services.backupMaintenanceService.cleanup();
             }
           });

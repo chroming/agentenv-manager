@@ -158,6 +158,9 @@ const api: AgentEnvApi = {
     ipcRenderer.invoke("conversations:continue", previewId),
   previewConversationMove: (input) =>
     ipcRenderer.invoke("conversations:preview-move", input),
+  previewDeleteConversation: (id) => ipcRenderer.invoke("conversations:preview-delete", id),
+  deleteConversation: (id) => ipcRenderer.invoke("conversations:delete", id),
+  restoreDeletedConversation: (id) => ipcRenderer.invoke("conversations:restore-deleted", id),
   moveConversation: (previewId) =>
     ipcRenderer.invoke("conversations:move", previewId),
   listNativeMcpConnections: () =>
@@ -280,7 +283,7 @@ const api: AgentEnvApi = {
   listManagedBackups: () => ipcRenderer.invoke("backups:list-managed"),
   previewManagedBackup: (input) => ipcRenderer.invoke("backups:preview-managed", input),
   deleteManagedBackup: (input) => ipcRenderer.invoke("backups:delete-managed", input),
-  cleanupManagedBackups: () => ipcRenderer.invoke("backups:cleanup-managed"),
+  cleanupManagedBackups: (scope) => ipcRenderer.invoke("backups:cleanup-managed", scope),
   previewRollback: (backupId) => ipcRenderer.invoke("rollback:preview", backupId),
   rollback: (backupId) => ipcRenderer.invoke("rollback:apply", backupId),
   previewStopManaging: (targetId, mode) =>

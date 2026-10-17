@@ -70,6 +70,15 @@ const setup = async () => {
 };
 
 describe("conversation index store", () => {
+  it("removes every local file projection without touching a remote history at the same path", async () => {
+    const { store: index } = await setup();
+    for (const [id, deviceId] of [["local-1","local"],["local-2","local"],["remote-1","ssh-device"]]) {
+      index.upsert({...detail,id,origin:{sourceKey:id,deviceId,deviceName:deviceId,historyPath:candidate.source.locator,readOnly:deviceId !== "local"}},candidate);
+    }
+    index.removeLocalFiles([candidate.source.locator]);
+    expect((await index.list()).items.map((item) => item.id)).toEqual(["remote-1"]);
+    expect((await index.search({query:"发布"})).map((item) => item.id)).toEqual(["remote-1"]);
+  });
   it("indexes searchable visible content without changing the source file", async () => {
     const { path, store: index } = await setup();
     const source = join(root, "history.jsonl");

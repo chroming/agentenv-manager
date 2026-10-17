@@ -1,4 +1,5 @@
 import { stat } from "node:fs/promises";
+import { collectConversationDeletionFiles } from "./conversationDeletionFiles";
 import { basename, dirname, join } from "node:path";
 import type {
   ConversationDetail,
@@ -151,6 +152,7 @@ const createClaudeAccumulator = (
 };
 
 export const createClaudeConversationCapability = (): AgentConversationCapability => ({
+  deletionFiles: (input) => collectConversationDeletionFiles("claude-code", input, input.candidate, input.candidates),
   historyDetail: "full",
   discover: async ({ targetPaths }) => {
     const projectsRoot = join(targetPaths.configDir, "projects");

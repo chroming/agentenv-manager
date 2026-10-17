@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { collectConversationDeletionFiles } from "./conversationDeletionFiles";
 import { stat } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { AgentConversationCapability } from "../types";
@@ -83,6 +84,7 @@ export const parseCodexConversation = (
 export const createCodexConversationCapability = (): AgentConversationCapability => {
   let titleIndexCache: CodexTitleIndexCache | undefined;
   return {
+    deletionFiles: (input) => collectConversationDeletionFiles("codex", input, input.candidate, input.candidates),
     historyDetail: "full",
     discover: async ({ targetPaths }) => {
       const titleIndex = await readCodexTitleIndex(targetPaths.configDir, titleIndexCache);

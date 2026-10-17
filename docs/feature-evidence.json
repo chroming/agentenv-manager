@@ -2,6 +2,31 @@
   "formatVersion": 1,
   "features": [
     {
+      "id": "recoverable-conversation-deletion",
+      "summary": "Explicit local history deletion with verified backups, recently-deleted retention and non-overwriting recovery.",
+      "contract": { "path": "docs/product-audit/2026-10-17-conversation-deletion.md", "anchor": "## Feature Admission: Recoverable Conversation Deletion" },
+      "support": { "opencode": "unsupported", "claude-code": "partial", "codex": "partial", "antigravity": "unsupported", "antigravity-app": "unsupported", "trae-cli": "unsupported", "pi": "partial", "workbuddy": "unsupported" },
+      "states": {
+        "idle": "Contextual Delete is available only on supported local file-backed histories.",
+        "working": "The confirmation owns progress; mutation and history indexing are serialized.",
+        "success": "Original files and cached search entries are removed; Undo opens the same restore operation.",
+        "error": "Failures remain in the initiating dialog with diagnostic copy support.",
+        "cancelled": "Dismissal before confirmation does not create a backup or modify originals.",
+        "noOp": "Repeated restore of a completed recovery record changes no files.",
+        "stale": "Commit rediscovers the file set and compares all hashes against the preview.",
+        "partial": "SSH, arbitrary source folders and native shared history databases are excluded; active sessions must be closed.",
+        "persisted": "Verified payloads and recovery phases survive restart; deletion retention is independent of recovery-point retention.",
+        "rollback": "Partial deletion restores removed files without overwriting new files; incomplete journals and payloads are protected from cleanup."
+      },
+      "evidence": {
+        "domain": ["tests/main/conversations/conversationDeletion.test.ts", "tests/main/conversations/conversationService.test.ts", "tests/main/conversations/historySearchController.test.ts", "tests/main/activationService.test.ts"],
+        "renderer": ["tests/renderer/ConversationDeletionDialog.test.tsx", "tests/renderer/BackupManagerDialog.test.tsx"],
+        "desktop": ["tests/e2e/conversationDeletion.e2e.test.ts"],
+        "persistence": ["tests/e2e/conversationDeletion.e2e.test.ts", "tests/main/conversations/conversationDeletion.test.ts"],
+        "visual": ["conversation-delete-920-en.png", "conversation-delete-920-zh_CN.png", "conversation-recovery-920-en.png", "conversation-recovery-920-zh_CN.png", "conversation-restore-920-en.png", "conversation-restore-920-zh_CN.png"]
+      }
+    },
+    {
       "id": "manual-worktree-retention-analysis",
       "summary": "Review bounded local Git evidence before deciding whether a Worktree deserves retention; AI never authorizes cleanup.",
       "contract": { "path": "docs/product-audit/2026-10-05-worktree-selection-analysis.md", "anchor": "## Feature Admission: Worktree Retention Analysis" },

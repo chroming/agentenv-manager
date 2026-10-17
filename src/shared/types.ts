@@ -203,6 +203,9 @@ export interface AgentEnvApi {
   continueConversation(previewId: string): Promise<ConversationLaunchResult>;
   previewConversationMove(input: ConversationMoveInput): Promise<ConversationMovePreview>;
   moveConversation(previewId: string): Promise<ConversationMoveResult>;
+  previewDeleteConversation(id: string): Promise<import("./conversationDeletion").ConversationDeletePreview>;
+  deleteConversation(previewId: string): Promise<{ backupId: string }>;
+  restoreDeletedConversation(backupId: string): Promise<void>;
   listNativeMcpConnections(): Promise<NativeMcpInspection>;
   listNativeInstructions?(): Promise<NativeInstructionsInspection>;
   listInstructionBlocks(): Promise<InstructionBlock[]>;
@@ -330,7 +333,7 @@ export interface AgentEnvApi {
   listManagedBackups(): Promise<ManagedBackupInventory>;
   previewManagedBackup(input: DeleteManagedBackupInput): Promise<ManagedBackupPreview>;
   deleteManagedBackup(input: DeleteManagedBackupInput): Promise<ManagedBackupDeleteResult>;
-  cleanupManagedBackups(): Promise<ManagedBackupCleanupResult>;
+  cleanupManagedBackups(scope?: "recovery" | "deleted"): Promise<ManagedBackupCleanupResult>;
   previewRollback(backupId: string): Promise<RollbackPreview>;
   rollback(backupId: string): Promise<RollbackResult>;
   previewStopManaging(targetId: string, mode: StopManagingMode): Promise<StopManagingPreview>;
@@ -475,6 +478,7 @@ export interface ConversationCapabilityStatus {
 }
 
 export interface TargetConversationCapabilities {
+  delete?: ConversationCapabilityStatus;
   history: ConversationCapabilityStatus;
   openOriginal: ConversationCapabilityStatus;
   continue: ConversationCapabilityStatus;
@@ -1459,6 +1463,7 @@ export interface AgentEnvSettings {
   telemetryEnabled?: boolean;
   telemetryConsentVersion?: 1;
   backupRetentionDays: BackupRetentionDays;
+  deletedConversationRetentionDays?: BackupRetentionDays;
   enabledTargetIds?: string[];
   agentDiscoveryVersion?: number;
   agentDiscoveryReviewedIds?: string[];
@@ -1701,11 +1706,14 @@ export interface ProjectSkillScanResult {
 
 export type BackupRetentionDays = 7 | 30 | 90 | null;
 
-export type ManagedBackupKind = "target-recovery" | "skill-cleanup" | "workspace-sync";
+export type ManagedBackupKind = "target-recovery" | "skill-cleanup" | "workspace-sync" | "conversation-delete";
 export type ManagedBackupCleanupStatus = "required" | "retained" | "kept" | "eligible";
 export type ManagedBackupRequiredReason = "recovery-required" | "takeover-baseline" | "workspace-sync-recovery";
 
 export interface ManagedBackupItem {
+  conversationTitle?: string;
+  deletionPhase?: import("./conversationDeletion").ConversationDeletionPhase;
+  expiresAt?: string;
   id: string;
   kind: ManagedBackupKind;
   createdAt: string;
@@ -2461,10 +2469,11 @@ export interface BackupEntry {
 }
 
 export interface BackupManifest {
+  conversation?: import("./conversationDeletion").ConversationDeletionMetadata;
   formatVersion: 2;
   id: string;
   createdAt: string;
-  operation?: "apply" | "stop-managing" | "data-import" | "adopt-drift" | "shared-skill-migration" | "workspace-sync" | "rollback-safety";
+  operation?: "apply" | "stop-managing" | "data-import" | "adopt-drift" | "shared-skill-migration" | "workspace-sync" | "rollback-safety" | "conversation-delete";
   targetId?: string;
   targetIds?: string[];
   profileId?: string;
@@ -2473,10 +2482,11 @@ export interface BackupManifest {
 }
 
 export interface BackupSummary {
+  conversation?: import("./conversationDeletion").ConversationDeletionMetadata;
   id: string;
   createdAt: string;
   fileCount: number;
-  operation?: "apply" | "stop-managing" | "data-import" | "adopt-drift" | "shared-skill-migration" | "workspace-sync" | "rollback-safety";
+  operation?: BackupManifest["operation"];
   targetId?: string;
   targetIds?: string[];
   profileId?: string;

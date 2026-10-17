@@ -51,6 +51,7 @@ interface ConversationIndexSearchInput extends ConversationSearchInput {
 }
 
 export interface ConversationIndexStore {
+  removeLocalFiles(paths: string[]): void;
   removeMissingSource(sourceId: string, observedIds: Set<string>): number;
   hasSourceRecords(sourceId: string): boolean;
   clearSources(sourceIds?: string[]): void;
@@ -132,6 +133,8 @@ const createDatabase = (path: string) => {
         ON conversations(updated_at DESC);
       CREATE INDEX IF NOT EXISTS conversations_agent_idx
         ON conversations(agent_id, updated_at DESC);
+      CREATE INDEX IF NOT EXISTS conversations_locator_idx
+        ON conversations(source_locator);
       CREATE TABLE IF NOT EXISTS conversation_messages (
         conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
         ordinal INTEGER NOT NULL,
@@ -369,6 +372,21 @@ export const createConversationIndexStore = async (
   };
 
   return {
+    removeLocalFiles: (paths) => {
+      const find = database.prepare("SELECT id, origin_json FROM conversations WHERE source_locator=?");
+      const remove = database.prepare("DELETE FROM conversations WHERE id=?");
+      database.exec("BEGIN IMMEDIATE");
+      try {
+        for (const path of new Set(paths)) {
+          const rows = find.all(path) as Array<{id: string; origin_json: string | null}>;
+          for (const row of rows) if (row.origin_json && JSON.parse(row.origin_json).deviceId === "local") {
+            deleteSearchStatement?.run(row.id);
+            remove.run(row.id);
+          }
+        }
+        database.exec("COMMIT");
+      } catch (error) { database.exec("ROLLBACK"); throw error; }
+    },
     hasSourceRecords: (sourceId) => Boolean(database.prepare("SELECT 1 FROM conversations WHERE history_source = ? LIMIT 1").get(sourceId)),
     removeMissingSource: (sourceId, observedIds) => {
       const rows = database.prepare("SELECT id FROM conversations WHERE history_source=?").all(sourceId) as Array<{id:string}>;

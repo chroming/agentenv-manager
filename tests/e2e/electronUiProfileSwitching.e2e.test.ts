@@ -9943,7 +9943,7 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByLabel("Backup retention").selectOption("30");
     await expect.poll(() => page.getByLabel("Backup retention").inputValue()).toBe("30");
     await page.getByRole("button", { name: "Manage", exact: true }).click();
-    const manager = page.getByRole("dialog", { name: "Manage Backups" });
+    const manager = page.getByRole("dialog", { name: "Backups & recovery" });
     await manager.waitFor({ state: "visible" });
     await expectInViewport(page, manager);
     await expectNoHorizontalOverflow(page, [".backup-manager-dialog"]);

@@ -42,6 +42,9 @@ import type { HistorySearchConfig, HistorySearchStatus } from "../../shared/conv
 import type { RemoteDeviceStore } from "../remoteDevices/remoteDeviceStore";
 import type { SshTransport } from "../remoteDevices/systemSshTransport";
 import { historyFilePath } from "../targets/conversations/historySourceAdapter";
+import type { ConversationDeletePreview, ConversationDeletionMetadata } from "../../shared/conversationDeletion";
+import { createBackupStore } from "../backupStore";
+import { createConversationDeletion, inspectConversationFiles } from "./conversationDeletion";
 
 const MAX_CONTEXT_CHARACTERS = 120_000;
 const PREVIEW_TTL_MS = 10 * 60 * 1000;
@@ -74,6 +77,9 @@ export interface ConversationClipboard {
 }
 
 export interface ConversationService {
+  previewDelete(id: string): Promise<ConversationDeletePreview>;
+  delete(previewId: string): Promise<{ backupId: string }>;
+  restoreDeleted(backupId: string): Promise<void>;
   historyStatus(): Promise<HistorySearchStatus>;
   configureHistory(config: HistorySearchConfig, clearRemoved?: boolean): Promise<HistorySearchStatus>;
   list(input?: ConversationListInput): Promise<ConversationListResult>;
@@ -241,6 +247,8 @@ export const createConversationService = async (options: {
   const pendingMoves = new Map<string, PendingMove>();
   const moveLocks = new Map<string, Promise<unknown>>();
   const now = options.now ?? Date.now;
+  const deletion = createConversationDeletion(createBackupStore(options.paths), options.paths.backupsDir);
+  const pendingDeletes = new Map<string, { preview: ConversationDeletePreview; metadata: ConversationDeletionMetadata; hashes: Record<string, string>; createdAt: number }>();
   const history = await createHistorySearchController({ paths: options.paths, registry: options.targetRegistry,
     settings: options.settingsStore, index, devices: options.devices, transport: options.transport });
 
@@ -333,7 +341,64 @@ export const createConversationService = async (options: {
     historyStatus: await history.status()
   });
 
+  const deletionContext = async (sourceKey: string, agentId: string) => {
+    const source = (await history.status()).config.sources.find((item) => item.id === sourceKey && item.agentId === agentId);
+    if (!source || source.deviceId !== "local" || source.kind !== "default" || !history.allowedIds().includes(sourceKey)) throw new Error("This local history source is no longer enabled");
+    const capability = options.targetRegistry.get(agentId);
+    return {
+      homeDir: options.paths.homeDir, platform: process.platform, environment: process.env,
+      targetPaths: capability.createTargetPaths({ homeDir: options.paths.homeDir, rootDirOverride: source.root, environment: process.env })
+    } satisfies AgentConversationContext;
+  };
+
   return {
+    previewDelete: async (id) => history.mutate(async () => {
+      for (const [key, value] of pendingDeletes) if (now() - value.createdAt > PREVIEW_TTL_MS) pendingDeletes.delete(key);
+      const record = index.record(id);
+      const origin = record.summary.origin;
+      if (!origin || origin.deviceId !== "local" || origin.readOnly || !history.allowedIds().includes(origin.sourceKey)) throw new Error("Only enabled local Agent histories support deletion. SSH and additional folders are read-only.");
+      const agentId = record.summary.agentId;
+      const capability = options.targetRegistry.get(agentId).conversations!;
+      if (!capability.deletionFiles) throw new Error("Deleting original history is not supported for this Agent yet. Its files and search index have not been changed.");
+      const context = await deletionContext(origin.sourceKey, agentId);
+      const discovered = await capability.discover(context);
+      if (!discovered.complete) throw new Error("The Agent history could not be fully read. Refresh its history source before deleting a conversation.");
+      const candidate = discovered.candidates.find((item) => item.source.locator === record.candidate.source.locator);
+      if (!candidate) throw new Error("The original conversation is no longer available. Refresh Conversations.");
+      const collected = await capability.deletionFiles({ ...context, candidate, candidates: discovered.candidates });
+      const inspected = await inspectConversationFiles(collected.files, collected.roots, now());
+      const settings = await options.settingsStore.readSettings();
+      const preview: ConversationDeletePreview = {
+        previewId: randomUUID(), title: record.summary.title, files: collected.files,
+        sizeBytes: inspected.sizeBytes, retentionDays: settings.deletedConversationRetentionDays === undefined ? 30 : settings.deletedConversationRetentionDays,
+        warnings: ["Close this conversation in its original Agent before deleting it. Native Agent recent-session lists may retain an entry until refreshed."]
+      };
+      pendingDeletes.set(preview.previewId, { preview, metadata: { conversationId: id, title: record.summary.title, agentId, sourceKey: origin.sourceKey, workspacePath: record.summary.workspacePath, roots: collected.roots }, hashes: inspected.hashes, createdAt: now() });
+      return preview;
+    }),
+    delete: async (previewId) => history.mutate(async () => {
+      const pending = pendingDeletes.get(previewId);
+      if (!pending || now() - pending.createdAt > PREVIEW_TTL_MS) throw new Error("Deletion preview expired. Review the conversation again.");
+      pendingDeletes.delete(previewId);
+      if (!history.allowedIds().includes(pending.metadata.sourceKey)) throw new Error("This history source is no longer enabled");
+      const context = await deletionContext(pending.metadata.sourceKey, pending.metadata.agentId);
+      const capability = options.targetRegistry.get(pending.metadata.agentId).conversations!;
+      if (!capability.deletionFiles) throw new Error("Conversation deletion is unavailable for this Agent");
+      const discovered = await capability.discover(context);
+      const record = index.record(pending.metadata.conversationId);
+      const candidate = discovered.candidates.find((item) => item.source.locator === record.candidate.source.locator);
+      if (!discovered.complete || !candidate) throw new Error("Conversation history changed. Review deletion again.");
+      const collected = await capability.deletionFiles({ ...context, candidate, candidates: discovered.candidates });
+      const inspected = await inspectConversationFiles(collected.files, collected.roots, now());
+      if (JSON.stringify(inspected.hashes) !== JSON.stringify(pending.hashes)) throw new Error("Conversation changed after preview. Review deletion again.");
+      const backupId = await deletion.remove(pending.metadata, pending.hashes, () => index.removeLocalFiles(collected.files));
+      return { backupId };
+    }),
+    restoreDeleted: async (id) => {
+      await history.mutate(() => deletion.restore(id));
+      // Restoration does not opt the user into scanning disabled or paused sources.
+      await history.refresh().catch((error) => console.warn("Conversation restored; search refresh deferred:", error));
+    },
     historyStatus: history.status,
     configureHistory: history.configure,
     list: async (input = {}) => {
@@ -582,7 +647,7 @@ export const createConversationService = async (options: {
         throw new Error("Move preview expired; choose the working directory again");
       }
       pendingMoves.delete(previewId);
-      return runMoveExclusive(pendingMove.preview.conversationId, async () => {
+      return history.mutate(() => runMoveExclusive(pendingMove.preview.conversationId, async () => {
         const origin = index.record(pendingMove.preview.conversationId).summary.origin;
         if (!origin || origin.deviceId !== "local" || origin.readOnly || !history.allowedIds().includes(origin.sourceKey)) {
           throw new Error("This history source is no longer enabled. Review History sources before moving it.");
@@ -649,7 +714,7 @@ export const createConversationService = async (options: {
           }
           throw error;
         }
-      });
+      }));
     },
     dispose: () => { history.dispose(); index.close(); }
   };

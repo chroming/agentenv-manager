@@ -322,6 +322,7 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
   const api: AgentEnvApi = {
     conversationHistoryStatus: vi.fn().mockResolvedValue({ config: { version: 1, enabled: false, paused: false, sources: [] }, needsConsent: true, running: false, sources: [], availableSources: [] }),
     configureConversationHistory: vi.fn(),
+    previewDeleteConversation: vi.fn(), deleteConversation: vi.fn(), restoreDeletedConversation: vi.fn(),
     readAIPreferences: vi.fn().mockResolvedValue({ enabled: true, features: { summaries: true, tags: true, comparison: true, duplicates: true, profile: true, worktree: true } }),
     saveAIPreferences: vi.fn().mockImplementation(async (value) => value),
     onAIPreferencesChanged: vi.fn().mockReturnValue(() => undefined),
@@ -4846,7 +4847,7 @@ describe("App", () => {
     const openRecovery = screen.getByRole("button", { name: "Open Recovery" });
     expect(openRecovery).toHaveTextContent("Open Recovery");
     fireEvent.click(openRecovery);
-    expect(await screen.findByRole("dialog", { name: "Manage Backups" })).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: "Backups & recovery" })).toBeInTheDocument();
   });
 
   it("lists every active target and routes profile deletion recovery to Targets", async () => {
@@ -5212,7 +5213,7 @@ describe("App", () => {
     await waitFor(() => expect(api.updateSettings).toHaveBeenCalledWith({ backupRetentionDays: 90 }));
 
     fireEvent.click(screen.getByRole("button", { name: /^Manage$/ }));
-    const manager = await screen.findByRole("dialog", { name: "Manage Backups" });
+    const manager = await screen.findByRole("dialog", { name: "Backups & recovery" });
     expect(within(manager).getByText("Takeover baseline")).toBeInTheDocument();
     expect(within(manager).getByText("Required")).toBeInTheDocument();
     expect(within(manager).queryByRole("button", { name: /Delete backup Daily Coding/ })).not.toBeInTheDocument();
@@ -5234,7 +5235,7 @@ describe("App", () => {
     fireEvent.click(screen.getByRole("menuitem", { name: "Delete backup" }));
     expect(within(manager).getByText("Delete backup?")).toBeInTheDocument();
     fireEvent.click(within(manager).getByRole("button", { name: "Cancel" }));
-    expect(within(manager).getByText("Manage Backups")).toBeInTheDocument();
+    expect(within(manager).getByText("Backups & recovery")).toBeInTheDocument();
 
     fireEvent.click(within(manager).getByRole("button", { name: "Clean up now" }));
     expect(within(manager).getByText("Clean up backups?")).toBeInTheDocument();

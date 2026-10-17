@@ -13,11 +13,14 @@ interface ConversationIpcServices {
 }
 
 export const registerConversationIpc = (
-  handles: Pick<IpcRegistrationHandles, "diagnosticHandle">,
+  handles: Pick<IpcRegistrationHandles, "diagnosticHandle" | "handleMutation">,
   services: ConversationIpcServices
 ) => {
   const { diagnosticHandle } = handles;
   const { conversationService } = services;
+  diagnosticHandle("conversations:preview-delete", (_event, id) => conversationService.previewDelete(String(id ?? "")));
+  handles.handleMutation("conversations:delete", (_event, id) => conversationService.delete(String(id ?? "")));
+  handles.handleMutation("conversations:restore-deleted", (_event, id) => conversationService.restoreDeleted(parseId(id, "backup id")));
   diagnosticHandle("conversations:history-status", () => conversationService.historyStatus());
   diagnosticHandle("conversations:configure-history", (_event, config, clearRemoved) => conversationService.configureHistory(config, clearRemoved !== false));
 

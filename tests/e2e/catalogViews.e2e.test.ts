@@ -182,7 +182,7 @@ describe("Device-local catalog views", () => {
     await nav("Settings").click();
     await page.getByRole("tab", { name: t("Data"), exact: true }).click();
     await page.getByRole("button", { name: t("Manage"), exact: true }).click();
-    const backups = page.getByRole("dialog", { name: t("Manage Backups"), exact: true });
+    const backups = page.getByRole("dialog", { name: t("Backups & recovery"), exact: true });
     await backups.waitFor();
     await chooseSort("Sort backups", "Oldest first");
     for (const width of [920, 1440]) {

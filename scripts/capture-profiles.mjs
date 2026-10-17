@@ -2252,7 +2252,7 @@ try {
   await page.getByRole("tab", { name: "Data" }).click();
   await capturePage(page, join(outputDir, "settings-data-920x620.png"));
   await page.getByRole("button", { name: "Manage", exact: true }).click();
-  const backupManager = page.getByRole("dialog", { name: "Manage Backups" });
+  const backupManager = page.getByRole("dialog", { name: "Backups & recovery" });
   await backupManager.waitFor({ state: "visible" });
   await capturePage(page, join(outputDir, "settings-backups-920x620.png"));
   await backupManager.getByRole("button", { name: /Preview backup/ }).first().click();

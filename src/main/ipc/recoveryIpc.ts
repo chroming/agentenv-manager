@@ -11,7 +11,7 @@ import { parseId, type IpcRegistrationHandles } from "./registration";
 const parseManagedBackupInput = (value: unknown): DeleteManagedBackupInput => {
   if (!value || typeof value !== "object") throw new Error("Invalid backup selection");
   const input = value as { id?: unknown; kind?: unknown };
-  if (input.kind !== "target-recovery" && input.kind !== "skill-cleanup" && input.kind !== "workspace-sync") {
+  if (input.kind !== "target-recovery" && input.kind !== "skill-cleanup" && input.kind !== "workspace-sync" && input.kind !== "conversation-delete") {
     throw new Error("Invalid backup kind");
   }
   return { id: parseId(input.id, "backup id"), kind: input.kind };
@@ -31,7 +31,7 @@ export const registerRecoveryIpc = (
 ) => {
   const { diagnosticHandle, handleMutation } = handles;
   const { activationService, backupMaintenanceService, backupStore, mutationCoordinator, paths } = services;
-  diagnosticHandle("backups:list", () => backupStore.listBackups());
+  diagnosticHandle("backups:list", async () => (await backupStore.listBackups()).filter((backup) => backup.operation !== "conversation-delete"));
   diagnosticHandle("backups:list-managed", () => backupMaintenanceService.listInventory());
   diagnosticHandle("backups:preview-managed", (_event, input: unknown) =>
     backupMaintenanceService.previewBackup(parseManagedBackupInput(input))
@@ -39,7 +39,10 @@ export const registerRecoveryIpc = (
   handleMutation("backups:delete-managed", (_event, input: unknown) =>
     backupMaintenanceService.deleteBackup(parseManagedBackupInput(input))
   );
-  handleMutation("backups:cleanup-managed", () => backupMaintenanceService.cleanup());
+  handleMutation("backups:cleanup-managed", (_event, scope) => {
+    if (scope !== undefined && scope !== "recovery" && scope !== "deleted") throw new Error("Invalid recovery scope");
+    return backupMaintenanceService.cleanup(scope);
+  });
   diagnosticHandle("rollback:preview", (_event, backupId: unknown) => activationService.previewRollback(String(backupId)));
   handleMutation("rollback:apply", (_event, backupId: unknown) => activationService.rollback(String(backupId)));
   diagnosticHandle("targets:preview-stop-managing", (_event, targetId: unknown, mode: unknown) =>

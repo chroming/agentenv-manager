@@ -36,7 +36,7 @@ export interface BackupStoreOptions {
 export interface BackupStore {
   createBackup(
     sourcePaths: string[],
-    context?: Pick<BackupManifest, "operation" | "targetId" | "targetIds" | "profileId" | "profileName">
+    context?: Pick<BackupManifest, "operation" | "targetId" | "targetIds" | "profileId" | "profileName" | "conversation">
   ): Promise<BackupManifest>;
   listBackups(): Promise<BackupSummary[]>;
   readBackup(id: string): Promise<BackupManifest>;
@@ -210,7 +210,7 @@ export const createBackupStore = (
 
   const createBackup = async (
     sourcePaths: string[],
-    context: Pick<BackupManifest, "operation" | "targetId" | "targetIds" | "profileId" | "profileName"> = {}
+    context: Pick<BackupManifest, "operation" | "targetId" | "targetIds" | "profileId" | "profileName" | "conversation"> = {}
   ): Promise<BackupManifest> => {
     await ensurePrivateDir(paths.backupsDir, platform);
     const uniqueSourcePaths = [...new Set(sourcePaths.map((path) => resolve(path)))];
@@ -356,7 +356,8 @@ export const createBackupStore = (
         targetId: manifest.targetId,
         targetIds: manifest.targetIds,
         profileId: manifest.profileId,
-        profileName: manifest.profileName
+        profileName: manifest.profileName,
+        conversation: manifest.conversation
       }))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
   };

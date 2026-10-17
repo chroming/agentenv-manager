@@ -199,6 +199,7 @@ export interface ConversationMoveAdapterInput extends AgentConversationContext {
 }
 
 export interface AgentConversationCapability {
+  deletionFiles?(input: AgentConversationContext & { candidate: AgentConversationCandidate; candidates: AgentConversationCandidate[] }): Promise<{ files: string[]; roots: string[] }>;
   historyDetail: ConversationDetailState;
   discover(context: AgentConversationContext): Promise<{
     candidates: AgentConversationCandidate[];

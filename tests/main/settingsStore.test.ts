@@ -90,7 +90,8 @@ describe("settings store", () => {
       appUpdateAutoDownloadEnabled: true,
       appUpdateInstallOnQuit: true,
       telemetryEnabled: true,
-      backupRetentionDays: 30
+      backupRetentionDays: 30,
+      deletedConversationRetentionDays: 30
     });
 
     await store.updateSettings({
@@ -120,7 +121,8 @@ describe("settings store", () => {
       appUpdateAutoDownloadEnabled: false,
       appUpdateInstallOnQuit: false,
       telemetryEnabled: true,
-      backupRetentionDays: 30
+      backupRetentionDays: 30,
+      deletedConversationRetentionDays: 30
     });
     expect(resolveSkillsLibraryDir(paths, await store.readSettings())).toBe(
       join(root, "app-data", "skills-library")

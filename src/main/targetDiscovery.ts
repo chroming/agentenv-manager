@@ -176,6 +176,9 @@ const conversationCapabilitiesFor = (
     (evidence) => `${evidence.label}: ${evidence.path}`
   );
   return {
+    delete: conversations?.deletionFiles
+      ? { state: "available", evidence: ["Recoverable local history-file deletion"] }
+      : { state: "unsupported", evidence: ["This Agent does not have a verified history deletion adapter"] },
     history: conversations
       ? {
           state: conversations.historyDetail === "full" ? "available" : "degraded",

@@ -161,11 +161,11 @@ export const useBackupRecoveryController = ({
     }
   }, [backupDeleteCandidate, onBusyChange, refreshManagedBackups, t]);
 
-  const cleanupBackups = useCallback(async () => {
+  const cleanupBackups = useCallback(async (scope?: "recovery" | "deleted") => {
     onBusyChange(true);
     setBackupManagerNotice(undefined);
     try {
-      const result = await window.agentEnv.cleanupManagedBackups();
+      const result = await window.agentEnv.cleanupManagedBackups(scope);
       inventoryEpochRef.current++;
       setBackupCleanupConfirm(false);
       setBackupManagerNotice({

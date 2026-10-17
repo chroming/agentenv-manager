@@ -958,8 +958,16 @@ independent of which Agents are enabled for management. Its consent, coverage an
 are defined in [History search](conversation-history-search.md). It helps the user find
 prior work, reopen it, continue its visible context in another Agent, and explicitly move a
 supported native conversation to a different working directory. It is not a chat client or an
-archive. Discovery remains read-only; Move is the only operation in this workspace that may
-mutate a source history.
+archive. Discovery remains read-only. Move and explicitly confirmed recoverable Delete are
+the only operations in this workspace that may mutate source history.
+
+- Recoverable Delete is limited to adapters that enumerate local conversation files and
+  attachments. A verified backup precedes deletion; stale or active-looking files are rejected,
+  failures restore removed files, and incomplete recovery records cannot expire. Recovery points
+  and Recently deleted share storage infrastructure, not restore semantics: conversation recovery
+  never overwrites an occupied path and cannot run through Agent rollback. Recently deleted has
+  its own retention policy. No SSH or native shared database deletion is implied. See the
+  [deletion contract](product-audit/2026-10-17-conversation-deletion.md).
 
 - Original Agent history is always the source of truth. Discovery, indexing, search, and preview
   MUST NOT edit, rename, delete, resume, or otherwise mutate a source conversation. `Open original`

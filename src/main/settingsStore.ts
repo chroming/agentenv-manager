@@ -20,6 +20,7 @@ export const SettingsSchema = z.object({
   telemetryEnabled: z.boolean().default(true),
   telemetryConsentVersion: z.literal(1).optional(),
   backupRetentionDays: z.union([z.literal(7), z.literal(30), z.literal(90), z.null()]).default(30),
+  deletedConversationRetentionDays: z.union([z.literal(7), z.literal(30), z.literal(90), z.null()]).default(30),
   enabledTargetIds: z.array(z.string().min(1)).optional(),
   agentDiscoveryVersion: z.number().int().positive().optional(),
   agentDiscoveryReviewedIds: z.array(z.string().min(1)).optional(),
@@ -43,7 +44,8 @@ export const DEFAULT_SETTINGS: AgentEnvSettings = {
   appUpdateAutoDownloadEnabled: true,
   appUpdateInstallOnQuit: true,
   telemetryEnabled: true,
-  backupRetentionDays: 30
+  backupRetentionDays: 30,
+  deletedConversationRetentionDays: 30
 };
 
 export interface SettingsStoreOptions {

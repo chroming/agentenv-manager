@@ -15,6 +15,7 @@ import type { BackupStore } from "./backupStore";
 import type { AgentEnvPaths } from "./paths";
 import type { SkillLibraryStore } from "./skillLibraryStore";
 import { SafeIdSchema } from "../shared/schemas";
+import { readConversationDeletionPhase } from "./conversations/conversationDeletion";
 
 export interface BackupMaintenanceServiceOptions {
   now?: () => Date;
@@ -24,7 +25,7 @@ export interface BackupMaintenanceService {
   listInventory(): Promise<ManagedBackupInventory>;
   previewBackup(input: DeleteManagedBackupInput): Promise<ManagedBackupPreview>;
   deleteBackup(input: DeleteManagedBackupInput): Promise<{ deletedCount: number; freedBytes: number }>;
-  cleanup(): Promise<ManagedBackupCleanupResult>;
+  cleanup(scope?: "recovery" | "deleted"): Promise<ManagedBackupCleanupResult>;
 }
 
 const isMissingFileError = (error: unknown) =>
@@ -177,7 +178,7 @@ export const createBackupMaintenanceService = (
     SkillLibraryStore,
     "listCleanupBackups" | "previewCleanupBackup" | "deleteCleanupBackup"
   >,
-  settingsStore: { readSettings(): Promise<Pick<AgentEnvSettings, "backupRetentionDays">> },
+  settingsStore: { readSettings(): Promise<Pick<AgentEnvSettings, "backupRetentionDays" | "deletedConversationRetentionDays">> },
   options: BackupMaintenanceServiceOptions = {}
 ): BackupMaintenanceService => {
   const now = options.now ?? (() => new Date());
@@ -234,6 +235,7 @@ export const createBackupMaintenanceService = (
     }
     const latestByTarget = new Map<string, string>();
     for (const backup of backups) {
+      if (backup.operation === "conversation-delete") continue;
       for (const targetId of [backup.targetId, ...(backup.targetIds ?? [])]) {
         if (targetId && !latestByTarget.has(targetId)) latestByTarget.set(targetId, backup.id);
       }
@@ -244,6 +246,22 @@ export const createBackupMaintenanceService = (
       : now().getTime() - settings.backupRetentionDays * 24 * 60 * 60 * 1000;
 
     const targetItems = await Promise.all(backups.map(async (backup): Promise<ManagedBackupItem> => {
+      if (backup.operation === "conversation-delete") {
+        const phase = await readConversationDeletionPhase(paths.backupsDir, backup.id).catch(() => undefined);
+        const retention = settings.deletedConversationRetentionDays === undefined ? 30 : settings.deletedConversationRetentionDays;
+        const expiresAt = retention === null ? undefined : new Date(new Date(backup.createdAt).getTime() + retention * 86_400_000).toISOString();
+        const incomplete = phase !== "deleted" && phase !== "restored";
+        return {
+          id: backup.id, kind: "conversation-delete", operation: backup.operation,
+          createdAt: backup.createdAt, fileCount: backup.fileCount,
+          sizeBytes: await directorySize(join(paths.backupsDir, backup.id)),
+          targetId: backup.targetId, conversationTitle: backup.conversation?.title,
+          deletionPhase: phase, expiresAt, restored: phase === "restored",
+          cleanupStatus: incomplete ? "required" : expiresAt && expiresAt <= now().toISOString() ? "eligible" : "kept",
+          requiredReason: incomplete ? "recovery-required" : undefined,
+          deletable: !incomplete
+        };
+      }
       const requiredReason = required.get(backup.id);
       const isEligible = !requiredReason && !latestIds.has(backup.id) && cutoff !== undefined &&
         new Date(backup.createdAt).getTime() < cutoff;
@@ -314,7 +332,7 @@ export const createBackupMaintenanceService = (
 
   const removeItem = async (item: ManagedBackupItem) => {
     if (!item.deletable) throw new Error("This backup is required for recovery and cannot be deleted");
-    if (item.kind === "target-recovery" || item.kind === "workspace-sync") await backupStore.deleteBackup(item.id);
+    if (item.kind === "target-recovery" || item.kind === "workspace-sync" || item.kind === "conversation-delete") await backupStore.deleteBackup(item.id);
     else if (item.restored) {
       const safeId = SafeIdSchema.parse(item.id);
       await rm(join(paths.backupsDir, "skill-cleanup-restored", safeId), {
@@ -334,7 +352,7 @@ export const createBackupMaintenanceService = (
     if (!item) throw new Error(`Backup does not exist: ${input.id}`);
 
     let files: ManagedBackupFile[];
-    if (item.kind === "target-recovery" || item.kind === "workspace-sync") {
+    if (item.kind === "target-recovery" || item.kind === "workspace-sync" || item.kind === "conversation-delete") {
       const manifest = await backupStore.readBackup(item.id);
       files = manifest.entries.map((entry) => ({
         kind: entry.kind === "directory"
@@ -367,12 +385,12 @@ export const createBackupMaintenanceService = (
     }
   };
 
-  const cleanup = async (): Promise<ManagedBackupCleanupResult> => {
+  const cleanup = async (scope?: "recovery" | "deleted"): Promise<ManagedBackupCleanupResult> => {
     if (activeMutation) throw new Error("Backup cleanup is already running");
     activeMutation = true;
     try {
       const inventory = await listInventory();
-      const eligible = inventory.items.filter((item) => item.cleanupStatus === "eligible");
+      const eligible = inventory.items.filter((item) => item.cleanupStatus === "eligible" && (!scope || (item.kind === "conversation-delete") === (scope === "deleted")));
       let freedBytes = 0;
       let deletedCount = 0;
       const failures: ManagedBackupCleanupResult["failures"] = [];

@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, realpath, rm, stat, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, rm, stat, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
@@ -128,6 +128,42 @@ const settingsStore: SettingsStore = {
 };
 
 describe("conversation service", () => {
+  it("deletes original files and all searchable copies, restores on restart, and rejects stale previews", async () => {
+    root = await realpath(await mkdtemp(join(tmpdir(), "aem-delete-service-")));
+    const paths = createPaths({ homeDir: join(root, "home"), appDataRoot: join(root, "data"), conversationIndexPath: join(root, "cache", "conversations.sqlite") });
+    const dir = join(paths.homeDir, ".codex", "sessions");
+    await mkdir(dir, { recursive: true });
+    const file = join(dir, "rollout-session-1.jsonl");
+    const original = [
+      {type:"session_meta",payload:{id:"session-1",cwd:root}},
+      {type:"response_item",payload:{type:"message",role:"user",content:[{type:"input_text",text:"unique deletion needle"}]}}
+    ].map((r) => JSON.stringify(r)).join("\n");
+    await writeFile(file, original); await utimes(file, new Date(0), new Date(0));
+    const adapter = createCodexTargetAdapter();
+    const target = makeTarget(adapter, paths.homeDir);
+    const options = { paths, targetRegistry: createTargetRegistry([adapter]), settingsStore,
+      targetDiscoveryService: { listTargets: async () => [target], probeSupportedTargets: async () => [target] }, clipboard: { writeText: vi.fn() }, launcher: { launch: vi.fn() } };
+    let service = await createConversationService(options);
+    try {
+      await service.refresh();
+      const id = await indexedId(service);
+      // History ownership is bound to its approved source, not today's Agent install/config.
+      target.health.installationFound = false;
+      target.paths.configDir = join(root, "another-agent-home");
+      let preview = await service.previewDelete(id);
+      await writeFile(file, `${original}\n`); await utimes(file, new Date(0), new Date(0));
+      await expect(service.delete(preview.previewId)).rejects.toThrow("changed after preview");
+      preview = await service.previewDelete(id);
+      const { backupId } = await service.delete(preview.previewId);
+      expect(await service.search({ query: "unique deletion needle" })).toHaveLength(0);
+      await service.refresh();
+      expect((await service.list()).items).toHaveLength(0);
+      service.dispose(); service = await createConversationService(options);
+      await service.restoreDeleted(backupId);
+      expect(await service.search({ query: "unique deletion needle" })).toHaveLength(1);
+      expect(await readFile(file, "utf8")).toBe(`${original}\n`);
+    } finally { service.dispose(); }
+  });
   it("refreshes incrementally, isolates Agent failures, and never mutates history", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-conversation-service-"));
     const paths = createPaths({

@@ -1952,6 +1952,7 @@ export const createActivationService = ({
 
   const previewRollback = async (backupId: string): Promise<RollbackPreview> => {
     const backup = await backupStore.readBackup(backupId);
+    if (backup.operation === "conversation-delete") throw new Error("Restore conversations from Recently deleted, not Agent rollback.");
     const targetIds = [...new Set([backup.targetId, ...(backup.targetIds ?? [])])].filter(
       (targetId): targetId is string => Boolean(targetId)
     );
@@ -1977,6 +1978,7 @@ export const createActivationService = ({
 
   const rollback = async (backupId: string): Promise<RollbackResult> => {
     const backup = await backupStore.readBackup(backupId);
+    if (backup.operation === "conversation-delete") return { ok: false, errors: ["Restore conversations from Recently deleted, not Agent rollback."] };
     const targetIds = [...new Set([backup.targetId, ...(backup.targetIds ?? [])])].filter(
       (targetId): targetId is string => Boolean(targetId)
     );

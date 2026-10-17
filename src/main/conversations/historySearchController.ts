@@ -62,6 +62,8 @@ export const createHistorySearchController = async (options: {
   let running: Promise<ConversationRefreshResult> | undefined;
   let disposed = false;
   let configuring = false;
+  let mutations = 0;
+  let mutationTail: Promise<unknown> = Promise.resolve();
   const verifiedCompressionCopies = new Map<string, string | undefined>();
   const devices = () => options.devices?.list() ?? Promise.resolve([] as RemoteDevice[]);
   const allowedIds = () => config.enabled && !needsConsent ? config.sources.map((s) => s.id) : [];
@@ -107,6 +109,7 @@ export const createHistorySearchController = async (options: {
     if (configuring) throw new Error("History settings are being saved. Try again shortly.");
     configuring = true;
     try {
+    await mutationTail.catch(() => undefined);
     const next = HistorySearchConfigSchema.parse(value);
     const validDevices = new Set(["local", ...(await devices()).map((d) => d.id)]);
     for (const source of next.sources) {
@@ -140,7 +143,7 @@ export const createHistorySearchController = async (options: {
   };
   const refresh = (): Promise<ConversationRefreshResult> => {
     if (running) return running;
-    if (!config.enabled || config.paused || needsConsent || disposed || configuring) return Promise.resolve({ indexed: 0, unchanged: 0, removed: 0, failures: [], refreshedAt: new Date().toISOString() });
+    if (!config.enabled || config.paused || needsConsent || disposed || configuring || mutations) return Promise.resolve({ indexed: 0, unchanged: 0, removed: 0, failures: [], refreshedAt: new Date().toISOString() });
     const generation = epoch;
     const signal = abort.signal;
     const current = () => { signal.throwIfAborted(); if (generation !== epoch || disposed) throw new Error("History indexing stopped"); };
@@ -332,7 +335,19 @@ export const createHistorySearchController = async (options: {
     });
     return running;
   };
-  return { status, configure, refresh, allowedIds,
+  const mutate = <T>(operation: () => Promise<T>): Promise<T> => {
+    if (configuring || disposed) return Promise.reject(new Error("History settings are changing. Retry after they finish saving."));
+    mutations++;
+    const next = mutationTail.catch(() => undefined).then(async () => {
+      // Let an in-flight read finish before changing its source and cached rows.
+      await running?.catch(() => undefined);
+      if (disposed) throw new Error("History service closed before the operation started");
+      return operation();
+    }).finally(() => { mutations--; });
+    mutationTail = next;
+    return next;
+  };
+  return { status, configure, refresh, allowedIds, mutate,
     enabled: () => config.enabled && !needsConsent,
     dispose: () => { disposed = true; epoch++; abort.abort(); } };
 };

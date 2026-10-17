@@ -1,4 +1,4 @@
-import { type RefObject } from "react";
+import { useState, type RefObject } from "react";
 import {
   ChevronRight,
   Database,
@@ -15,10 +15,11 @@ import type {
 } from "../../shared/types";
 import { useI18n, type TranslationValues } from "../i18n";
 import { FileTypeIcon } from "./FileTypeIcon";
-import { Button, SelectControl, SortMenu, ToolbarOverflowMenu } from "./ui";
+import { Button, SegmentedControl, SelectControl, SortMenu, ToolbarOverflowMenu } from "./ui";
 import { useCatalogView } from "../hooks/useCatalogView";
 import { projectBackups, compareCatalogNames } from "../catalogSort";
 import { CatalogFilters, FilterReset } from "./ui";
+import { DiagnosticMessage } from "./ui/DiagnosticCopyButton";
 
 type Translate = (message: string, values?: TranslationValues) => string;
 
@@ -28,6 +29,8 @@ export interface BackupManagerNotice {
 }
 
 interface BackupManagerDialogProps {
+  initialSection?: "recovery" | "deleted";
+  onRestoreConversation?(item: ManagedBackupItem): void;
   busy: boolean;
   cleanupConfirm: boolean;
   deleteCandidate?: ManagedBackupItem;
@@ -40,7 +43,7 @@ interface BackupManagerDialogProps {
   previewCandidate?: ManagedBackupItem;
   previewLoading: boolean;
   onBackOrClose(): void;
-  onCleanup(): void;
+  onCleanup(scope: "recovery" | "deleted"): void;
   onDelete(): void;
   onOpenCleanupConfirm(): void;
   onOpenDelete(item: ManagedBackupItem): void;
@@ -52,7 +55,7 @@ interface BackupManagerDialogProps {
 }
 
 const managedBackupTitle = (item: ManagedBackupItem, t: Translate): string =>
-  item.kind === "skill-cleanup"
+  item.kind === "conversation-delete" ? item.conversationTitle ?? t("Conversation") : item.kind === "skill-cleanup"
     ? t(item.restored ? "Restored skill cleanup · {{name}}" : "Skill cleanup · {{name}}", {
         name: item.libraryId ?? item.id
       })
@@ -68,6 +71,9 @@ const managedBackupTitle = (item: ManagedBackupItem, t: Translate): string =>
           });
 
 const managedBackupStatusLabel = (item: ManagedBackupItem, t: Translate): string => {
+  if (item.kind === "conversation-delete" && item.restored) return t("Restored");
+  if (item.kind === "conversation-delete" && item.cleanupStatus !== "required") return item.expiresAt
+    ? t("Expires {{date}}", { date: new Date(item.expiresAt).toLocaleDateString() }) : t("Kept until deleted");
   if (item.requiredReason === "recovery-required") return t("Required for recovery");
   if (item.requiredReason === "workspace-sync-recovery") {
     return t("Required for Workspace recovery");
@@ -79,6 +85,8 @@ const managedBackupStatusLabel = (item: ManagedBackupItem, t: Translate): string
 };
 
 export const BackupManagerDialog = ({
+  initialSection = "recovery",
+  onRestoreConversation,
   busy,
   cleanupConfirm,
   deleteCandidate,
@@ -102,13 +110,24 @@ export const BackupManagerDialog = ({
   formatDate
 }: BackupManagerDialogProps) => {
   const { t } = useI18n();
+  const [section, setSection] = useState(initialSection);
   const [view, updateView] = useCatalogView("backups", {
     sort: "newest", kindFilter: "all", statusFilter: "all", targetFilter: "all"
   });
-  const visibleItems = projectBackups(inventory?.items ?? [], view);
+  const sectionItems = (inventory?.items ?? []).filter((item) => (item.kind === "conversation-delete") === (section === "deleted"));
+  const visibleItems = projectBackups(sectionItems, section === "deleted" ? { ...view, kindFilter: "all" } : view);
+  const eligibleItems = sectionItems.filter((item) => item.cleanupStatus === "eligible");
+  const eligibleBytes = eligibleItems.reduce((sum, item) => sum + item.sizeBytes, 0);
+  const countLabel = section === "deleted"
+    ? sectionItems.length === 1 ? "1 conversation · {{size}}" : "{{count}} conversations · {{size}}"
+    : sectionItems.length === 1 ? "{{count}} backup · {{size}}" : "{{count}} backups · {{size}}";
+  const cleanupCountLabel = section === "deleted" ? "Permanently delete {{count}} saved conversations and free approximately {{size}}."
+    : eligibleItems.length === 1 ? "Delete 1 backup and free approximately {{size}}." : "Delete {{count}} backups and free approximately {{size}}.";
+  const deleteDescription = deleteCandidate?.kind === "conversation-delete" ? "The saved conversation files will be permanently deleted. This cannot be undone." : "This recovery point cannot be restored after deletion. Profiles, Library resources, and current Agent files are unchanged.";
+  const cleanupDescription = section === "deleted" ? "Expired deleted conversations will be permanently removed. Incomplete recovery records stay available." : "Only recovery points outside the retention period are removed. Required recovery and takeover backups stay available.";
   const targetIds = [...new Set(inventory?.items.flatMap((item) => item.targetId ? [item.targetId] : []) ?? [])]
     .sort(compareCatalogNames);
-  const filterCount = [view.kindFilter, view.statusFilter, view.targetFilter].filter((value) => value !== "all").length;
+  const filterCount = [section === "deleted" ? "all" : view.kindFilter, view.statusFilter, view.targetFilter].filter((value) => value !== "all").length;
 
   return (
     <div
@@ -120,9 +139,10 @@ export const BackupManagerDialog = ({
         className="profile-form-dialog backup-manager-dialog"
         role="dialog"
         aria-modal="true"
-        aria-label={t("Manage Backups")}
+        aria-label={t("Backups & recovery")}
         onClick={(event) => event.stopPropagation()}
       >
+        {notice ? <div className={`backup-manager-notice is-${notice.kind}`} role={notice.kind === "error" ? "alert" : "status"}>{notice.kind === "error" ? <DiagnosticMessage message={notice.message} /> : notice.message}</div> : null}
         {previewCandidate ? (
           <>
             <header className="profile-dialog-header backup-preview-header">
@@ -133,7 +153,7 @@ export const BackupManagerDialog = ({
                 </p>
               </div>
               <span className="backup-preview-count">
-                {t("{{count}} files", { count: previewCandidate.fileCount })}
+                {previewCandidate.fileCount === 1 ? t("1 file") : t("{{count}} files", { count: previewCandidate.fileCount })}
               </span>
             </header>
             <div className="backup-preview-list" aria-busy={previewLoading}>
@@ -166,18 +186,21 @@ export const BackupManagerDialog = ({
               </span>
               <Button
                 ref={initialFocusRef}
-                disabled={previewLoading}
+                disabled={previewLoading || busy}
                 onClick={onBackOrClose}
               >
                 {t("Back")}
               </Button>
+              {previewCandidate.kind === "conversation-delete" && !previewCandidate.restored && onRestoreConversation ? (
+                <Button variant="primary" busy={busy} disabled={previewLoading || busy} onClick={() => onRestoreConversation(previewCandidate)}>{t("Restore conversation")}</Button>
+              ) : null}
             </footer>
           </>
         ) : deleteCandidate ? (
           <>
             <header className="profile-dialog-header">
               <div className="ui-dialog-header__copy">
-                <div className="section-title ui-dialog-title">{t("Delete backup?")}</div>
+                <div className="section-title ui-dialog-title">{deleteCandidate.kind === "conversation-delete" ? t("Permanently delete conversation?") : t("Delete backup?")}</div>
                 <p className="muted ui-dialog-description">
                   {managedBackupTitle(deleteCandidate, t)}
                 </p>
@@ -186,7 +209,7 @@ export const BackupManagerDialog = ({
             <div className="backup-confirm-summary">
               <strong>{formatBytes(deleteCandidate.sizeBytes)}</strong>
               <p>
-                {t("This recovery point cannot be restored after deletion. Profiles, Library resources, and current Agent files are unchanged.")}
+                {t(deleteDescription)}
               </p>
             </div>
             <footer className="preview-actions">
@@ -197,8 +220,8 @@ export const BackupManagerDialog = ({
               >
                 {t("Cancel")}
               </Button>
-              <Button variant="danger" disabled={busy || inventoryLoading} onClick={onDelete}>
-                {t("Delete backup")}
+              <Button variant="danger" busy={busy} disabled={busy || inventoryLoading} onClick={onDelete}>
+                {deleteCandidate.kind === "conversation-delete" ? t("Delete permanently") : t("Delete backup")}
               </Button>
             </footer>
           </>
@@ -206,15 +229,13 @@ export const BackupManagerDialog = ({
           <>
             <header className="profile-dialog-header">
               <div className="ui-dialog-header__copy">
-                <div className="section-title ui-dialog-title">{t("Clean up backups?")}</div>
+                <div className="section-title ui-dialog-title">{section === "deleted" ? t("Permanently delete expired conversations?") : t("Clean up backups?")}</div>
                 <p className="muted ui-dialog-description">
                   {t(
-                    (inventory?.eligibleCount ?? 0) === 1
-                      ? "Delete 1 backup and free approximately {{size}}."
-                      : "Delete {{count}} backups and free approximately {{size}}.",
+                    cleanupCountLabel,
                     {
-                      count: inventory?.eligibleCount ?? 0,
-                      size: formatBytes(inventory?.eligibleBytes ?? 0)
+                      count: eligibleItems.length,
+                      size: formatBytes(eligibleBytes)
                     }
                   )}
                 </p>
@@ -222,7 +243,7 @@ export const BackupManagerDialog = ({
             </header>
             <div className="backup-confirm-summary">
               <p>
-                {t("Only recovery points outside the retention period are removed. Required recovery and takeover backups stay available.")}
+                {t(cleanupDescription)}
               </p>
             </div>
             <footer className="preview-actions">
@@ -233,12 +254,12 @@ export const BackupManagerDialog = ({
               >
                 {t("Cancel")}
               </Button>
-              <Button variant="danger" disabled={busy || inventoryLoading} onClick={onCleanup}>
-                {t(
-                  (inventory?.eligibleCount ?? 0) === 1
+              <Button variant="danger" busy={busy} disabled={busy || inventoryLoading} onClick={() => onCleanup(section)}>
+                {section === "deleted" ? t("Delete permanently") : t(
+                  eligibleItems.length === 1
                     ? "Clean up 1 backup"
                     : "Clean up {{count}} backups",
-                  { count: inventory?.eligibleCount ?? 0 }
+                  { count: eligibleItems.length }
                 )}
               </Button>
             </footer>
@@ -247,31 +268,30 @@ export const BackupManagerDialog = ({
           <>
             <header className="profile-dialog-header backup-manager-header">
               <div className="ui-dialog-header__copy">
-                <div className="section-title ui-dialog-title">{t("Manage Backups")}</div>
+                <div className="section-title ui-dialog-title">{t("Backups & recovery")}</div>
                 <p className="muted ui-dialog-description">
                   {t(
-                    (inventory?.items.length ?? 0) === 1
-                      ? "{{count}} backup · {{size}}"
-                      : "{{count}} backups · {{size}}",
+                    countLabel,
                     {
-                      count: inventory?.items.length ?? 0,
-                      size: formatBytes(inventory?.totalBytes ?? 0)
+                      count: sectionItems.length,
+                      size: formatBytes(sectionItems.reduce((sum, item) => sum + item.sizeBytes, 0))
                     }
                   )}
                 </p>
               </div>
               <div className="ui-dialog-header__actions">
+              <SegmentedControl<"recovery" | "deleted"> label={t("Recovery type")} value={section} disabled={busy} options={[{value: "recovery", label: t("Recovery points")}, {value: "deleted", label: t("Recently deleted")}]} onChange={setSection} />
               <SortMenu label={t("Sort backups")} value={view.sort} active={view.sort !== "newest"}
                 options={[{ value: "newest", label: t("Newest first") }, { value: "oldest", label: t("Oldest first") },
                   { value: "size", label: t("Largest first") }]} onChange={(sort) => updateView({ sort })} />
               <CatalogFilters count={filterCount}>
                 <div className="catalog-filter-fields">
-                  <label><span>{t("Type")}</span>
+                  {section === "recovery" && <label><span>{t("Type")}</span>
                     <SelectControl controlWidth="fill" aria-label={t("Backup type filter")} value={view.kindFilter}
                       onChange={(event) => updateView({ kindFilter: event.currentTarget.value as typeof view.kindFilter })}>
                       <option value="all">{t("All types")}</option><option value="target-recovery">{t("Agent recovery")}</option>
                       <option value="skill-cleanup">{t("Skill cleanup")}</option><option value="workspace-sync">{t("Device Sync")}</option>
-                    </SelectControl></label>
+                    </SelectControl></label>}
                   <label><span>{t("Status")}</span>
                     <SelectControl controlWidth="fill" aria-label={t("Backup status filter")} value={view.statusFilter}
                       onChange={(event) => updateView({ statusFilter: event.currentTarget.value as typeof view.statusFilter })}>
@@ -289,14 +309,6 @@ export const BackupManagerDialog = ({
               </CatalogFilters>
               </div>
             </header>
-            {notice ? (
-              <div
-                className={`backup-manager-notice is-${notice.kind}`}
-                role={notice.kind === "error" ? "alert" : "status"}
-              >
-                {notice.message}
-              </div>
-            ) : null}
             <div className="backup-manager-list" aria-busy={inventoryLoading}>
               {inventoryLoading && !inventory ? (
                 <div className="backup-manager-empty">{t("Calculating storage...")}</div>
@@ -327,7 +339,7 @@ export const BackupManagerDialog = ({
                         </strong>
                         <small>
                           {formatDate(item.createdAt)} ·{" "}
-                          {t("{{count}} files", { count: item.fileCount })} ·{" "}
+                          {item.fileCount === 1 ? t("1 file") : t("{{count}} files", { count: item.fileCount })} ·{" "}
                           {formatBytes(item.sizeBytes)}
                         </small>
                       </span>
@@ -356,7 +368,7 @@ export const BackupManagerDialog = ({
                         items={[{
                           id: "delete",
                           icon: <Trash2 size={15} aria-hidden="true" />,
-                          label: t("Delete backup"),
+                          label: item.kind === "conversation-delete" ? t("Delete permanently") : t("Delete backup"),
                           onSelect: () => onOpenDelete(item)
                         }]}
                       />
@@ -373,19 +385,19 @@ export const BackupManagerDialog = ({
               ) : (
                 <div className="backup-manager-empty">
                   <History size={22} aria-hidden="true" />
-                  <strong>{t(inventory?.items.length ? "No matching backups" : "No managed backups")}</strong>
+                  <strong>{section === "deleted" ? t("No deleted conversations") : t(inventory?.items.length ? "No matching backups" : "No managed backups")}</strong>
                   <span>
-                    {t(inventory?.items.length ? "Try another search or reset the filters." : "Recovery points will appear here after AgentEnv changes local environments.")}
+                    {sectionItems.length ? t("Try another search or reset the filters.") : section === "deleted" ? t("Deleted conversations stay here until their retention period ends.") : t("Recovery points will appear here after AgentEnv changes local environments.")}
                   </span>
                 </div>
               )}
             </div>
             <footer className="preview-actions backup-manager-actions">
               <span>
-                {inventory?.eligibleCount
+                {eligibleItems.length
                   ? t("{{count}} eligible · {{size}}", {
-                      count: inventory.eligibleCount,
-                      size: formatBytes(inventory.eligibleBytes)
+                      count: eligibleItems.length,
+                      size: formatBytes(eligibleBytes)
                     })
                   : t("Nothing to clean")}
               </span>
@@ -398,7 +410,7 @@ export const BackupManagerDialog = ({
               </Button>
               <Button
                 variant="danger"
-                disabled={busy || inventoryLoading || !inventory?.eligibleCount}
+                disabled={busy || inventoryLoading || !eligibleItems.length}
                 onClick={onOpenCleanupConfirm}
               >
                 {t("Clean up now")}

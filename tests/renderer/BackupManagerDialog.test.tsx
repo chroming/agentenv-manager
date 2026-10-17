@@ -23,6 +23,21 @@ const props = () => ({ busy: false, cleanupConfirm: false, dialogRef: createRef<
 });
 
 describe("Backup catalog controls", () => {
+  it("separates deleted conversations and scopes cleanup to the selected section", () => {
+    const handlers = props();
+    const deleted = { id: "deleted", kind: "conversation-delete" as const, conversationTitle: "Original chat", createdAt: "2025-01-01", fileCount: 2, sizeBytes: 512,
+      cleanupStatus: "eligible" as const, deletable: true, deletionPhase: "deleted" as const };
+    const combined = { ...inventory, items: [...inventory.items, deleted] };
+    const onRestoreConversation = vi.fn();
+    const view = render(<BackupManagerDialog {...handlers} inventory={combined} initialSection="deleted" onRestoreConversation={onRestoreConversation} />);
+    expect(screen.getAllByRole("button", {name:/Preview backup/})).toHaveLength(1);
+    expect(screen.getByText("1 eligible · 512 B")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", {name:"Recovery points"}));
+    expect(screen.getAllByRole("button", {name:/Preview backup/})).toHaveLength(2);
+    view.rerender(<BackupManagerDialog {...handlers} inventory={combined} previewCandidate={deleted} onRestoreConversation={onRestoreConversation} />);
+    fireEvent.click(screen.getByRole("button", {name:"Restore conversation"}));
+    expect(onRestoreConversation).toHaveBeenCalledWith(deleted);
+  });
   it.each([
     ["en", "Device Sync"],
     ["zh_CN", "设备同步"],
@@ -53,7 +68,7 @@ describe("Backup catalog controls", () => {
   it("sorts and filters previews without changing cleanup scope or protected actions", () => {
     const handlers = props();
     render(<BackupManagerDialog {...handlers} />);
-    const dialog = screen.getByRole("dialog", { name: "Manage Backups" });
+    const dialog = screen.getByRole("dialog", { name: "Backups & recovery" });
     expect(within(dialog).getAllByRole("button", { name: /Preview backup/ })[0]).toHaveAccessibleName("Preview backup Skill cleanup · Newer");
     fireEvent.click(screen.getByRole("button", { name: "Sort backups: Newest first" }));
     fireEvent.click(screen.getByRole("menuitemradio", { name: "Oldest first" }));

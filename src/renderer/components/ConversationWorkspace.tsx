@@ -19,6 +19,7 @@ import {
   Settings2,
   RefreshCw,
   TriangleAlert,
+  Trash2,
   UserRound
 } from "lucide-react";
 import {
@@ -35,6 +36,8 @@ import { createPortal } from "react-dom";
 import { ProductIcon } from "../productIcons";
 import type { HistorySearchStatus } from "../../shared/conversationSearch";
 import { HistorySearchSettings } from "./HistorySearchSettings";
+import { ConversationDeletionDialog } from "./ConversationDeletionDialog";
+import { ConversationRecoveryDialog } from "./ConversationRecoveryDialog";
 import type {
   ConversationContinuationPreview,
   ConversationDetail,
@@ -127,7 +130,7 @@ const conversationPageSize = 200;
 const conversationMessagePageSize = 60;
 const conversationListEndThreshold = 56;
 const manualRefreshFeedbackMinimumMs = 240;
-type ConversationOperation = "copy" | "open-original" | "continue" | "move";
+type ConversationOperation = "copy" | "open-original" | "continue" | "move" | "restore";
 
 const conversationSortOptions: Array<{
   value: ConversationSortOrder;
@@ -387,6 +390,7 @@ const TargetMenu = ({
 };
 
 const ConversationActionItems = ({
+  onDelete,
   agentName,
   canOpenOriginal,
   canMove,
@@ -394,6 +398,7 @@ const ConversationActionItems = ({
   onOpenOriginal,
   onMove
 }: {
+  onDelete?(): void;
   agentName: string;
   canOpenOriginal: boolean;
   canMove: boolean;
@@ -420,11 +425,13 @@ const ConversationActionItems = ({
         <Copy size={15} aria-hidden="true" />
         <span>{t("Copy conversation")}</span>
       </ActionMenuItem>
+      {onDelete ? <ActionMenuItem role="menuitem" tone="danger" onClick={onDelete}><Trash2 size={15} aria-hidden="true" /><span>{t("Delete conversation…")}</span></ActionMenuItem> : null}
     </>
   );
 };
 
 const ConversationActionsMenu = ({
+  onDelete,
   busy,
   operation,
   agentName,
@@ -434,6 +441,7 @@ const ConversationActionsMenu = ({
   onOpenOriginal,
   onMove
 }: {
+  onDelete?(): Promise<void>;
   busy: boolean;
   operation?: ConversationOperation;
   agentName: string;
@@ -453,7 +461,7 @@ const ConversationActionsMenu = ({
     const bounds = buttonRef.current?.getBoundingClientRect();
     if (bounds) {
       const width = 210;
-      const height = 45 + (canOpenOriginal ? 41 : 0) + (canMove ? 41 : 0);
+      const height = 45 + (canOpenOriginal ? 41 : 0) + (canMove ? 41 : 0) + (onDelete ? 41 : 0);
       const fitsBelow = bounds.bottom + 6 + height <= window.innerHeight - 12;
       setStyle({
         width,
@@ -525,6 +533,7 @@ const ConversationActionsMenu = ({
           style={style}
         >
           <ConversationActionItems
+            onDelete={onDelete ? () => run(onDelete) : undefined}
             agentName={agentName}
             canOpenOriginal={canOpenOriginal}
             canMove={canMove}
@@ -635,6 +644,9 @@ export const ConversationWorkspace = ({
     left: number;
     top: number;
   }>();
+  const [deleteId, setDeleteId] = useState<string>();
+  const [recentlyDeletedOpen, setRecentlyDeletedOpen] = useState(false);
+  const [deletedBackupId, setDeletedBackupId] = useState<string>();
   const [message, setMessage] = useState("");
   const [warning, setWarning] = useState("");
   const [error, setError] = useState("");
@@ -1552,7 +1564,19 @@ export const ConversationWorkspace = ({
     }
   };
 
-  const feedback: AppFeedbackMessage | undefined = error
+  const undoDeletion = async () => {
+    if (!deletedBackupId || operation) return;
+    setOperation("restore"); setError(""); setMessage("");
+    try {
+      await window.agentEnv.restoreDeletedConversation(deletedBackupId);
+      setDeletedBackupId(undefined); setMessage(t("Conversation restored"));
+      invalidateConversationListPrefetch(); await loadList();
+    } catch (error) { setError(String(error)); }
+    finally { setOperation(undefined); }
+  };
+  const feedback: AppFeedbackMessage | undefined = operation === "restore"
+    ? { kind: "loading", title: t("Restoring conversation…") }
+    : error
     ? { kind: "error", title: t("Could not complete this step"), message: error }
     : warning
       ? {
@@ -1672,6 +1696,7 @@ export const ConversationWorkspace = ({
               </>} actions={
                 <HistorySearchSettings renderTrigger={(openSources) => (
                   <ToolbarOverflowMenu label={t("More")} menuLabel={t("Conversations")} busy={refreshBusy} allowWhileBusy items={[
+                    { id: "recently-deleted", label: t("Recently deleted"), icon: <Trash2 size={15} />, onSelect: () => setRecentlyDeletedOpen(true) },
                     { id: "refresh", label: t("Refresh"), icon: <RefreshCw size={15} />,
                       disabled: refreshBusy || !historyStatus?.config.enabled || historyStatus.config.paused,
                       onSelect: () => void refresh() },
@@ -2010,6 +2035,7 @@ export const ConversationWorkspace = ({
                       ) : null}
                     </span>
                     <ConversationActionsMenu
+                      onDelete={detail.origin?.deviceId === "local" && !detail.origin.readOnly && targets.find((target) => target.id === detail.agentId)?.conversationCapabilities.delete?.state === "available" ? async () => { setDeleteId(detail.id); } : undefined}
                       busy={busy}
                       operation={operation}
                       agentName={detail.agentName}
@@ -2406,6 +2432,7 @@ export const ConversationWorkspace = ({
             style={{ left: contextMenu.left, top: contextMenu.top, width: 220 }}
           >
             <ConversationActionItems
+              onDelete={local && targets.find((target) => target.id === item.agentId)?.conversationCapabilities.delete?.state === "available" ? () => { setContextMenu(undefined); setDeleteId(item.id); } : undefined}
               agentName={item.agentName}
               canOpenOriginal={Boolean(canOpenOriginal)}
               canMove={local && Boolean(targets.find((target) => target.id === item.agentId)
@@ -2419,13 +2446,20 @@ export const ConversationWorkspace = ({
         );
       })() : null}
       <AppFeedback
-        feedback={feedback}
+        feedback={deletedBackupId && feedback?.kind === "success" ? { ...feedback, action: { label: t("Undo"), onClick: () => void undoDeletion() } } : feedback}
         onDismiss={() => {
           setError("");
           setWarning("");
           setMessage("");
+          setDeletedBackupId(undefined);
         }}
       />
+      {deleteId ? <ConversationDeletionDialog id={deleteId} onClose={() => setDeleteId(undefined)} onDeleted={(backupId) => {
+        setDeleteId(undefined); setDeletedBackupId(backupId); setSelectedId(""); setDetail(undefined);
+        setMessage(t("Conversation moved to Recently deleted")); invalidateConversationListPrefetch();
+        void loadList().catch((e) => setError(String(e)));
+      }} /> : null}
+      {recentlyDeletedOpen ? <ConversationRecoveryDialog onClose={() => { setRecentlyDeletedOpen(false); invalidateConversationListPrefetch(); void loadList().catch((e) => setError(String(e))); }} /> : null}
     </>
   );
 };

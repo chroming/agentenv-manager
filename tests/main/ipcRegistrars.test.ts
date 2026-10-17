@@ -44,6 +44,8 @@ describe("domain IPC registrars", () => {
     expect(registrations).toContainEqual({ channel: "conversations:search", kind: "diagnostic" });
     expect(registrations).toContainEqual({ channel: "conversations:continue", kind: "diagnostic" });
     expect(registrations).toContainEqual({ channel: "menu:open-context", kind: "diagnostic" });
+    expect(registrations).toContainEqual({ channel: "conversations:delete", kind: "mutation" });
+    expect(registrations).toContainEqual({ channel: "conversations:restore-deleted", kind: "mutation" });
   });
 
   it("keeps conversation search and continuation validation at the registrar boundary", async () => {
@@ -176,6 +178,15 @@ describe("domain IPC registrars", () => {
     expect(registrations).toContainEqual({ channel: "backups:delete-managed", kind: "mutation" });
     expect(registrations).toContainEqual({ channel: "data:create-backup", kind: "diagnostic" });
     expect(registrations).toContainEqual({ channel: "data:restore", kind: "mutation" });
+  });
+
+  it("does not expose deleted conversations as Agent recovery points", async () => {
+    const { handles, handlers } = collectChannels();
+    registerRecoveryIpc(handles, {
+      activationService: service(), backupMaintenanceService: service(), mutationCoordinator: service(), paths: service(),
+      backupStore: { listBackups: vi.fn().mockResolvedValue([{id:"apply",operation:"apply"},{id:"deleted",operation:"conversation-delete"}]) } as any
+    });
+    expect(await handlers.get("backups:list")!(event)).toEqual([{id:"apply",operation:"apply"}]);
   });
 
   it("keeps Target discovery and native resource inspection behind the diagnostic handle", () => {

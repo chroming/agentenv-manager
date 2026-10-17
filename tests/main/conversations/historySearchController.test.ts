@@ -46,6 +46,27 @@ const setup = async (transport?: SshTransport, configText?: string, trae = false
 };
 
 describe("explicit history search permissions", () => {
+  it("serializes source mutations with refresh and configuration", async () => {
+    const { controller, index } = await setup();
+    const { deviceName, agentName, ...source } = (await controller.status()).availableSources.find((s) => s.deviceId === "local")!;
+    const config = { version: 1 as const, enabled: true, paused: false, sources: [source] };
+    await controller.configure(config);
+    let release!: () => void;
+    const gate = new Promise<void>((done) => { release = done; });
+    let entered!: () => void;
+    const started = new Promise<void>((done) => { entered = done; });
+    const mutation = controller.mutate(async () => { entered(); await gate; });
+    await started;
+    expect((await controller.refresh()).indexed).toBe(0);
+    const configured = controller.configure({ ...config, paused: true });
+    const lateMutation = vi.fn();
+    await expect(controller.mutate(lateMutation)).rejects.toThrow("settings are changing");
+    expect(lateMutation).not.toHaveBeenCalled();
+    expect((await controller.status()).config.paused).toBe(false);
+    release(); await mutation; await configured;
+    expect((await controller.status()).config.paused).toBe(true);
+    expect((await index.list()).items).toHaveLength(0);
+  });
   it("indexes compressed Codex histories, collapses matching representations and retains cached text on corruption", async () => {
     const { controller, index, file } = await setup();
     const compressed = `${file}.zst`;

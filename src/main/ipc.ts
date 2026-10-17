@@ -290,7 +290,7 @@ export const registerIpcHandlers = ({
     });
   };
 
-  registerConversationIpc({ diagnosticHandle }, { conversationService });
+  registerConversationIpc({ diagnosticHandle, handleMutation }, { conversationService });
   registerDialogIpc({ diagnosticHandle }, { targetRegistry });
   registerProjectIpc({ diagnosticHandle, handleMutation }, {
     projectEnvironmentService,

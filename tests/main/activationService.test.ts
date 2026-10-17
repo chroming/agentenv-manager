@@ -80,6 +80,16 @@ const writeCodexLiveFiles = async (paths: ReturnType<typeof createPaths>) => {
 };
 
 describe("activation service v2", () => {
+  it("keeps conversation recovery out of Agent rollback", async () => {
+    const { paths, service } = await makeEnv();
+    const file = join(paths.codexHome, "history-fixture.jsonl");
+    await writeFile(file, "original conversation");
+    const backup = await createBackupStore(paths).createBackup([file], { operation: "conversation-delete", targetId: "codex" });
+    await writeFile(file, "new conversation");
+    await expect(service.previewRollback(backup.id)).rejects.toThrow("Recently deleted");
+    expect((await service.rollback(backup.id)).ok).toBe(false);
+    expect(await readFile(file, "utf8")).toBe("new conversation");
+  });
   it("shares Profile and linked Skill reads within a status request, but rechecks the next request", async () => {
     const { paths, service, profileStore, profile, settingsStore } = await makeEnv();
     await settingsStore.updateSettings({ enabledTargetIds: ["codex", "claude-code"], skillSyncMethod: "symlink" });

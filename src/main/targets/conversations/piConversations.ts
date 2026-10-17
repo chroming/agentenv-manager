@@ -1,4 +1,5 @@
 import { stat } from "node:fs/promises";
+import { collectConversationDeletionFiles } from "./conversationDeletionFiles";
 import { join, resolve } from "node:path";
 import type {
   ConversationDetail,
@@ -135,6 +136,7 @@ export const parsePiConversation = (
 };
 
 export const createPiConversationCapability = (): AgentConversationCapability => ({
+  deletionFiles: (input) => collectConversationDeletionFiles("pi", input, input.candidate, input.candidates),
   historyDetail: "full",
   discover: async ({ targetPaths }) => {
     const roots = [...new Set([

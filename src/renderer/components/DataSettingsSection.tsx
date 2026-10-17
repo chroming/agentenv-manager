@@ -11,6 +11,8 @@ import { FreshnessStatus } from "./FreshnessStatus";
 import { Button, IconButton, SelectControl } from "./ui";
 
 interface DataSettingsSectionProps {
+  deletedConversationRetentionDays?: BackupRetentionDays;
+  onDeletedConversationRetentionChange?(value: BackupRetentionDays): void;
   backupRetentionDays: BackupRetentionDays;
   busy: boolean;
   freshness: FreshnessState;
@@ -24,6 +26,8 @@ interface DataSettingsSectionProps {
 }
 
 export const DataSettingsSection = ({
+  deletedConversationRetentionDays = 30,
+  onDeletedConversationRetentionChange,
   backupRetentionDays,
   busy,
   freshness,
@@ -102,6 +106,13 @@ export const DataSettingsSection = ({
             <option value="90">{t("Keep for 90 days")}</option>
           </SelectControl>
         </label>
+        {onDeletedConversationRetentionChange ? <label className="backup-settings-row" htmlFor="deleted-conversation-retention">
+          <span className="backup-settings-icon" aria-hidden="true"><Clock3 size={18} /></span>
+          <span className="backup-settings-copy"><strong>{t("Recently deleted conversations")}</strong><small>{t("Permanently remove deleted history after this period.")}</small></span>
+          <SelectControl controlWidth="standard" id="deleted-conversation-retention" disabled={busy} value={deletedConversationRetentionDays ?? "never"} onChange={(event) => onDeletedConversationRetentionChange(event.currentTarget.value === "never" ? null : Number(event.currentTarget.value) as BackupRetentionDays)}>
+            <option value="never">{t("Never")}</option><option value="7">{t("Keep for 7 days")}</option><option value="30">{t("Keep for 30 days")}</option><option value="90">{t("Keep for 90 days")}</option>
+          </SelectControl>
+        </label> : null}
       </div>
       <div className="settings-data-footer">
         <span className="settings-field-note">{t("Data exports are stored outside AgentEnv and are never cleaned automatically.")}</span>
