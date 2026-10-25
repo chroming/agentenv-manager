@@ -1765,6 +1765,7 @@ export interface ManagedBackupCleanupFailure extends DeleteManagedBackupInput {
 
 export interface ManagedBackupCleanupResult extends ManagedBackupDeleteResult {
   failures: ManagedBackupCleanupFailure[];
+  deletedItems?: DeleteManagedBackupInput[];
 }
 
 export type AppLocale = "system" | "en" | "zh_CN" | "zh_TW";

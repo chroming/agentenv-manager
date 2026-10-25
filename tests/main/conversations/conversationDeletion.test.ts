@@ -144,7 +144,7 @@ describe("recoverable conversation deletion", () => {
     await maintenance.cleanup("deleted");
     expect((await f.store.listBackups()).length).toBe(1);
     await writeConversationDeletionPhase(f.paths.backupsDir, id, "deleted");
-    expect((await maintenance.cleanup("deleted")).deletedCount).toBe(1);
+    expect(await maintenance.cleanup("deleted")).toMatchObject({ deletedCount: 1, deletedItems: [{ id, kind: "conversation-delete" }] });
   });
 
   it("collects Claude sidecars and subagents, without unrelated sessions or project files", async () => {

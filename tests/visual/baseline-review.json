@@ -9,7 +9,7 @@
     "generatedAt": "2026-10-07T09:10:17.767Z"
   },
   "review": {
-    "scenarios": 100,
+    "scenarios": 106,
     "method": "Changed scenarios inspected in old/current contact sheets; history, file diff, import, cleanup and group dialogs also inspected at native size. Remaining baselines preserved.",
     "scope": "Mock Electron workflows on macOS; no real Agent resources or model requests",
     "thresholdsChanged": false,
@@ -515,9 +515,47 @@
       "file": "startup-failure-920x620.png",
       "sha256": "e4f735865f7b007da56c50bfd11cd487925c37e14c2d02526a17e50afc1513bf",
       "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
+    },
+    {
+      "file": "conversation-delete-920-en.png",
+      "sha256": "b08e1d2317d4438ecbafae9acdab0ef24309b975aea3b52afa2f66e467be3085",
+      "reviewReason": "Reviewed 2026-10-25: current isolated Electron deletion dialog at minimum width; shared warning, file disclosure and destructive footer inspected."
+    },
+    {
+      "file": "conversation-delete-920-zh_CN.png",
+      "sha256": "95ac19d860cc58a9f0d675d35794b028368550ef2949d3f2f19c7c71fabc001f",
+      "reviewReason": "Reviewed 2026-10-25: current isolated Electron Chinese deletion dialog; warning wraps without obscuring the file disclosure or footer."
+    },
+    {
+      "file": "conversation-recovery-920-en.png",
+      "sha256": "bc3de7b03ba80c0f4b36da79db81087151e0d4f3a73546e3e40187605b016099",
+      "reviewReason": "Reviewed 2026-10-25: preserved English recovery list compared with the current Settings entry; dates masked, row states and footer inspected."
+    },
+    {
+      "file": "conversation-recovery-920-zh_CN.png",
+      "sha256": "1fb5efac1d6241c84fab741b6ae7ac67e6681a43624a59d3ac6f455a2f45bfb8",
+      "reviewReason": "Reviewed 2026-10-25: preserved Chinese recovery list compared with current Conversations entry; restored and deleted receipts remain distinct."
+    },
+    {
+      "file": "conversation-restore-920-en.png",
+      "sha256": "cf75a54111233a33db56342972f0103ff7e7cb68211f44731c7ab6342ca6804a",
+      "reviewReason": "Reviewed 2026-10-25: preserved English restore preview compared with current desktop capture; paths and timestamps masked, Back and Restore visible."
+    },
+    {
+      "file": "conversation-restore-920-zh_CN.png",
+      "sha256": "ee5edd80743be3bc55d26bbcf138b0797c45652799f6a99558a84edfb59f84ba",
+      "reviewReason": "Reviewed 2026-10-25: preserved Chinese restore preview and current occupied-destination error inspected; footer remains usable."
     }
   ],
   "incrementalReviews": [
+    {
+      "reviewedAt": "2026-10-25",
+      "sourceFingerprint": "2400ce89a2ef89ef4565dba02566779ad7c505808d1cae8b5e11442cde9dee6d",
+      "artifactFingerprint": "ec5c65dc30279d4fa91a1ac2dfe385f06baa4e7f93459d2fd4426b86cc1f6e9a",
+      "scope": "Six conversation deletion, recently deleted and restoration captures; two warning baselines updated and four existing dialog baselines retained.",
+      "method": "Current isolated Electron en/zh_CN captures inspected at native size, with both entry points, keyboard focus and persisted recovery assertions. Other baselines preserved.",
+      "thresholdsChanged": false
+    },
     {
       "reviewedAt": "2026-10-05",
       "sourceFingerprint": "f40b851b47134d5e3342dcc5ede5c15d4a75c2ce4b9a8167fddb8eb422b17069",

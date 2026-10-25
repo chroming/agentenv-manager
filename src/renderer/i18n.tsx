@@ -18,6 +18,10 @@ const zhCN: Record<string, string> = {
   "Backups & recovery": "备份与恢复",
   "Recovery type": "恢复类型",
   "Recovery points": "恢复点",
+  "1 recovery point": "1 个恢复点",
+  "{{count}} recovery points": "{{count}} 个恢复点",
+  "1 conversation record": "1 条对话记录",
+  "{{count}} conversation records": "{{count}} 条对话记录",
   "Recently deleted": "最近删除",
   "Recently deleted conversations": "最近删除的对话",
   "No deleted conversations": "没有已删除的对话",
@@ -2724,6 +2728,10 @@ Object.assign(zhCN, {
 });
 
 const zhTW: Record<string, string> = {
+  "1 recovery point": "1 個復原點",
+  "{{count}} recovery points": "{{count}} 個復原點",
+  "1 conversation record": "1 條對話記錄",
+  "{{count}} conversation records": "{{count}} 條對話記錄",
   "Sort Skills": "排序 Skills",
   "Sort sources": "排序來源",
   "Sort groups": "排序分組",

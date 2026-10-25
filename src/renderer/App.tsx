@@ -1710,15 +1710,9 @@ const AppContent = ({
             ? "delete"
             : dataRestorePreview
               ? "restore"
-              : backupDeleteCandidate
-                ? "delete-backup"
-                : backupPreviewCandidate
-                  ? `preview-backup:${backupPreviewCandidate.kind}:${backupPreviewCandidate.id}`
-                : backupCleanupConfirm
-                  ? "cleanup-backups"
-                  : backupManagerOpen
-                    ? "manage-backups"
-                    : "guard")
+              : backupDeleteCandidate || backupPreviewCandidate || backupCleanupConfirm || backupManagerOpen
+                ? `${backupRecovery.state.backupModalFocusKey}:${busy ? "busy" : "ready"}`
+                : "guard")
   });
 
   const selectTargetNow = (targetId: string) => {
@@ -4600,6 +4594,7 @@ const AppContent = ({
             </div>
             {backupManagerOpen ? (
               <BackupRecoveryManager
+                targetNames={targetNames}
                 controller={backupRecovery}
                 busy={busy}
                 onBusyChange={setBusy}

@@ -3,18 +3,21 @@ import type { useBackupRecoveryController } from "../hooks/useBackupRecoveryCont
 import { useI18n } from "../i18n";
 import { formatBytes } from "../formatBytes";
 import { BackupManagerDialog, type BackupManagerNotice } from "./BackupManagerDialog";
+import type { TargetNameIndex } from "../targetPresentation";
+import { notifyConversationRecoveryChange } from "../conversationRecoveryEvents";
 
-export const BackupRecoveryManager = ({ controller, busy, onBusyChange, dialogRef, initialFocusRef, initialSection, onClose, error }: {
+export const BackupRecoveryManager = ({ controller, busy, onBusyChange, dialogRef, initialFocusRef, initialSection, onClose, error, targetNames }: {
   controller: ReturnType<typeof useBackupRecoveryController>;
   busy: boolean; dialogRef: RefObject<HTMLElement | null>; initialFocusRef: RefObject<HTMLButtonElement | null>;
   onBusyChange(busy: boolean): void;
   initialSection?: "recovery" | "deleted"; onClose?(): void; error?: string;
+  targetNames?: TargetNameIndex;
 }) => {
   const { t, formatDate } = useI18n();
   const [restoring, setRestoring] = useState(false);
   const [notice, setNotice] = useState<BackupManagerNotice>();
   const s = controller.state, a = controller.actions;
-  return <BackupManagerDialog initialSection={initialSection} busy={busy || restoring} dialogRef={dialogRef} initialFocusRef={initialFocusRef}
+  return <BackupManagerDialog targetNames={targetNames} initialSection={initialSection} busy={busy || restoring} dialogRef={dialogRef} initialFocusRef={initialFocusRef}
     cleanupConfirm={s.backupCleanupConfirm} deleteCandidate={s.backupDeleteCandidate} inventory={s.managedBackups}
     inventoryLoading={s.managedBackupsLoading} notice={error ? { kind: "error", message: error } : notice ?? s.backupManagerNotice}
     preview={s.managedBackupPreview} previewCandidate={s.backupPreviewCandidate} previewLoading={s.managedBackupPreviewLoading}
@@ -25,9 +28,9 @@ export const BackupRecoveryManager = ({ controller, busy, onBusyChange, dialogRe
     onRestoreConversation={(item) => {
       setRestoring(true); onBusyChange(true); setNotice(undefined);
       void window.agentEnv.restoreDeletedConversation(item.id).then(async () => {
-        a.closeManager();
+        if (s.backupPreviewCandidate) a.closeManager();
         setNotice({ kind: "success", message: t("Conversation restored") });
-        window.dispatchEvent(new Event("agentenv-history-indexed"));
+        notifyConversationRecoveryChange({ kind: "restored", backupIds: [item.id] });
         await a.refreshManagedBackups("mutation");
       }).catch((error) => setNotice({ kind: "error", message: String(error) })).finally(() => { setRestoring(false); onBusyChange(false); });
     }} formatBytes={formatBytes} formatDate={formatDate} />;

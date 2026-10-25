@@ -1,5 +1,20 @@
-import type { ManagedBackupInventory, ManagedBackupItem } from "../shared/types";
+import type { ManagedBackupCleanupResult, ManagedBackupInventory, ManagedBackupItem } from "../shared/types";
 import type { useFreshnessCoordinator } from "./hooks/useFreshnessCoordinator";
+import type { TranslationValues } from "./i18n";
+import { formatBytes } from "./formatBytes";
+import type { BackupManagerNotice } from "./components/BackupManagerDialog";
+
+export const backupCleanupNotice = (
+  result: ManagedBackupCleanupResult,
+  t: (message: string, values?: TranslationValues) => string
+): BackupManagerNotice => ({
+  kind: result.failures.length > 0 ? "error" : "success",
+  message: result.failures.length > 0
+    ? t(result.deletedCount === 1 ? "Deleted 1 backup; {{failed}} failed" : "Deleted {{count}} backups; {{failed}} failed",
+      { count: result.deletedCount, failed: result.failures.length })
+    : t(result.deletedCount === 1 ? "Deleted 1 backup · Freed {{size}}" : "Deleted {{count}} backups · Freed {{size}}",
+      { count: result.deletedCount, size: formatBytes(result.freedBytes) })
+});
 
 export const refreshBackupInventory = async (
   run: ReturnType<typeof useFreshnessCoordinator>["run"],

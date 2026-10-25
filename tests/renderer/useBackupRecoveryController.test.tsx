@@ -8,6 +8,7 @@ import type {
 } from "../../src/shared/types";
 import { useBackupRecoveryController } from "../../src/renderer/hooks/useBackupRecoveryController";
 import { useFreshnessCoordinator } from "../../src/renderer/hooks/useFreshnessCoordinator";
+import { onConversationRecoveryChange } from "../../src/renderer/conversationRecoveryEvents";
 
 const requiredBackup: ManagedBackupItem = {
   id: "required-backup",
@@ -109,6 +110,29 @@ const renderController = (
 };
 
 describe("useBackupRecoveryController", () => {
+  it("notifies only successful conversation deletions, including partial expiry cleanup", async () => {
+    const { result, api } = renderController();
+    const changed = vi.fn();
+    const unsubscribe = onConversationRecoveryChange(changed);
+    const item: ManagedBackupItem = { ...eligibleBackup, id: "conversation-one", kind: "conversation-delete" };
+    try {
+      act(() => result.current.actions.openDelete(item));
+      vi.mocked(api.deleteManagedBackup).mockRejectedValueOnce(new Error("disk unavailable"));
+      await act(() => result.current.actions.deleteSelectedBackup());
+      expect(changed).not.toHaveBeenCalled();
+      await act(() => result.current.actions.deleteSelectedBackup());
+      expect(changed).toHaveBeenLastCalledWith({ kind: "deleted", backupIds: [item.id] });
+      changed.mockClear();
+      act(() => result.current.actions.openDelete(eligibleBackup));
+      await act(() => result.current.actions.deleteSelectedBackup());
+      expect(changed).not.toHaveBeenCalled();
+      vi.mocked(api.cleanupManagedBackups).mockResolvedValueOnce({ deletedCount: 2, freedBytes: 1024,
+        deletedItems: [{ id: "expired-chat", kind: "conversation-delete" }, { id: "expired-recovery", kind: "target-recovery" }],
+        failures: [{ id: "failed-chat", kind: "conversation-delete", message: "disk unavailable" }] });
+      await act(() => result.current.actions.cleanupBackups());
+      expect(changed).toHaveBeenLastCalledWith({ kind: "deleted", backupIds: ["expired-chat"] });
+    } finally { unsubscribe(); }
+  });
   beforeEach(() => {
     vi.clearAllMocks();
   });

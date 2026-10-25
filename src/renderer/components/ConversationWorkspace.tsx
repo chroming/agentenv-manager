@@ -38,10 +38,12 @@ import type { HistorySearchStatus } from "../../shared/conversationSearch";
 import { HistorySearchSettings } from "./HistorySearchSettings";
 import { ConversationDeletionDialog } from "./ConversationDeletionDialog";
 import { ConversationRecoveryDialog } from "./ConversationRecoveryDialog";
+import { conversationPageSize, invalidateConversationListPrefetch, preloadConversationList } from "../conversationListCache";
+import { notifyConversationRecoveryChange, onConversationRecoveryChange } from "../conversationRecoveryEvents";
+export { invalidateConversationListPrefetch, preloadConversationList } from "../conversationListCache";
 import type {
   ConversationContinuationPreview,
   ConversationDetail,
-  ConversationListResult,
   ConversationMovePreview,
   ConversationMoveResult,
   ConversationRefreshResult,
@@ -82,21 +84,6 @@ import {
 } from "./ui";
 
 let conversationRefreshOperation: Promise<ConversationRefreshResult> | undefined;
-let conversationListPrefetch: Promise<ConversationListResult> | undefined;
-
-export const preloadConversationList = () => {
-  conversationListPrefetch ??= window.agentEnv.listConversations({
-    limit: conversationPageSize
-  }).catch((error) => {
-    conversationListPrefetch = undefined;
-    throw error;
-  });
-  return conversationListPrefetch;
-};
-
-export const invalidateConversationListPrefetch = () => {
-  conversationListPrefetch = undefined;
-};
 
 export const refreshConversationIndex = () => {
   if (conversationRefreshOperation) return conversationRefreshOperation;
@@ -126,7 +113,6 @@ const continuationText = (detail: ConversationDetail) => [
   ])
 ].join("\n");
 
-const conversationPageSize = 200;
 const conversationMessagePageSize = 60;
 const conversationListEndThreshold = 56;
 const manualRefreshFeedbackMinimumMs = 240;
@@ -1431,10 +1417,17 @@ export const ConversationWorkspace = ({
       void loadList().then(() => refresh()).catch((e) => setError(String(e)));
     };
     window.addEventListener("agentenv-history-changed", changed);
-    const indexed = () => { void loadList().catch(() => undefined); };
+    const indexed = () => { invalidateConversationListPrefetch(); void loadList().catch(() => undefined); };
     window.addEventListener("agentenv-history-indexed", indexed);
     return () => { window.removeEventListener("agentenv-history-changed", changed); window.removeEventListener("agentenv-history-indexed", indexed); };
   }, []);
+  useEffect(() => onConversationRecoveryChange(({ kind, backupIds }) => {
+    if (!deletedBackupId || !backupIds.includes(deletedBackupId)) return;
+    setDeletedBackupId(undefined);
+    setMessage((current) => current === t("Conversation moved to Recently deleted")
+      ? kind === "restored" ? t("Conversation restored") : ""
+      : current);
+  }), [deletedBackupId, t]);
   const sourceCanMove = Boolean(
     detail && !detail.origin?.readOnly && (!detail.origin || detail.origin.deviceId === "local") && detailTarget?.conversationCapabilities.move?.state === "available"
   );
@@ -1569,8 +1562,8 @@ export const ConversationWorkspace = ({
     setOperation("restore"); setError(""); setMessage("");
     try {
       await window.agentEnv.restoreDeletedConversation(deletedBackupId);
+      notifyConversationRecoveryChange({ kind: "restored", backupIds: [deletedBackupId] });
       setDeletedBackupId(undefined); setMessage(t("Conversation restored"));
-      invalidateConversationListPrefetch(); await loadList();
     } catch (error) { setError(String(error)); }
     finally { setOperation(undefined); }
   };
@@ -2459,7 +2452,7 @@ export const ConversationWorkspace = ({
         setMessage(t("Conversation moved to Recently deleted")); invalidateConversationListPrefetch();
         void loadList().catch((e) => setError(String(e)));
       }} /> : null}
-      {recentlyDeletedOpen ? <ConversationRecoveryDialog onClose={() => { setRecentlyDeletedOpen(false); invalidateConversationListPrefetch(); void loadList().catch((e) => setError(String(e))); }} /> : null}
+      {recentlyDeletedOpen ? <ConversationRecoveryDialog targets={targets} onClose={() => { setRecentlyDeletedOpen(false); }} /> : null}
     </>
   );
 };

@@ -91,8 +91,15 @@ describe.skipIf(process.platform === "win32")("Conversation deletion and shared 
     await closeApp(); app = await launch(); page = await app.firstWindow();
     await expect.poll(() => page.evaluate(() => window.agentEnv.readStartupStatus())).toEqual({state:"ready"});
     await nav().click();
-    await page.locator(".conversation-list-pane").getByRole("button",{name:t("More"),exact:true}).click();
-    await page.getByRole("menuitem",{name:t("Recently deleted"),exact:true}).click();
+    if (locale === "en") {
+      await page.getByRole("complementary",{name:t("Global navigation")}).getByRole("button",{name:t("Settings"),exact:true}).click();
+      await page.getByRole("tab",{name:t("Data"),exact:true}).click();
+      await page.getByRole("button",{name:t("Manage"),exact:true}).click();
+      await page.getByRole("button",{name:t("Recently deleted"),exact:true}).click();
+    } else {
+      await page.locator(".conversation-list-pane").getByRole("button",{name:t("More"),exact:true}).click();
+      await page.getByRole("menuitem",{name:t("Recently deleted"),exact:true}).click();
+    }
     const manager = page.getByRole("dialog",{name:t("Backups & recovery"),exact:true});
     const row = manager.getByRole("button",{name:/Synthetic deletion example/}).first();
     await row.waitFor();
@@ -104,6 +111,7 @@ describe.skipIf(process.platform === "win32")("Conversation deletion and shared 
     await row.click();
     await page.setViewportSize({width:920,height:620});
     await manager.locator(".backup-preview-file").first().waitFor();
+    await expect.poll(() => manager.getByRole("button",{name:t("Back"),exact:true}).evaluate((button) => button === document.activeElement)).toBe(true);
     await capture("conversation-restore-920");
     await writeFile(file,"A new session owns this path");
     await manager.getByRole("button",{name:t("Restore conversation"),exact:true}).click();
@@ -115,5 +123,25 @@ describe.skipIf(process.platform === "win32")("Conversation deletion and shared 
     await manager.getByRole("button",{name:t("Restore conversation"),exact:true}).click();
     await expect.poll(() => readFile(file,"utf8").catch(() => "")).toBe(transcript);
     await expect.poll(async () => (await page.evaluate(() => window.agentEnv.searchConversations({query:"Synthetic deletion example"}))).length).toBe(1);
+    await manager.getByText(t("Conversation restored"),{exact:true}).waitFor();
+    await expect.poll(() => manager.getByRole("button",{name:t("Close"),exact:true}).evaluate((button) => button === document.activeElement)).toBe(true);
+    await manager.getByRole("button",{name:t("Close"),exact:true}).click();
+    await nav().click();
+    await page.getByRole("option").filter({hasText:"Synthetic deletion example"}).waitFor();
+    // Removing a recovery record must retire the corresponding Undo in the live workspace.
+    await utimes(file,new Date(0),new Date(0));
+    await page.getByRole("option").filter({hasText:"Synthetic deletion example"}).click({button:"right"});
+    await page.getByRole("menuitem",{name:t("Delete conversation…"),exact:true}).click();
+    await page.getByRole("dialog",{name:t("Delete conversation?"),exact:true}).getByRole("button",{name:t("Delete conversation"),exact:true}).click();
+    await page.getByRole("button",{name:t("Undo"),exact:true}).waitFor();
+    await page.locator(".conversation-list-pane").getByRole("button",{name:t("More"),exact:true}).click();
+    await page.getByRole("menuitem",{name:t("Recently deleted"),exact:true}).click();
+    const pendingRow = manager.locator(".backup-manager-row").filter({hasText:t("Kept until deleted")}).first();
+    await pendingRow.getByRole("button",{name:/More actions|更多操作/}).click();
+    await page.getByRole("menuitem",{name:t("Delete permanently"),exact:true}).click();
+    await expect.poll(() => manager.getByRole("button",{name:t("Cancel"),exact:true}).evaluate((button) => button === document.activeElement)).toBe(true);
+    await manager.getByRole("button",{name:t("Delete permanently"),exact:true}).click();
+    await manager.getByRole("button",{name:t("Close"),exact:true}).click();
+    expect(await page.getByRole("button",{name:t("Undo"),exact:true}).count()).toBe(0);
   },120_000);
 });

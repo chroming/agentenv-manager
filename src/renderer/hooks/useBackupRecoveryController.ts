@@ -7,7 +7,8 @@ import type {
 } from "../../shared/types";
 import type { TranslationValues } from "../i18n";
 import { formatBytes } from "../formatBytes";
-import { refreshBackupInventory, withoutDeletedBackup } from "../backupInventory";
+import { backupCleanupNotice, refreshBackupInventory, withoutDeletedBackup } from "../backupInventory";
+import { notifyConversationRecoveryChange } from "../conversationRecoveryEvents";
 import type { BackupManagerNotice } from "../components/BackupManagerDialog";
 import type { useFreshnessCoordinator } from "./useFreshnessCoordinator";
 
@@ -144,6 +145,9 @@ export const useBackupRecoveryController = ({
       inventoryEpochRef.current++;
       if (result.deletedCount === 1) {
         setManagedBackups((current) => withoutDeletedBackup(current, backupDeleteCandidate));
+        if (backupDeleteCandidate.kind === "conversation-delete") {
+          notifyConversationRecoveryChange({ kind: "deleted", backupIds: [backupDeleteCandidate.id] });
+        }
       }
       setBackupDeleteCandidate(undefined);
       setBackupManagerNotice({
@@ -166,24 +170,11 @@ export const useBackupRecoveryController = ({
     setBackupManagerNotice(undefined);
     try {
       const result = await window.agentEnv.cleanupManagedBackups(scope);
+      notifyConversationRecoveryChange({ kind: "deleted", backupIds: (result.deletedItems ?? [])
+        .filter((item) => item.kind === "conversation-delete").map((item) => item.id) });
       inventoryEpochRef.current++;
       setBackupCleanupConfirm(false);
-      setBackupManagerNotice({
-        kind: result.failures.length > 0 ? "error" : "success",
-        message: result.failures.length > 0
-          ? t(
-              result.deletedCount === 1
-                ? "Deleted 1 backup; {{failed}} failed"
-                : "Deleted {{count}} backups; {{failed}} failed",
-              { count: result.deletedCount, failed: result.failures.length }
-            )
-          : t(
-              result.deletedCount === 1
-                ? "Deleted 1 backup · Freed {{size}}"
-                : "Deleted {{count}} backups · Freed {{size}}",
-              { count: result.deletedCount, size: formatBytes(result.freedBytes) }
-            )
-      });
+      setBackupManagerNotice(backupCleanupNotice(result, t));
       void refreshManagedBackups("mutation");
     } catch (error) {
       setBackupManagerNotice({ kind: "error", message: errorMessage(error) });
@@ -247,6 +238,10 @@ export const useBackupRecoveryController = ({
       backupDeleteCandidate,
       backupManagerNotice,
       backupManagerOpen,
+      backupModalFocusKey: backupPreviewCandidate
+        ? `preview-backup:${backupPreviewCandidate.kind}:${backupPreviewCandidate.id}:${managedBackupPreviewLoading ? "loading" : "ready"}`
+        : backupDeleteCandidate ? `delete-backup:${backupDeleteCandidate.id}`
+          : backupCleanupConfirm ? "cleanup-backups" : "manage-backups",
       backupPreviewCandidate,
       dataBackupStatus,
       dataRestorePreview,

@@ -20,6 +20,7 @@ import { useCatalogView } from "../hooks/useCatalogView";
 import { projectBackups, compareCatalogNames } from "../catalogSort";
 import { CatalogFilters, FilterReset } from "./ui";
 import { DiagnosticMessage } from "./ui/DiagnosticCopyButton";
+import type { TargetNameIndex } from "../targetPresentation";
 
 type Translate = (message: string, values?: TranslationValues) => string;
 
@@ -29,6 +30,7 @@ export interface BackupManagerNotice {
 }
 
 interface BackupManagerDialogProps {
+  targetNames?: TargetNameIndex;
   initialSection?: "recovery" | "deleted";
   onRestoreConversation?(item: ManagedBackupItem): void;
   busy: boolean;
@@ -54,7 +56,7 @@ interface BackupManagerDialogProps {
   formatDate(value: string): string;
 }
 
-const managedBackupTitle = (item: ManagedBackupItem, t: Translate): string =>
+const managedBackupTitle = (item: ManagedBackupItem, t: Translate, targetNames: TargetNameIndex): string =>
   item.kind === "conversation-delete" ? item.conversationTitle ?? t("Conversation") : item.kind === "skill-cleanup"
     ? t(item.restored ? "Restored skill cleanup · {{name}}" : "Skill cleanup · {{name}}", {
         name: item.libraryId ?? item.id
@@ -64,16 +66,16 @@ const managedBackupTitle = (item: ManagedBackupItem, t: Translate): string =>
       : item.profileName
         ? t("{{profile}} · {{target}}", {
             profile: item.profileName,
-            target: item.targetId ?? t("Agent")
+            target: item.targetId ? targetNames[item.targetId] ?? t("Unknown Agent") : t("Agent")
           })
         : t("Agent recovery · {{target}}", {
-            target: item.targetId ?? t("Unknown Agent")
+            target: item.targetId ? targetNames[item.targetId] ?? t("Unknown Agent") : t("Unknown Agent")
           });
 
-const managedBackupStatusLabel = (item: ManagedBackupItem, t: Translate): string => {
+const managedBackupStatusLabel = (item: ManagedBackupItem, t: Translate, localeTag: string): string => {
   if (item.kind === "conversation-delete" && item.restored) return t("Restored");
   if (item.kind === "conversation-delete" && item.cleanupStatus !== "required") return item.expiresAt
-    ? t("Expires {{date}}", { date: new Date(item.expiresAt).toLocaleDateString() }) : t("Kept until deleted");
+    ? t("Expires {{date}}", { date: new Date(item.expiresAt).toLocaleDateString(localeTag) }) : t("Kept until deleted");
   if (item.requiredReason === "recovery-required") return t("Required for recovery");
   if (item.requiredReason === "workspace-sync-recovery") {
     return t("Required for Workspace recovery");
@@ -85,6 +87,7 @@ const managedBackupStatusLabel = (item: ManagedBackupItem, t: Translate): string
 };
 
 export const BackupManagerDialog = ({
+  targetNames = {},
   initialSection = "recovery",
   onRestoreConversation,
   busy,
@@ -109,7 +112,9 @@ export const BackupManagerDialog = ({
   formatBytes,
   formatDate
 }: BackupManagerDialogProps) => {
-  const { t } = useI18n();
+  const { t, localeTag } = useI18n();
+  const titleFor = (item: ManagedBackupItem) => managedBackupTitle(item, t, targetNames);
+  const statusFor = (item: ManagedBackupItem) => managedBackupStatusLabel(item, t, localeTag);
   const [section, setSection] = useState(initialSection);
   const [view, updateView] = useCatalogView("backups", {
     sort: "newest", kindFilter: "all", statusFilter: "all", targetFilter: "all"
@@ -149,7 +154,7 @@ export const BackupManagerDialog = ({
               <div className="ui-dialog-header__copy">
                 <div className="section-title ui-dialog-title">{t("Backup contents")}</div>
                 <p className="muted ui-dialog-description">
-                  {managedBackupTitle(previewCandidate, t)}
+                  {titleFor(previewCandidate)}
                 </p>
               </div>
               <span className="backup-preview-count">
@@ -202,7 +207,7 @@ export const BackupManagerDialog = ({
               <div className="ui-dialog-header__copy">
                 <div className="section-title ui-dialog-title">{deleteCandidate.kind === "conversation-delete" ? t("Permanently delete conversation?") : t("Delete backup?")}</div>
                 <p className="muted ui-dialog-description">
-                  {managedBackupTitle(deleteCandidate, t)}
+                  {titleFor(deleteCandidate)}
                 </p>
               </div>
             </header>
@@ -302,7 +307,7 @@ export const BackupManagerDialog = ({
                     <SelectControl controlWidth="fill" aria-label={t("Backup Agent filter")} value={view.targetFilter}
                       onChange={(event) => updateView({ targetFilter: event.currentTarget.value })}>
                       <option value="all">{t("All Agents")}</option>
-                      {targetIds.map((id) => <option key={id} value={id}>{id}</option>)}
+                      {targetIds.map((id) => <option key={id} value={id}>{targetNames[id] ?? t("Unknown Agent")}</option>)}
                     </SelectControl></label>
                   <FilterReset disabled={!filterCount} onReset={() => updateView({ kindFilter: "all", statusFilter: "all", targetFilter: "all" })} />
                 </div>
@@ -320,7 +325,7 @@ export const BackupManagerDialog = ({
                       type="button"
                       disabled={busy}
                       aria-label={t("Preview backup {{name}}", {
-                        name: managedBackupTitle(item, t)
+                        name: titleFor(item)
                       })}
                       onClick={() => onPreview(item)}
                     >
@@ -334,8 +339,8 @@ export const BackupManagerDialog = ({
                         )}
                       </span>
                       <span className="backup-row-copy">
-                        <strong title={managedBackupTitle(item, t)}>
-                          {managedBackupTitle(item, t)}
+                        <strong title={titleFor(item)}>
+                          {titleFor(item)}
                         </strong>
                         <small>
                           {formatDate(item.createdAt)} ·{" "}
@@ -345,9 +350,9 @@ export const BackupManagerDialog = ({
                       </span>
                       <span
                         className={`backup-status is-${item.cleanupStatus}`}
-                        title={managedBackupStatusLabel(item, t)}
+                        title={statusFor(item)}
                       >
-                        {managedBackupStatusLabel(item, t)}
+                        {statusFor(item)}
                       </span>
                       <ChevronRight
                         className="backup-row-chevron"
@@ -360,10 +365,10 @@ export const BackupManagerDialog = ({
                       <ToolbarOverflowMenu
                         disabled={busy || inventoryLoading}
                         label={t("More actions for {{name}}", {
-                          name: managedBackupTitle(item, t)
+                          name: titleFor(item)
                         })}
                         menuLabel={t("Actions for {{name}}", {
-                          name: managedBackupTitle(item, t)
+                          name: titleFor(item)
                         })}
                         items={[{
                           id: "delete",
@@ -375,7 +380,7 @@ export const BackupManagerDialog = ({
                     ) : (
                       <span
                         className="backup-required-lock"
-                        title={managedBackupStatusLabel(item, t)}
+                        title={statusFor(item)}
                       >
                         {t("Required")}
                       </span>

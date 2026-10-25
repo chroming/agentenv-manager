@@ -9954,7 +9954,7 @@ describe("Electron UI profile switching e2e", () => {
     await expectTextFits(manager.getByRole("button", { name: "Clean up now" }));
     await expect.poll(() => manager.textContent()).toContain("3 backups");
     await manager.getByRole("button", {
-      name: "Preview backup Old Manual · cleanup-target"
+      name: "Preview backup Old Manual · Unknown Agent"
     }).click();
     await expect.poll(() => manager.textContent()).toContain("Backup contents");
     await expect.poll(() => manager.textContent()).toContain(
@@ -9963,7 +9963,7 @@ describe("Electron UI profile switching e2e", () => {
     await expectNoHorizontalOverflow(page, [".backup-manager-dialog", ".backup-preview-list"]);
     await manager.getByRole("button", { name: "Back" }).click();
     await manager.getByRole("button", {
-      name: "More actions for Old Manual · cleanup-target"
+      name: "More actions for Old Manual · Unknown Agent"
     }).click();
     await page.getByRole("menuitem", { name: "Delete backup" }).click();
     await manager.getByRole("button", { name: "Delete backup", exact: true }).click();

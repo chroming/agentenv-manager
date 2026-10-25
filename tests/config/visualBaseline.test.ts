@@ -23,6 +23,8 @@ it("captures history and invocation scenarios in both visual verification entry 
     const source = await readFile(join(process.cwd(), "scripts", file), "utf8");
     expect(source, file).toContain("tests/e2e/conversationHistorySearch.e2e.test.ts");
     expect(source, file).toContain("AGENTENV_CAPTURE_HISTORY_DIR");
+    expect(source, file).toContain("tests/e2e/conversationDeletion.e2e.test.ts");
+    expect(source, file).toContain("AGENTENV_CAPTURE_DELETION_DIR");
     expect(source, file).toContain("persists manual Skill invocation");
     expect(source, file).toContain("AGENTENV_STATUS_CAPTURE_DIR");
   }

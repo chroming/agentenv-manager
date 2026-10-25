@@ -16,6 +16,7 @@ const inventory: ManagedBackupInventory = {
   ], eligibleBytes: 100, eligibleCount: 1, totalBytes: 300, retentionDays: 30
 };
 const props = () => ({ busy: false, cleanupConfirm: false, dialogRef: createRef<HTMLElement>(),
+  targetNames: { codex: "Codex", "claude-code": "Claude Code" },
   initialFocusRef: createRef<HTMLButtonElement>(), inventory, inventoryLoading: false, previewLoading: false,
   onBackOrClose: vi.fn(), onCleanup: vi.fn(), onDelete: vi.fn(), onOpenCleanupConfirm: vi.fn(),
   onOpenDelete: vi.fn(), onPreview: vi.fn(), onCancelCleanup: vi.fn(), onCancelDelete: vi.fn(),
@@ -23,6 +24,17 @@ const props = () => ({ busy: false, cleanupConfirm: false, dialogRef: createRef<
 });
 
 describe("Backup catalog controls", () => {
+  it.each(["en", "zh_CN", "zh_TW"] as const)("formats Agent names and expiration with the app locale in %s", (preference) => {
+    const expiresAt = "2026-11-20T12:00:00Z";
+    const item = { ...inventory.items[0], kind: "conversation-delete" as const, conversationTitle: "Fixture", targetId: "claude-code", expiresAt };
+    render(<I18nProvider preference={preference}><BackupManagerDialog {...props()} inventory={{ ...inventory, items: [item] }} initialSection="deleted" /></I18nProvider>);
+    const locale = { en: "en-US", zh_CN: "zh-CN", zh_TW: "zh-TW" }[preference];
+    expect(screen.getByText(translate(preference, "Expires {{date}}", { date: new Date(expiresAt).toLocaleDateString(locale) }))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: translate(preference, "Filters") }));
+    const filter = screen.getByRole("combobox", { name: translate(preference, "Backup Agent filter") });
+    expect(within(filter).getByRole("option", { name: "Claude Code" })).toHaveValue("claude-code");
+    expect(within(filter).queryByRole("option", { name: "claude-code" })).not.toBeInTheDocument();
+  });
   it("separates deleted conversations and scopes cleanup to the selected section", () => {
     const handlers = props();
     const deleted = { id: "deleted", kind: "conversation-delete" as const, conversationTitle: "Original chat", createdAt: "2025-01-01", fileCount: 2, sizeBytes: 512,
@@ -56,7 +68,7 @@ describe("Backup catalog controls", () => {
     const view = render(<BackupManagerDialog {...handlers} inventoryLoading />);
     expect(screen.getByRole("button", { name: "Clean up now" })).toBeDisabled();
     expect(screen.getByRole("button", { name: /More actions for Older/ })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Preview backup Older · codex" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Preview backup Older · Codex" })).toBeEnabled();
     expect(screen.getByRole("button", { name: "Close" })).toBeEnabled();
     view.rerender(<BackupManagerDialog {...handlers} inventoryLoading deleteCandidate={inventory.items[0]} />);
     expect(screen.getByRole("button", { name: "Delete backup" })).toBeDisabled();
@@ -72,7 +84,7 @@ describe("Backup catalog controls", () => {
     expect(within(dialog).getAllByRole("button", { name: /Preview backup/ })[0]).toHaveAccessibleName("Preview backup Skill cleanup · Newer");
     fireEvent.click(screen.getByRole("button", { name: "Sort backups: Newest first" }));
     fireEvent.click(screen.getByRole("menuitemradio", { name: "Oldest first" }));
-    expect(within(dialog).getAllByRole("button", { name: /Preview backup/ })[0]).toHaveAccessibleName("Preview backup Older · codex");
+    expect(within(dialog).getAllByRole("button", { name: /Preview backup/ })[0]).toHaveAccessibleName("Preview backup Older · Codex");
     fireEvent.click(within(dialog).getByRole("button", { name: "Filters" }));
     expect(screen.getByRole("dialog", { name: "Filters" })).toHaveClass("ui-filter-popover__panel--modal");
     fireEvent.change(screen.getByRole("combobox", { name: "Backup status filter" }), { target: { value: "protected" } });

@@ -394,11 +394,13 @@ export const createBackupMaintenanceService = (
       let freedBytes = 0;
       let deletedCount = 0;
       const failures: ManagedBackupCleanupResult["failures"] = [];
+      const deletedItems: DeleteManagedBackupInput[] = [];
       for (const item of eligible) {
         try {
           await removeItem(item);
           deletedCount += 1;
           freedBytes += item.sizeBytes;
+          deletedItems.push({ id: item.id, kind: item.kind });
         } catch (error) {
           failures.push({
             id: item.id,
@@ -407,7 +409,7 @@ export const createBackupMaintenanceService = (
           });
         }
       }
-      return { deletedCount, freedBytes, failures };
+      return { deletedCount, freedBytes, failures, deletedItems };
     } finally {
       activeMutation = false;
     }

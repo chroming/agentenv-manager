@@ -40,6 +40,13 @@ export const DataSettingsSection = ({
   onRestore
 }: DataSettingsSectionProps) => {
   const { t } = useI18n();
+  const conversationCount = inventory?.items.filter((item) => item.kind === "conversation-delete").length ?? 0;
+  const recoveryCount = (inventory?.items.length ?? 0) - conversationCount;
+  const storageSummary = [
+    t(recoveryCount === 1 ? "1 recovery point" : "{{count}} recovery points", { count: recoveryCount }),
+    t(conversationCount === 1 ? "1 conversation record" : "{{count}} conversation records", { count: conversationCount }),
+    formatBytes(inventory?.totalBytes ?? 0)
+  ].join(" · ");
 
   return (
     <section className="resource-section settings-section" aria-labelledby="agentenv-data-heading">
@@ -70,10 +77,7 @@ export const DataSettingsSection = ({
             <small>
               {inventoryLoading && !inventory
                 ? t("Calculating storage...")
-                : t((inventory?.items.length ?? 0) === 1 ? "{{count}} backup · {{size}}" : "{{count}} backups · {{size}}", {
-                    count: inventory?.items.length ?? 0,
-                    size: formatBytes(inventory?.totalBytes ?? 0)
-                  })}
+                : storageSummary}
             </small>
           </span>
           <span className="backup-settings-row-actions settings-row-actions">

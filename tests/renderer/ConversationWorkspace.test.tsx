@@ -20,6 +20,7 @@ import type {
   ConversationDetail,
   TargetInfo
 } from "../../src/shared/types";
+import { notifyConversationRecoveryChange } from "../../src/renderer/conversationRecoveryEvents";
 
 const target = (
   id: "codex" | "opencode",
@@ -202,6 +203,33 @@ afterEach(() => {
 });
 
 describe("ConversationWorkspace", () => {
+  it.each(["restored", "deleted"] as const)("clears only the matching Undo after a backup is %s", async (kind) => {
+    const api = installApi();
+    Object.assign(api, {
+      previewDeleteConversation: vi.fn().mockResolvedValue({ previewId: "preview", title: detail.title, files: ["/history/fixture.jsonl"], sizeBytes: 512, retentionDays: 30, warnings: [] }),
+      deleteConversation: vi.fn(async () => {
+        api.listConversations.mockResolvedValue({ items: [], total: 0, totalSizeBytes: 0,
+          historyStatus: { config: { version: 1, enabled: true, paused: false, sources: [] }, needsConsent: false, running: false, sources: [], availableSources: [] },
+          workspacePaths: [], agentCounts: { codex: 0, opencode: 0 }, lastRefreshedAt: new Date().toISOString() });
+        return { backupId: "deleted-one" };
+      })
+    });
+    const agent = target("codex", "Codex");
+    agent.conversationCapabilities.delete = { state: "available", evidence: ["fixture"] };
+    render(<ConversationWorkspace targets={[agent]} />);
+    const row = await screen.findByRole("option", { name: /Repair release workflow/ });
+    fireEvent.contextMenu(row);
+    fireEvent.click(screen.getByRole("menuitem", { name: "Delete conversation…" }));
+    await waitFor(() => expect(screen.getByRole("button", { name: "Delete conversation" })).toBeEnabled());
+    fireEvent.click(screen.getByRole("button", { name: "Delete conversation" }));
+    await screen.findByRole("button", { name: "Undo" });
+    act(() => notifyConversationRecoveryChange({ kind, backupIds: ["unrelated"] }));
+    expect(screen.getByRole("button", { name: "Undo" })).toBeEnabled();
+    act(() => window.dispatchEvent(new Event("agentenv-history-indexed")));
+    expect(screen.getByRole("button", { name: "Undo" })).toBeEnabled();
+    act(() => notifyConversationRecoveryChange({ kind, backupIds: ["deleted-one"] }));
+    expect(screen.queryByRole("button", { name: "Undo" })).not.toBeInTheDocument();
+  });
   it("copies the history location with local success and failure feedback", async () => {
     const api = installApi();
     render(<ConversationWorkspace targets={[target("codex", "Codex")]} />);

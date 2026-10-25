@@ -5208,7 +5208,7 @@ describe("App", () => {
     render(<App />);
 
     await openSettingsCategory("Data");
-    expect(await screen.findByText("2 backups · 6.0 KB")).toBeInTheDocument();
+    expect(await screen.findByText("2 recovery points · 0 conversation records · 6.0 KB")).toBeInTheDocument();
     fireEvent.change(screen.getByLabelText("Backup retention"), { target: { value: "90" } });
     await waitFor(() => expect(api.updateSettings).toHaveBeenCalledWith({ backupRetentionDays: 90 }));
 
@@ -5219,7 +5219,7 @@ describe("App", () => {
     expect(within(manager).queryByRole("button", { name: /Delete backup Daily Coding/ })).not.toBeInTheDocument();
 
     fireEvent.click(within(manager).getByRole("button", {
-      name: "Preview backup Daily Coding · opencode"
+      name: "Preview backup Daily Coding · OpenCode"
     }));
     expect(await within(manager).findByText("Backup contents")).toBeInTheDocument();
     expect(within(manager).getByText("/Users/test/.config/opencode/AGENTS.md")).toBeInTheDocument();

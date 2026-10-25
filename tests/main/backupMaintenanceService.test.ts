@@ -145,6 +145,11 @@ describe("backup maintenance service", () => {
 
     const result = await service.cleanup();
     expect(result).toMatchObject({ deletedCount: 3, failures: [] });
+    expect(result.deletedItems).toEqual(expect.arrayContaining([
+      { id: expiredCodex.id, kind: "target-recovery" },
+      { id: cleanupId, kind: "skill-cleanup" },
+      { id: restoredCleanupId, kind: "skill-cleanup" }
+    ]));
     await expect(backupStore.readBackup(expiredCodex.id)).rejects.toThrow();
     await expect(readFile(join(cleanupDir, "payload.txt"), "utf8")).rejects.toThrow();
     await expect(readFile(join(restoredCleanupDir, "manifest.json"), "utf8")).rejects.toThrow();
@@ -184,7 +189,7 @@ describe("backup maintenance service", () => {
 
     await expect(service.deleteBackup({ id: backup.id, kind: "target-recovery" }))
       .rejects.toThrow("required for recovery");
-    await expect(service.cleanup()).resolves.toEqual({ deletedCount: 0, freedBytes: 0, failures: [] });
+    await expect(service.cleanup()).resolves.toEqual({ deletedCount: 0, freedBytes: 0, failures: [], deletedItems: [] });
   });
 
   it("fails closed when Target state cannot be read safely", async () => {
@@ -295,7 +300,8 @@ describe("backup maintenance service", () => {
     await expect(service.cleanup()).resolves.toEqual({
       deletedCount: 0,
       freedBytes: 0,
-      failures: []
+      failures: [],
+      deletedItems: []
     });
     expect(deleteCleanupBackup).not.toHaveBeenCalled();
   });

@@ -3,7 +3,8 @@ import type { ConversationDeletePreview } from "../../shared/conversationDeletio
 import { useI18n } from "../i18n";
 import { formatBytes } from "../formatBytes";
 import { useModalDialog } from "../hooks/useModalDialog";
-import { Button, DialogBody, DialogFooter, DialogHeader, ModalFrame } from "./ui";
+import { Button, DialogBody, DialogFooter, DialogHeader, ModalFrame, Notice } from "./ui";
+import { TriangleAlert } from "lucide-react";
 import { DiagnosticMessage } from "./ui/DiagnosticCopyButton";
 import { FileTypeIcon } from "./FileTypeIcon";
 
@@ -39,7 +40,7 @@ export const ConversationDeletionDialog = ({ id, onClose, onDeleted }: {
       {preview ? <>
         <p>{t("Original Agent history files will be removed. You can restore this conversation from Recently deleted.")}</p>
         <p className="muted">{preview.retentionDays === null ? t("Kept until permanently deleted.") : t("Recoverable for {{days}} days after deletion.", { days: preview.retentionDays })} {formatBytes(preview.sizeBytes)}</p>
-        {preview.warnings.map((warning) => <p className="muted" key={warning}>{t(warning)}</p>)}
+        {preview.warnings.map((warning) => <Notice tone="warning" icon={<TriangleAlert size={16} />} key={warning}>{t(warning)}</Notice>)}
         <details><summary>{preview.files.length === 1 ? t("1 file") : t("{{count}} files", { count: preview.files.length })}</summary>
           <div className="backup-preview-list">{preview.files.map((path) => <div className="backup-preview-file" key={path}><FileTypeIcon kind="file" path={path} /><code>{path}</code></div>)}</div>
         </details>
