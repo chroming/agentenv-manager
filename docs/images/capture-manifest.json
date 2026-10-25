@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-10-11T06:12:04.735Z",
+  "generatedAt": "2026-10-25T10:01:46.702Z",
   "build": {
     "sourceFingerprint": "bc32f0bdca9b44ef38bff8066e8b86025280a04dcd9f42e3e50f7ca01c9cf4b7",
     "artifactFingerprint": "84104088afc2f7a46aa5f94ee4b9a93f680fa0e401a7e1402d53151590913309",
@@ -61,10 +61,16 @@
     },
     {
       "file": "worktrees.png",
-      "bytes": 68453,
-      "sha256": "f6ea79ef219886b220152eb4853dc4312f8dc835cdaf784fe1bc152297ead56d",
+      "bytes": 74552,
+      "sha256": "ffae4309613c3cf12b10f70406e0725d2117f87a538feaaf56c28055b5e01ce4",
       "width": 1180,
-      "height": 728
+      "height": 728,
+      "capturedAt": "2026-10-25T10:01:46.702Z",
+      "build": {
+        "sourceFingerprint": "2400ce89a2ef89ef4565dba02566779ad7c505808d1cae8b5e11442cde9dee6d",
+        "artifactFingerprint": "ec5c65dc30279d4fa91a1ac2dfe385f06baa4e7f93459d2fd4426b86cc1f6e9a",
+        "generatedAt": "2026-10-25T08:34:28.473Z"
+      }
     },
     {
       "file": "profile-compare.png",

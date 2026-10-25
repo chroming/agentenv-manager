@@ -34,6 +34,13 @@ default. It contains Profiles, the Skill Library, backups, recovery state,
 settings, and rebuildable caches. Target files are changed only by confirmed
 operations described in the Preview.
 
+When you delete a supported local conversation, AgentEnv saves its original
+files locally before removing them. These recovery copies stay in Recently
+deleted for 30 days by default, with retention configured separately from other
+recovery points. Clearing the search cache does not remove them. You can restore
+or permanently delete them through Backups & recovery. Restore does not overwrite
+files already at the original paths.
+
 Profile Compare creates two temporary, permission-restricted Agent homes and
 Workspace snapshots. To authenticate the selected Agent, it may copy that
 Agent's existing local credential file into each temporary home or pass

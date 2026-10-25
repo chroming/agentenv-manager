@@ -13,7 +13,7 @@ AgentEnv Manager keeps coding agent environments in one place. Its main features
 - **Skills management:** Import Skills from local folders, ZIP archives, GitHub, or Git repositories, add tags and groups, and keep checking their sources for updates.
 - **Project environments:** Save local or SSH Linux project folders, manage their Instructions and Skills, and open an Agent or copy its launch command.
 - **Worktree cleanup:** See local Git worktree branches, uncommitted changes, and disk usage, then preview and remove worktrees you no longer need.
-- **Conversation search:** Search Agent histories on this computer and SSH devices from one place, with messages and full project paths. Reopen local sessions in their original Agent or hand them off to another.
+- **Conversation search:** Search Agent histories on this computer and SSH devices from one place, with messages and full project paths. Reopen local sessions in their original Agent or hand them off to another. Supported conversations can also be deleted and restored.
 - **Try before Apply:** Preview Profile changes and run the same task with the current setup and a proposed Profile before deciding whether to apply it.
 - **AI assistance:** Summarize Skill updates, suggest tags, or analyze Profiles and comparison results. Your configured AI service is called only when you ask.
 
@@ -92,7 +92,7 @@ Recent scan results appear immediately when you return to the page or restart th
 
 ![Git worktrees](docs/images/worktrees.png)
 
-Select all worktrees eligible for batch cleanup within a repository. Before removal, review paths, uncommitted content, size, and estimated freed space. Git removes the working directory, not local branches or remote history. Main repositories cannot be removed; dirty, locked, and other review-required entries need separate attention. Cleanup that retains a file backup does not count that space as freed, and recovery remains available in Worktrees.
+Select all eligible worktrees in the current filtered view or within one repository. Before removal, review paths, uncommitted content, size, and estimated freed space. Git removes the working directory while keeping branches and remote history. You can stop a batch after the current item finishes; remaining items are skipped. Main repositories cannot be removed; dirty, locked, and other review-required entries need separate attention. Retained file backups do not count as freed space and can be restored from Worktrees.
 
 If you are unsure what to keep, request an AI analysis from the review dialog. AgentEnv rereads Git state before analysis. Suggestions do not replace cleanup confirmation or relax deletion safeguards.
 
@@ -125,6 +125,10 @@ Local conversations can reopen in their original Agent or continue in another on
 ![Conversation history](docs/images/conversations.png)
 
 Browsing and searching are read-only. For supported Agents, you can explicitly move a conversation to another working directory after previewing the impact. The source Agent still owns the history; conversations are not included in Profiles or Device Sync.
+
+Local Codex, Claude Code, and Pi conversations support deletion from the context menu, with a preview of the original files to remove. Close the session in its original Agent first. You can undo deletion immediately or restore it from **More > Recently deleted** or the Data page in Settings. Restoration does not overwrite existing files. The original Agent's recent-session list may need a refresh to remove its entry.
+
+Deleted conversations are kept for 30 days by default. Their retention period is separate from configuration recovery points, and automatic cleanup can be turned off. Deletion is not available for SSH histories, additional history folders, or other Agents yet.
 
 ## Supported Agents
 

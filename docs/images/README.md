@@ -14,6 +14,9 @@ write build fingerprints and image hashes to `capture-manifest.json` in each
 output directory. Keep the published image provenance in this directory's
 `capture-manifest.json` up to date.
 
+When refreshing one image, record its capture time and build in that file's
+manifest entry. The top-level build remains the default for earlier captures.
+
 The README includes both `skills-list.png` (tags and per-Skill updates) and
 `skills-by-source.png` (source scope and updates), plus `worktrees.png` with
 synthetic Git worktrees sorted by disk usage. The README fixture excludes
