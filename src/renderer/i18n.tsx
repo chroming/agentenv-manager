@@ -5769,3 +5769,20 @@ Object.assign(zhTW, {
   "The local main tree baseline is unavailable; integration cannot be compared.": "無法讀取本機主要工作目錄的基準，不能對比合入情況。",
   "Recovery copies are retained. Their size is excluded from estimated space freed.": "復原副本仍保留，其大小不計入預計釋放空間。"
 });
+
+Object.assign(zhCN, {
+  "Agent copies kept": "已保留的 Agent 副本",
+  "{{updated}} updated · {{count}} Agent copies kept": "{{updated}} 项已更新 · {{count}} 个 Agent 副本保持原样",
+  "Library updated; Agent copies kept": "Library 已更新，部分 Agent 副本保持原样",
+  "Library updated": "Library 已更新",
+  "These copies differ from the saved deployment or could not be verified. They were not changed. Review them before replacing them.": "这些副本与部署记录不同或无法验证，因此未作修改。请检查后再决定是否替换。",
+  "HTTP sends requests and API keys without encryption. Use it only on a trusted network.": "HTTP 不加密请求和 API Key，请仅在可信网络中使用。"
+});
+Object.assign(zhTW, {
+  "Agent copies kept": "已保留的 Agent 副本",
+  "{{updated}} updated · {{count}} Agent copies kept": "{{updated}} 項已更新 · {{count}} 個 Agent 副本保持原樣",
+  "Library updated; Agent copies kept": "Library 已更新，部分 Agent 副本保持原樣",
+  "Library updated": "Library 已更新",
+  "These copies differ from the saved deployment or could not be verified. They were not changed. Review them before replacing them.": "這些副本與部署記錄不同或無法驗證，因此未作修改。請檢查後再決定是否取代。",
+  "HTTP sends requests and API keys without encryption. Use it only on a trusted network.": "HTTP 不加密請求及 API Key，請僅在可信網路中使用。"
+});

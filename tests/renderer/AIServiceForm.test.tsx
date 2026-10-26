@@ -4,6 +4,23 @@ import { afterEach, expect, it, vi } from "vitest";
 import { AIServiceForm } from "../../src/renderer/components/SkillSummarySettings";
 import type { AgentEnvApi } from "../../src/shared/types";
 afterEach(cleanup);
+it("saves an HTTP endpoint and explains its transport without blocking connection tests", async () => {
+  const endpoint = "http://inference.internal:8000/v1";
+  const save = vi.fn().mockResolvedValue(undefined);
+  const test = vi.fn().mockResolvedValue(undefined);
+  window.agentEnv = {
+    readSkillSummaryConfig: vi.fn().mockResolvedValue({ endpoint, model: "fixture", hasKey: false }),
+    saveSkillSummaryConfig: save, testAIService: test
+  } as unknown as AgentEnvApi;
+  render(<AIServiceForm />);
+  await waitFor(() => expect(screen.getByRole("textbox", { name: "API endpoint" })).toHaveValue(endpoint));
+  expect(screen.getByText(/HTTP sends requests and API keys without encryption/)).toBeVisible();
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  await waitFor(() => expect(save).toHaveBeenCalledWith({ endpoint, model: "fixture", apiKey: undefined }));
+  await waitFor(() => expect(screen.getByRole("button", { name: "Test connection" })).toBeEnabled());
+  fireEvent.click(screen.getByRole("button", { name: "Test connection" }));
+  await waitFor(() => expect(test).toHaveBeenCalledOnce());
+});
 it("separates saving from testing and keeps a persistent feedback slot after actions", async () => {
   const test = vi.fn().mockResolvedValue(undefined);
   window.agentEnv = { readSkillSummaryConfig: vi.fn().mockResolvedValue({ endpoint: "https://example.test/v1", model: "fixture", hasKey: true }),

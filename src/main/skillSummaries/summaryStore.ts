@@ -34,8 +34,8 @@ const missing = (error: unknown) => (error as NodeJS.ErrnoException)?.code === "
 export const validateSummaryEndpoint = (value: string) => {
   const url = new URL(value);
   if (url.username || url.password || url.search || url.hash ||
-      !(url.protocol === "https:" || (url.protocol === "http:" && ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname)))) {
-    throw new Error("Use an HTTPS API endpoint without credentials, query or fragment (HTTP is allowed only on localhost).");
+      (url.protocol !== "https:" && url.protocol !== "http:")) {
+    throw new Error("Use an HTTP or HTTPS API endpoint without credentials, query or fragment.");
   }
   return url.href;
 };

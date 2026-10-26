@@ -24,6 +24,20 @@ const plan: SkillUpdatePlan = {
 };
 
 describe("BulkSkillUpdateDialog", () => {
+  it("expands preserved-copy results without offering to retry a committed Library update", () => {
+    render(<BulkSkillUpdateDialog plans={[plan]} failures={[]}
+      updateRun={{ reviewer: { status: "updated", skippedAgentCopies: [
+        { path: "/agents/opencode/skills/reviewer", targetIds: ["opencode"] }
+      ] } }} isBusy={false} previewingAllUpdates={false} updateActivityBusy={false}
+      stopRequested={false} onClose={vi.fn()} onPreview={vi.fn()} onStop={vi.fn()} onUpdate={vi.fn()} />);
+    expect(screen.getByText("1 updated · 1 Agent copies kept")).toBeInTheDocument();
+    expect(screen.queryByText(/0 failed/)).not.toBeInTheDocument();
+    const notice = screen.getByRole("region", { name: "Agent copies kept" });
+    expect(notice).toHaveTextContent("/agents/opencode/skills/reviewer");
+    expect(notice.closest("details")?.open).toBe(true);
+    expect(screen.queryByRole("button", { name: /Retry/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(/copied installs update now/)).not.toBeInTheDocument();
+  });
   it("updates only selected Skills and completes without treating unselected items as unfinished", () => {
     const onUpdate = vi.fn();
     render(<BulkSkillUpdateDialog plans={[plan, { ...plan, id: "other", name: "Other" }]}

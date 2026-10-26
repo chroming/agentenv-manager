@@ -79,6 +79,10 @@ quota. Recognized secrets are redacted on a best-effort basis, not a guarantee.
 No tools or automatic requests are enabled. Summaries and redacted supporting
 diffs persist locally; the API Key is stored encrypted using OS secure storage.
 These records and credentials are excluded from portable Workspace Sync.
+AI endpoints may use HTTP or HTTPS. HTTP sends request content and API keys
+without transport encryption; use it only on a trusted network. Changing the
+endpoint clears the old key unless a replacement is supplied. Requests do not
+follow redirects, and URLs cannot contain credentials, queries or fragments.
 
 Optional AI tag suggestions use that same configured API service only after
 manual confirmation. They send bounded SKILL.md text and existing tag names,

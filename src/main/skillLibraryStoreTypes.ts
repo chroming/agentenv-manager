@@ -25,6 +25,7 @@ import type {
   SkillRuntimeIssue,
   SkillRuntimeSnapshot,
   SkillLibraryEntry,
+  SkillLibraryUpdateResult,
   SkillMergeInput,
   SkillMergePreview,
   SkillMergeResult,
@@ -147,5 +148,5 @@ export interface SkillLibraryStore {
   previewUpdates(ids: string[]): Promise<SkillUpdatePreviewBatchResult>;
   readUpdateChange(input: SkillUpdateChangeReadInput): Promise<import("../shared/types").PlannedFileChange>;
   readSummaryInput(previewId: string): Promise<import("../shared/skillSummaries").SkillSummaryInput>;
-  updateSkill(input: SkillUpdateConfirmation): Promise<SkillLibraryEntry>;
+  updateSkill(input: SkillUpdateConfirmation): Promise<SkillLibraryUpdateResult>;
 }

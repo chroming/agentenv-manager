@@ -37,8 +37,85 @@ const fixture = async () => {
     inventory: [entry], libraryId: "review", currentContentHash, nextContentHash,
     targetStatesDir: states, syncCopiedInstalls: true
   });
-  return { installed, source, states, currentContentHash, nextContentHash, propagation };
+  return { installed, source, states, entry, currentContentHash, nextContentHash, propagation };
 };
+
+it("updates an unchanged older managed copy using its deployment receipt rather than the current Library version", async () => {
+  const f = await fixture();
+  const currentLibraryHash = f.nextContentHash;
+  await writeFile(join(f.source, "SKILL.md"), "# Third version");
+  const nextContentHash = await hashSkillContent(f.source);
+  const propagation = await prepareLibraryUpdatePropagation({
+    inventory: [{ ...f.entry, contentMatchesLibrary: false }], libraryId: "review",
+    currentContentHash: currentLibraryHash, nextContentHash, targetStatesDir: f.states, syncCopiedInstalls: true
+  });
+  expect(propagation.copiedInstalls).toHaveLength(1);
+  await applyLibraryUpdatePropagation({ sourceDir: f.source, nextContentHash, propagation });
+  expect(await readFile(join(f.installed, "SKILL.md"), "utf8")).toBe("# Third version");
+});
+
+it("preserves an externally changed copy without blocking the Library update", async () => {
+  const f = await fixture();
+  await writeFile(join(f.installed, "SKILL.md"), "# Device edit");
+  const propagation = await prepareLibraryUpdatePropagation({
+    inventory: [{ ...f.entry, contentHash: await hashSkillContent(f.installed), contentMatchesLibrary: false }],
+    libraryId: "review", currentContentHash: f.currentContentHash, nextContentHash: f.nextContentHash,
+    targetStatesDir: f.states, syncCopiedInstalls: true
+  });
+  expect(propagation.copiedInstalls).toHaveLength(0);
+  expect(propagation).toMatchObject({ skippedCopiedInstalls: [{ path: f.installed }] });
+  expect(propagation.stateUpdates).toHaveLength(0);
+  expect(await readFile(join(f.installed, "SKILL.md"), "utf8")).toBe("# Device edit");
+});
+
+it("advances a healthy neighbor while retaining the changed copy's receipt", async () => {
+  const f = await fixture();
+  const changed = join(root, "changed");
+  await mkdir(changed);
+  await writeFile(join(changed, "SKILL.md"), "# Device edit");
+  const statePath = join(f.states, "claude-code.json");
+  const state = JSON.parse(await readFile(statePath, "utf8"));
+  state.managedResources[0].path = changed;
+  await writeFile(statePath, JSON.stringify(state));
+  const savedState = await readFile(statePath, "utf8");
+  const propagation = await prepareLibraryUpdatePropagation({
+    inventory: [
+      { ...f.entry, foundIn: ["codex"] },
+      { ...f.entry, foundIn: ["claude-code"], path: changed, contentMatchesLibrary: false }
+    ], libraryId: "review", currentContentHash: f.currentContentHash, nextContentHash: f.nextContentHash,
+    targetStatesDir: f.states, syncCopiedInstalls: true
+  });
+  await applyLibraryUpdatePropagation({ sourceDir: f.source, nextContentHash: f.nextContentHash, propagation });
+  expect(await readFile(join(f.installed, "SKILL.md"), "utf8")).toBe("# New");
+  expect(await readFile(join(changed, "SKILL.md"), "utf8")).toBe("# Device edit");
+  expect(await readFile(statePath, "utf8")).toBe(savedState);
+  expect(propagation.skippedCopiedInstalls).toEqual([{ path: changed, targetIds: ["claude-code"] }]);
+});
+
+it("does not overwrite an unverifiable old managed copy without a deployment receipt", async () => {
+  const f = await fixture();
+  for (const id of ["codex", "claude-code"]) await rm(join(f.states, id + ".json"));
+  const propagation = await prepareLibraryUpdatePropagation({
+    inventory: [{ ...f.entry, contentMatchesLibrary: false }], libraryId: "review",
+    currentContentHash: f.nextContentHash, nextContentHash: "next", targetStatesDir: f.states, syncCopiedInstalls: true
+  });
+  expect(propagation.copiedInstalls).toHaveLength(0);
+  expect(propagation.skippedCopiedInstalls).toHaveLength(1);
+  expect(propagation.stateUpdates).toHaveLength(0);
+});
+
+it("does not mistake an edited manual-only copy's observed hash for a trusted deployment baseline", async () => {
+  const f = await fixture();
+  await writeFile(join(f.installed, "SKILL.md"), "# Edited manual Skill");
+  const propagation = await prepareLibraryUpdatePropagation({
+    inventory: [{ ...f.entry, contentHash: await hashSkillContent(f.installed), invocationMode: "manual",
+      invocationTargetId: "claude-code", sourceContentHash: f.currentContentHash, contentMatchesLibrary: false }],
+    libraryId: "review", currentContentHash: f.currentContentHash, nextContentHash: f.nextContentHash,
+    targetStatesDir: f.states, syncCopiedInstalls: true
+  });
+  expect(propagation.copiedInstalls).toHaveLength(0);
+  expect(propagation.skippedCopiedInstalls).toHaveLength(1);
+});
 
 it("updates every owning Agent receipt without changing an observing Agent's state", async () => {
   const f = await fixture();

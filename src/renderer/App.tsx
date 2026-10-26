@@ -34,7 +34,7 @@ import type {
   LibraryResourceVersions, ManageTargetSkillInput, SkillInventoryEntry, SkillRuntimeIssue,
   SkillImportConflictResolution, SkillImportInput, SkillImportPreviewInput, SkillAvailabilityInput,
   SkillIconInput, SkillTagsInput, SkillCleanupRequest, SkillCleanupBackupSummary, SkillCleanupResult,
-  SkillLibraryEntry, SkillSourceCandidateIgnoreInput, SkillSourceCheckAllResult, SkillSourceGroupView,
+  SkillLibraryEntry, SkillLibraryUpdateResult, SkillSourceCandidateIgnoreInput, SkillSourceCheckAllResult, SkillSourceGroupView,
   SkillSourceNameInput, SkillSourceMergePreview, SkillSourceMergePreviewInput, SkillSourceMergeResult,
   SkillUpstream, SkillMergeInput, SkillMergePreview, SkillUpdateInfo, SkillUpdatePlan,
   SkillUpdatePreviewBatchResult, SkillUpdateSettingsInput,
@@ -943,7 +943,7 @@ const AppContent = ({
   };
 
   const applyLibraryContentUpdatesLocally = (
-    updatedSkills: SkillLibraryEntry[],
+    updatedSkills: SkillLibraryUpdateResult[],
     syncCopiedInstalls: boolean
   ) => {
     if (updatedSkills.length === 0) return;
@@ -951,17 +951,8 @@ const AppContent = ({
     setLibrarySkills((current) =>
       current.map((skill) => updatesById.get(skill.id) ?? skill)
     );
-    setSkillInventory((current) => {
-      const next = updateSkillInventoryAfterLibraryUpdate(current, updatedSkills);
-      return syncCopiedInstalls
-        ? next.map((item) => {
-          const updated = item.libraryId ? updatesById.get(item.libraryId) : undefined;
-          return updated && item.installMethod === "copied"
-            ? { ...item, contentHash: updated.contentHash, contentMatchesLibrary: true }
-            : item;
-        })
-        : next;
-    });
+    setSkillInventory((current) =>
+      updateSkillInventoryAfterLibraryUpdate(current, updatedSkills, syncCopiedInstalls));
     commitSkillUpdates((current) => [
       ...current.filter((item) => !updatesById.has(item.id)),
       ...updatedSkills

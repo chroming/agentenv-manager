@@ -3180,23 +3180,7 @@ description: >
       }]
     });
 
-    await rm(claudeInstallPath, { recursive: true, force: true });
-    await cp(updated.path, claudeInstallPath, { recursive: true });
-    await writeFile(join(paths.targetStatesDir, "claude-code.json"), JSON.stringify({
-      formatVersion: 3,
-      managedMcpNames: [],
-      activeProfileId: profile.id,
-      appliedProfileHash: "profile-hash",
-      appliedLibraryVersions: { skills: { reviewer: updated.contentHash } },
-      managedResources: [{
-        kind: "skill",
-        id: "reviewer",
-        path: claudeInstallPath,
-        contentHash: updated.contentHash
-      }],
-      skillReceipts: [],
-      sharedSkillPreparations: []
-    }));
+    // The copied Agent still has v1: opting in later must not confuse that with drift.
     await writeFile(join(sourceDir, "SKILL.md"), "---\nname: reviewer\n---\n# v3\n", "utf8");
     const nextPlan = await store.previewUpdate("reviewer");
     const synced = await store.updateSkill({
@@ -3216,19 +3200,24 @@ description: >
       "utf8"
     );
 
-    await expect(
-      store.updateSkill({
+    const partiallySynced = await store.updateSkill({
         id: "reviewer",
         previewId: driftPlan.previewId!,
         syncCopiedInstalls: true
-      })
-    ).rejects.toThrow("turn off Agent copy updates or review that Agent before retrying");
+      });
+    expect(partiallySynced.skippedAgentCopies).toEqual([{ path: claudeInstallPath, targetIds: ["claude-code"] }]);
     await expect(
       readFile(join(paths.skillsLibraryDir, "reviewer", "SKILL.md"), "utf8")
-    ).resolves.toContain("# v3");
+    ).resolves.toContain("# v4");
     await expect(
       readFile(join(claudePaths.skillsDir!, "reviewer", "SKILL.md"), "utf8")
     ).resolves.toContain("# device edit");
+    await expect(readFile(join(openCodeInstallPath, "SKILL.md"), "utf8")).resolves.toContain("# v4");
+    const claudeState = JSON.parse(await readFile(join(paths.targetStatesDir, "claude-code.json"), "utf8"));
+    expect(claudeState.appliedLibraryVersions.skills.reviewer).toBe(synced.contentHash);
+    expect(claudeState.managedResources[0].contentHash).toBe(synced.contentHash);
+    const openCodeState = JSON.parse(await readFile(join(paths.targetStatesDir, "opencode.json"), "utf8"));
+    expect(openCodeState.appliedLibraryVersions.skills.reviewer).toBe(partiallySynced.contentHash);
   });
 
   it("refreshes local-source skills and records a new content hash", async () => {

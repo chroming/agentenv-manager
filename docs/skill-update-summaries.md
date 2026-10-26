@@ -15,7 +15,7 @@ Skill 更新摘要仅由用户手动触发。检查更新、打开预览、选�
 
 ## 调用与安全边界
 
-P0 使用支持 JSON 输出的 OpenAI-compatible Chat Completions endpoint。地址必须 HTTPS，只有 loopback 允许 HTTP；拒绝 URL 中的凭据、query、fragment，拒绝重定向。变更 endpoint 时不复用原 API Key。
+P0 使用支持 JSON 输出的 OpenAI-compatible Chat Completions endpoint，支持 HTTPS 和 HTTP（包括局域网地址及 IPv6）。HTTP 不加密内容和 API Key，设置中显示轻量提示，不额外弹窗；拒绝 URL 中的凭据、query、fragment，拒绝重定向。变更 endpoint 时不复用原 API Key。
 
 复用系统安全存储加密 Key，不增加依赖，不复用 Agent 登录凭据，不启用 CLI fallback。
 不配置工具，不运行 Skill、不跟随链接；外部文件作为不可信资料。输入和输出尽力脱敏，不能承诺发现所有私密信息；设置中的信息提示说明发送范围与供应商计费，生成始终由用户手动触发。

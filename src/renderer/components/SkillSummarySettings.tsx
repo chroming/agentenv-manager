@@ -48,6 +48,7 @@ export const AIServiceForm = ({ onSaved, onCancel }: { onSaved?(): void; onCance
   return <div className="profile-form-grid">
       <p className="settings-muted">{t("Manual only. OpenAI-compatible Chat Completions API with JSON output. Credentials stay on this device.")}</p>
       <TextField label={t("API endpoint")} value={endpoint} disabled={busy} onChange={(event) => { setEndpoint(event.currentTarget.value); setSaved(false); }} />
+      {endpoint.trim().toLowerCase().startsWith("http:") ? <p className="settings-muted">{t("HTTP sends requests and API keys without encryption. Use it only on a trusted network.")}</p> : null}
       <TextField label={t("Model")} value={model} disabled={busy} onChange={(event) => { setModel(event.currentTarget.value); setSaved(false); }} />
       <TextField label={t("API Key")} type="password" autoComplete="off" value={apiKey} disabled={busy}
         placeholder={hasKey ? t("Saved securely; leave blank to keep") : ""}

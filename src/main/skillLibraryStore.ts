@@ -25,6 +25,7 @@ import type {
   SkillImportPreviewInput,
   SkillImportSnapshot,
   SkillLibraryEntry,
+  SkillLibraryUpdateResult,
   SkillMergeInput,
   SkillMergePreview,
   SkillMergeResult,
@@ -3037,7 +3038,7 @@ export const createSkillLibraryStore = (
     id,
     previewId,
     syncCopiedInstalls = false
-  }: SkillUpdateConfirmation): Promise<SkillLibraryEntry> => {
+  }: SkillUpdateConfirmation): Promise<SkillLibraryUpdateResult> => {
     const safeId = SafeIdSchema.parse(id);
     const pending = pendingUpdates.get(String(previewId));
     if (!pending || pending.id !== safeId) {
@@ -3123,7 +3124,9 @@ export const createSkillLibraryStore = (
       );
       await setCleanupStatus(backup, "complete");
       await discardPendingUpdatesForSkill(safeId);
-      return updated;
+      return propagation.skippedCopiedInstalls.length
+        ? { ...updated, skippedAgentCopies: propagation.skippedCopiedInstalls }
+        : updated;
     } catch (error) {
       return failAfterCleanupRollback(backup, `Updating ${safeId}`, error);
     }

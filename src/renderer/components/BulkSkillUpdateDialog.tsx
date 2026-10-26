@@ -20,6 +20,7 @@ import { useI18n } from "../i18n";
 import { useModalDialog } from "../hooks/useModalDialog";
 import { DiffWorkspaceDialog } from "./DiffWorkspaceDialog";
 import { SkillSummaryReview } from "./SkillSummaryReview";
+import { SkillUpdateCopyNotice } from "./SkillUpdateCopyNotice";
 import {
   Button,
   ChoiceInput,
@@ -83,11 +84,13 @@ export const BulkSkillUpdateDialog = ({
   const updatedCount = applicablePlans.filter((plan) => updateRun[plan.id]?.status === "updated").length;
   const failedPlans = applicablePlans.filter((plan) => updateRun[plan.id]?.status === "failed");
   const skippedPlans = applicablePlans.filter((plan) => updateRun[plan.id]?.status === "skipped");
+  const keptCopyCount = applicablePlans.reduce((count, plan) => count + (updateRun[plan.id]?.skippedAgentCopies?.length ?? 0), 0);
   const finished = started && !running && completedCount === applicablePlans.length;
   const completedSuccessfully =
     finished &&
     failures.length === 0 &&
     failedPlans.length === 0 &&
+    keptCopyCount === 0 &&
     skippedPlans.length === 0;
   const copiedInstallCount = applicablePlans.reduce(
     (total, plan) => total + (plan.impact?.copiedInstallCount ?? 0),
@@ -114,7 +117,7 @@ export const BulkSkillUpdateDialog = ({
     : progress?.status === "updating"
       ? t("Updating...")
       : progress?.status === "updated"
-        ? t("Done")
+        ? t(progress.skippedAgentCopies?.length ? "Library updated" : "Done")
         : progress?.status === "failed"
           ? t("Failed")
           : progress?.status === "skipped"
@@ -150,7 +153,8 @@ export const BulkSkillUpdateDialog = ({
         : {
             kind: "warning" as const,
             icon: <TriangleAlert size={15} aria-hidden="true" />,
-            label: t("Updates finished with issues")
+            label: t(keptCopyCount > 0 && !failedPlans.length && !skippedPlans.length && !failures.length
+              ? "Library updated; Agent copies kept" : "Updates finished with issues")
           };
 
   return (
@@ -184,7 +188,9 @@ export const BulkSkillUpdateDialog = ({
             label={overallStatus.label}
             statusKind={overallStatus.kind}
             detail={started && !running && !completedSuccessfully
-              ? t("{{updated}} updated · {{failed}} failed · {{skipped}} skipped", {
+              ? keptCopyCount > 0 && !failedPlans.length && !skippedPlans.length && !failures.length
+                ? t("{{updated}} updated · {{count}} Agent copies kept", { updated: updatedCount, count: keptCopyCount })
+                : t("{{updated}} updated · {{failed}} failed · {{skipped}} skipped", {
                   updated: updatedCount,
                   failed: failedPlans.length + failures.length,
                   skipped: skippedPlans.length
@@ -242,7 +248,7 @@ export const BulkSkillUpdateDialog = ({
               return (
                 <details
                   key={plan.id}
-                  open={plan.errors.length > 0 || progress?.status === "failed"}
+                  open={plan.errors.length > 0 || progress?.status === "failed" || Boolean(progress?.skippedAgentCopies?.length)}
                 >
                   <summary>
                     <span className="bulk-update-summary-identity">
@@ -289,7 +295,8 @@ export const BulkSkillUpdateDialog = ({
                       ) : null}
                     </span>
                   </summary>
-                  {plan.impact ? (
+                  <SkillUpdateCopyNotice copies={progress?.skippedAgentCopies} />
+                  {plan.impact && progress?.status !== "updated" ? (
                     <p className="skill-update-impact">
                       {t(syncCopiedInstalls
                         ? "{{profiles}} Profiles · {{linked}} linked installs update now · {{copied}} copied installs update now"

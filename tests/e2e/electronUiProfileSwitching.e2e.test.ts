@@ -9291,6 +9291,64 @@ describe("Electron UI profile switching e2e", () => {
     expect(await updatedRow.getByText("1 Agent pending").count()).toBe(0);
   }, standardElectronTestTimeout);
 
+  it("preserves edited Agent copies during single and bulk Library updates", async () => {
+    const { librarySkill, opencodeDir, page } = await launchApp();
+    await openSettingsCategory(page, "Skills");
+    await page.getByLabel("Global skill deployment method").selectOption("copy");
+    await selectProfile(page, "UI OpenCode alpha");
+    await expandComposerSection(page, "Skills");
+    await addLibrarySkillToProfile(page);
+    await saveProfile(page);
+    await previewAndApply(page, "OpenCode");
+    const installed = join(opencodeDir, "skills", "shared-reviewer", "SKILL.md");
+    const source = join(librarySkill.sourceDir, "SKILL.md");
+    const initial = await readFile(source, "utf8");
+    // A Library-only update followed by opt-in must accept the original, unchanged copy.
+    await writeFile(source, initial + "\nLibrary version two.\n");
+    await page.evaluate(async () => {
+      const plan = await window.agentEnv.previewLibrarySkillUpdate("shared-reviewer");
+      await window.agentEnv.updateLibrarySkill({ id: plan.id, previewId: plan.previewId! });
+    });
+    expect(await readFile(installed, "utf8")).toBe(initial);
+    await writeFile(source, initial + "\nLibrary version three.\n");
+    const clean = await page.evaluate(async () => {
+      const plan = await window.agentEnv.previewLibrarySkillUpdate("shared-reviewer");
+      return window.agentEnv.updateLibrarySkill({ id: plan.id, previewId: plan.previewId!, syncCopiedInstalls: true });
+    });
+    expect(clean.skippedAgentCopies).toBeUndefined();
+    expect(await readFile(installed, "utf8")).toContain("Library version three.");
+    const deviceEdit = initial + "\nPrivate device edit, keep this file.\n";
+    await writeFile(installed, deviceEdit);
+    await openSkillLibrary(page);
+    for (const bulk of [false, true]) {
+      await writeFile(source, initial + `\nLibrary version ${bulk ? "five" : "four"}.\n`);
+      await page.getByRole("button", { name: "Check updates", exact: true }).click();
+      const action = bulk ? page.getByRole("button", { name: "Update all skills", exact: true })
+        : page.getByRole("button", { name: "Review update shared-reviewer", exact: true });
+      await action.click();
+      const dialog = page.getByRole("dialog", { name: bulk ? "Update all skills" : "Update preview for shared-reviewer", exact: true });
+      await dialog.getByRole("switch", { name: "Also update Agent copies", exact: true }).click();
+      await dialog.getByRole("button", { name: bulk ? "Update selected (1)" : "Apply update shared-reviewer", exact: true }).click();
+      const notice = dialog.getByRole("region", { name: "Agent copies kept", exact: true });
+      await notice.waitFor();
+      expect(await notice.textContent()).toContain(installed.replace(/\/SKILL\.md$/, ""));
+      await page.waitForTimeout(900);
+      expect(await dialog.isVisible()).toBe(true);
+      expect(await readFile(installed, "utf8")).toBe(deviceEdit);
+      expect(await readFile(join(librarySkill.libraryDir, "SKILL.md"), "utf8"))
+        .toContain(bulk ? "Library version five." : "Library version four.");
+      for (const [width, height] of [[920, 620], [1180, 728], [1440, 900]]) {
+        await page.setViewportSize({ width, height });
+        await notice.scrollIntoViewIfNeeded();
+        await expectNoHorizontalOverflow(page, [bulk ? ".bulk-update-dialog" : ".skill-update-dialog"]);
+        await expectNoOverlap(notice, dialog.locator(".ui-dialog-footer"));
+        await page.screenshot({ path: `/tmp/agentenv-kept-agent-copies-${bulk ? "bulk" : "single"}-${width}.png` });
+      }
+      expect(await dialog.getByRole("button", { name: /Retry/ }).count()).toBe(0);
+      await dialog.getByRole("button", { name: "Close", exact: true }).click();
+    }
+  }, 90_000);
+
   it("keeps large Skill update previews readable instead of compressing file rows", async () => {
     const { librarySkill, page } = await launchApp();
     const referencesDir = join(librarySkill.sourceDir, "references");

@@ -278,7 +278,7 @@ export interface AgentEnvApi {
   cancelSkillSummary(requestId: string): Promise<void>;
   previewLibrarySkillUpdates(ids: string[]): Promise<SkillUpdatePreviewBatchResult>;
   readLibrarySkillUpdateChange(input: SkillUpdateChangeReadInput): Promise<PlannedFileChange>;
-  updateLibrarySkill(input: SkillUpdateConfirmation): Promise<SkillLibraryEntry>;
+  updateLibrarySkill(input: SkillUpdateConfirmation): Promise<SkillLibraryUpdateResult>;
   readSettings(): Promise<AgentEnvSettings>;
   updateSettings(input: Partial<AgentEnvSettings>): Promise<AgentEnvSettings>;
   readUiState(): Promise<UiState>;
@@ -661,6 +661,15 @@ export interface SkillUpstream {
   subpath?: string;
   revision?: string;
   updatedAt?: string;
+}
+
+export interface SkillUpdateSkippedCopy {
+  path: string;
+  targetIds: string[];
+}
+
+export interface SkillLibraryUpdateResult extends SkillLibraryEntry {
+  skippedAgentCopies?: SkillUpdateSkippedCopy[];
 }
 
 export interface SkillProvenance {

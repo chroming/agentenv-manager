@@ -17,6 +17,7 @@ import { Button, IconButton, ModalFrame, Switch } from "./ui";
 import { useI18n } from "../i18n";
 import { SkillSummaryReview } from "./SkillSummaryReview";
 import { SyntaxCodePreview } from "./SyntaxCodePreview";
+import { SkillUpdateCopyNotice } from "./SkillUpdateCopyNotice";
 
 interface SkillUpdateDialogProps {
   mode?: "update" | "addition";
@@ -127,13 +128,14 @@ export const SkillUpdateDialog = ({
       commitResult?.status !== "completed" ||
       busy ||
       diffWorkspaceOpen ||
-      progress?.status !== "updated"
+      progress?.status !== "updated" ||
+      Boolean(progress.skippedAgentCopies?.length)
     ) {
       return;
     }
     const timeout = window.setTimeout(() => onCloseRef.current(), 700);
     return () => window.clearTimeout(timeout);
-  }, [busy, commitResult?.status, diffWorkspaceOpen, progress?.status]);
+  }, [busy, commitResult?.status, diffWorkspaceOpen, progress?.status, progress?.skippedAgentCopies?.length]);
 
   useModalDialog({
     open: Boolean(plan),
@@ -185,7 +187,7 @@ export const SkillUpdateDialog = ({
     : progress?.status === "updating"
       ? t(adding ? "Adding..." : "Updating...")
       : progress?.status === "updated"
-        ? t("Done")
+        ? t(progress.skippedAgentCopies?.length ? "Library updated" : "Done")
         : progress?.status === "failed"
           ? t("Failed")
           : undefined;
@@ -211,7 +213,7 @@ export const SkillUpdateDialog = ({
                 ? ` · ${(plan.currentRevision ?? "current").slice(0, 7)} → ${plan.latestRevision.slice(0, 7)}`
                 : ""}
             </p>
-            <p className="skill-update-impact">{adding ? t("Review files before adding this Skill to Library.") : impactSummary}</p>
+            {progress?.status !== "updated" ? <p className="skill-update-impact">{adding ? t("Review files before adding this Skill to Library.") : impactSummary}</p> : null}
             {progressLabel ? (
               <div
                 className={`skill-update-progress skill-update-progress--${completionError ? "failed" : progress!.status}`}
@@ -279,6 +281,7 @@ export const SkillUpdateDialog = ({
             </div>
           ) : null}
           <div className="update-change-list">
+            <SkillUpdateCopyNotice copies={progress?.skippedAgentCopies} />
             {plan.changes.map((change, index) => (
               <SkillUpdateChange
                 change={change}

@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import type { SkillInventoryEntry, TargetState } from "../shared/types";
+import type { SkillInventoryEntry, SkillUpdateSkippedCopy, TargetState } from "../shared/types";
 import { writeAtomic, pathExists } from "./fileUtils";
 import { deploySkillDirectory } from "./skillDeployment";
 import { hashSkillContent } from "./skillContentHash";
@@ -19,6 +19,7 @@ export interface LibraryUpdatePropagation {
   copiedInstalls: SkillInventoryEntry[];
   stateUpdates: LibraryUpdateStateChange[];
   copiedPathHashes?: Record<string, string>;
+  skippedCopiedInstalls: SkillUpdateSkippedCopy[];
 }
 
 export const prepareLibraryUpdatePropagation = async ({
@@ -43,84 +44,85 @@ export const prepareLibraryUpdatePropagation = async ({
       (entry.installMethod === "copied" || entry.installMethod === "linked")
   );
   const linkedInstalls = managedInstalls.filter((entry) => entry.installMethod === "linked");
-  const copiedInstalls = syncCopiedInstalls
+  const copyCandidates = syncCopiedInstalls
     ? managedInstalls.filter((entry) => entry.installMethod === "copied")
     : [];
-  const propagatedInstalls = [...linkedInstalls, ...copiedInstalls];
-  const driftedInstall = propagatedInstalls.find((entry) => entry.contentMatchesLibrary !== true);
+  const driftedInstall = linkedInstalls.find((entry) => entry.contentMatchesLibrary !== true);
   if (driftedInstall) {
-    throw new Error(
-      driftedInstall.installMethod === "copied"
-        ? `${driftedInstall.name} changed in ${driftedInstall.path}; turn off Agent copy updates or review that Agent before retrying`
-        : `${driftedInstall.name} changed in ${driftedInstall.path}; review that linked Agent Skill before updating the Library`
-    );
+    throw new Error(`${driftedInstall.name} changed in ${driftedInstall.path}; review that linked Agent Skill before updating the Library`);
   }
 
+  const targetIds = [...new Set([...linkedInstalls, ...copyCandidates]
+    .filter((entry) => !entry.managedAsShared).flatMap((entry) => entry.foundIn).filter(Boolean))];
+  const states = (await Promise.all(targetIds.map(async (targetId) => {
+    const path = join(targetStatesDir, `${targetId}.json`);
+    if (!(await pathExists(path))) return undefined;
+    const content = await readFile(path, "utf8");
+    return { targetId, path, content, state: parseTargetState(JSON.parse(content)) };
+  }))).filter((item): item is NonNullable<typeof item> => Boolean(item));
+
+  const copiedInstalls: SkillInventoryEntry[] = [];
+  const skippedCopiedInstalls: SkillUpdateSkippedCopy[] = [];
   const copiedPathHashes: Record<string, string> = {};
-  for (const install of copiedInstalls) {
+  for (const install of copyCandidates) {
     const before = await hashPathEntry(install.path);
-    const expectedCurrentHash = install.invocationMode === "manual" && install.sourceContentHash === currentContentHash
-      ? install.contentHash
-      : currentContentHash;
-    if (await hashSkillContent(install.path) !== expectedCurrentHash) {
-      throw new Error(
-        `${install.name} changed in ${install.path}; turn off Agent copy updates or review that Agent before retrying`
-      );
+    const installedHash = await hashSkillContent(install.path);
+    const matchesCurrent = install.invocationMode === "manual"
+      ? install.contentMatchesLibrary === true && install.sourceContentHash === currentContentHash && installedHash === install.contentHash
+      : installedHash === currentContentHash;
+    const receipts = states.filter((item) => install.foundIn.includes(item.targetId)).flatMap(({ state }) =>
+      (state.managedResources ?? []).filter((resource) => resource.kind === "skill" &&
+        resource.id === libraryId && resolve(resource.path) === resolve(install.path)));
+    // A copy may legitimately lag behind Library after an update without propagation.
+    const matchesReceipt = receipts.length > 0 && receipts.every((resource) => resource.contentHash === installedHash);
+    if (!matchesCurrent && !matchesReceipt) {
+      skippedCopiedInstalls.push({ path: install.path, targetIds: install.foundIn });
+      continue;
     }
     if (!before || await hashPathEntry(install.path) !== before) throw new Error(`Agent Skill changed while preparing update: ${install.path}`);
+    copiedInstalls.push(install);
     copiedPathHashes[install.path] = before;
   }
 
-  const targetIds = [...new Set(
-    propagatedInstalls
-      .filter((entry) => !entry.managedAsShared)
-      .flatMap((entry) => entry.foundIn)
-      .filter((targetId): targetId is string => Boolean(targetId))
-  )];
-  const stateUpdates = (
-    await Promise.all(targetIds.map(async (targetId) => {
-      const path = join(targetStatesDir, `${targetId}.json`);
-      if (!(await pathExists(path))) return undefined;
-      const stateContent = await readFile(path, "utf8");
-      const state = parseTargetState(JSON.parse(stateContent));
-      const installPaths = new Set(
-        propagatedInstalls
-          .filter((entry) => entry.foundIn.includes(targetId))
-          .filter((entry) => !entry.managedAsShared)
-          .map((entry) => resolve(entry.path))
-      );
-      const managesVersion = Object.prototype.hasOwnProperty.call(
-        state.appliedLibraryVersions?.skills ?? {},
-        libraryId
-      );
-      const ownsInstall = (resource: NonNullable<TargetState["managedResources"]>[number]) =>
-        resource.kind === "skill" && installPaths.has(resolve(resource.path));
-      if (!(state.managedResources ?? []).some(ownsInstall)) return undefined;
-      return {
-        path,
-        expectedPathHash: hashFileContent(stateContent),
-        state: {
-          ...state,
-          appliedLibraryVersions: managesVersion
-            ? {
-                ...state.appliedLibraryVersions,
-                skills: {
-                  ...(state.appliedLibraryVersions?.skills ?? {}),
-                  [libraryId]: nextContentHash
-                }
+  const propagatedInstalls = [...linkedInstalls, ...copiedInstalls];
+  const stateUpdates = states.map(({ targetId, path, content: stateContent, state }) => {
+    const installPaths = new Set(
+      propagatedInstalls
+        .filter((entry) => entry.foundIn.includes(targetId))
+        .filter((entry) => !entry.managedAsShared)
+        .map((entry) => resolve(entry.path))
+    );
+    const managesVersion = Object.prototype.hasOwnProperty.call(
+      state.appliedLibraryVersions?.skills ?? {},
+      libraryId
+    );
+    const ownsInstall = (resource: NonNullable<TargetState["managedResources"]>[number]) =>
+      resource.kind === "skill" && resource.id === libraryId && installPaths.has(resolve(resource.path));
+    if (!(state.managedResources ?? []).some(ownsInstall)) return undefined;
+    return {
+      path,
+      expectedPathHash: hashFileContent(stateContent),
+      state: {
+        ...state,
+        appliedLibraryVersions: managesVersion && !skippedCopiedInstalls.some((item) => item.targetIds.includes(targetId))
+          ? {
+              ...state.appliedLibraryVersions,
+              skills: {
+                ...(state.appliedLibraryVersions?.skills ?? {}),
+                [libraryId]: nextContentHash
               }
-            : state.appliedLibraryVersions,
-          managedResources: (state.managedResources ?? []).map((resource) =>
-            ownsInstall(resource)
-              ? { ...resource, contentHash: nextContentHash, sourceContentHash: nextContentHash }
-              : resource
-          )
-        }
-      };
-    }))
-  ).filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
+            }
+          : state.appliedLibraryVersions,
+        managedResources: (state.managedResources ?? []).map((resource) =>
+          ownsInstall(resource)
+            ? { ...resource, contentHash: nextContentHash, sourceContentHash: nextContentHash }
+            : resource
+        )
+      }
+    };
+  }).filter((entry): entry is NonNullable<typeof entry> => Boolean(entry));
 
-  return { linkedInstalls, copiedInstalls, stateUpdates, copiedPathHashes };
+  return { linkedInstalls, copiedInstalls, stateUpdates, copiedPathHashes, skippedCopiedInstalls };
 };
 
 export const applyLibraryUpdatePropagation = async ({

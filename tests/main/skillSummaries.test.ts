@@ -223,7 +223,15 @@ describe("manual Skill update summaries", () => {
     expect((await store.config()).hasKey).toBe(false);
   });
 
-  it.each(["http://example.com", "https://user:password@example.com", "https://example.com/?key=secret", "file:///etc/passwd"])("rejects unsafe endpoint %s", (endpoint) => {
+  it.each(["http://192.0.2.20:8080/v1", "http://inference.internal:8000/v1", "http://[fd00::1]:8000/v1"])("saves and reopens an HTTP AI endpoint %s", async (endpoint) => {
+    const { root, store } = await setup();
+    await store.saveConfig({ endpoint, model: "internal-model", apiKey: "fixture-http-key" });
+    const reopened = createSummaryStore(root, cipher);
+    expect(await reopened.credentials()).toMatchObject({ endpoint, model: "internal-model", key: "fixture-http-key" });
+    expect(await readFile(join(root, "skill-summary-service.json"), "utf8")).not.toContain("fixture-http-key");
+  });
+
+  it.each(["https://user:password@example.com", "http://user:password@example.com", "https://example.com/?key=secret", "http://example.com/#secret", "file:///etc/passwd", "ftp://example.com"])("rejects unsafe endpoint %s", (endpoint) => {
     expect(() => validateSummaryEndpoint(endpoint)).toThrow();
   });
 

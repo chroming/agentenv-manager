@@ -1,27 +1,28 @@
-import type { SkillLibraryEntry, SkillUpdatePlan } from "../shared/types";
+import type { SkillLibraryUpdateResult, SkillUpdatePlan, SkillUpdateSkippedCopy } from "../shared/types";
 
 export type SkillUpdateRunStatus = "queued" | "updating" | "updated" | "failed" | "skipped";
 
 export interface SkillUpdateRunItem {
   status: SkillUpdateRunStatus;
   error?: string;
+  skippedAgentCopies?: SkillUpdateSkippedCopy[];
 }
 
 export type SkillUpdateRun = Record<string, SkillUpdateRunItem>;
 
 export interface SkillUpdateQueueResult {
-  updated: SkillLibraryEntry[];
+  updated: SkillLibraryUpdateResult[];
   failed: Array<{ id: string; error: string }>;
   cancelled: boolean;
 }
 
 export const runSkillUpdateQueue = async (
   plans: SkillUpdatePlan[],
-  update: (plan: SkillUpdatePlan) => Promise<SkillLibraryEntry>,
+  update: (plan: SkillUpdatePlan) => Promise<SkillLibraryUpdateResult>,
   onProgress: (id: string, item: SkillUpdateRunItem) => void,
   shouldStop: () => boolean = () => false
 ): Promise<SkillUpdateQueueResult> => {
-  const updated: SkillLibraryEntry[] = [];
+  const updated: SkillLibraryUpdateResult[] = [];
   const failed: SkillUpdateQueueResult["failed"] = [];
 
   for (const [index, plan] of plans.entries()) {
@@ -33,8 +34,12 @@ export const runSkillUpdateQueue = async (
     }
     onProgress(plan.id, { status: "updating" });
     try {
-      updated.push(await update(plan));
-      onProgress(plan.id, { status: "updated" });
+      const result = await update(plan);
+      updated.push(result);
+      onProgress(plan.id, {
+        status: "updated",
+        ...(result.skippedAgentCopies?.length ? { skippedAgentCopies: result.skippedAgentCopies } : {})
+      });
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       failed.push({ id: plan.id, error: message });

@@ -1,16 +1,17 @@
 import type {
   LibraryResourceVersions,
   SkillInventoryEntry,
-  SkillLibraryEntry,
+  SkillLibraryUpdateResult,
   TargetManagementState
 } from "../shared/types";
 
-const updatesById = (updated: SkillLibraryEntry[]) =>
+const updatesById = (updated: SkillLibraryUpdateResult[]) =>
   new Map(updated.map((skill) => [skill.id, skill]));
 
 export const updateSkillInventoryAfterLibraryUpdate = (
   current: SkillInventoryEntry[],
-  updated: SkillLibraryEntry[]
+  updated: SkillLibraryUpdateResult[],
+  includeCopied = false
 ) => {
   const updates = updatesById(updated);
   return current.map((item) =>
@@ -21,14 +22,22 @@ export const updateSkillInventoryAfterLibraryUpdate = (
           contentMatchesLibrary: true
         }
       : item.libraryId && updates.has(item.libraryId) && item.installMethod === "copied"
-        ? { ...item, contentMatchesLibrary: false }
+        ? includeCopied && item.status === "managed" &&
+          !updates.get(item.libraryId)!.skippedAgentCopies?.some((copy) => copy.path === item.path)
+          ? {
+              ...item,
+              contentHash: item.invocationMode === "manual" ? item.contentHash : updates.get(item.libraryId)!.contentHash,
+              sourceContentHash: updates.get(item.libraryId)!.contentHash,
+              contentMatchesLibrary: true
+            }
+          : { ...item, contentMatchesLibrary: false }
       : item
   );
 };
 
 export const updateProfileLibraryVersions = (
   current: Record<string, LibraryResourceVersions>,
-  updated: SkillLibraryEntry[]
+  updated: SkillLibraryUpdateResult[]
 ) => {
   const updates = updatesById(updated);
   return Object.fromEntries(
@@ -49,7 +58,7 @@ export const updateProfileLibraryVersions = (
 
 export const updateAppliedTargetLibraryVersions = (
   current: TargetManagementState[],
-  updated: SkillLibraryEntry[],
+  updated: SkillLibraryUpdateResult[],
   inventory: SkillInventoryEntry[],
   includeCopied = false
 ) => {
@@ -66,9 +75,11 @@ export const updateAppliedTargetLibraryVersions = (
         skills: Object.fromEntries(
           Object.entries(appliedSkills).map(([id, version]) => [
             id,
-            inventory.some(
+            !updates.get(id)?.skippedAgentCopies?.some((copy) => copy.targetIds.includes(state.targetId)) && inventory.some(
               (install) =>
                 install.libraryId === id &&
+                install.status === "managed" &&
+                !install.managedAsShared &&
                 (install.installMethod === "linked" ||
                   (includeCopied && install.installMethod === "copied")) &&
                 install.foundIn.includes(state.targetId)

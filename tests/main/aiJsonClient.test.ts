@@ -20,7 +20,9 @@ describe("AI Chat Completions address resolution", () => {
     ["https://example.test/v1/", "https://example.test/v1/chat/completions"],
     ["https://example.test/gateway/v1", "https://example.test/gateway/v1/chat/completions"],
     ["https://example.test/v1/chat/completions", "https://example.test/v1/chat/completions"],
-    ["http://127.0.0.1:9000/custom-endpoint", "http://127.0.0.1:9000/custom-endpoint"]
+    ["http://127.0.0.1:9000/custom-endpoint", "http://127.0.0.1:9000/custom-endpoint"],
+    ["http://192.0.2.20:8080/v1", "http://192.0.2.20:8080/v1/chat/completions"],
+    ["http://inference.internal:8000/v1", "http://inference.internal:8000/v1/chat/completions"]
   ])("resolves %s without probing or retrying", async (endpoint, expected) => {
     const transport = vi.fn<typeof fetch>(async () => new Response('{"choices":[]}'));
     await createAIJsonClient(transport as typeof fetch)({ endpoint, key: "fixture", model: "fixture", system: "JSON", content: "{}", signal: new AbortController().signal });

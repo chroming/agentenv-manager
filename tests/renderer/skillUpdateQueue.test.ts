@@ -31,6 +31,16 @@ const updatedSkill = (id: string): SkillLibraryEntry => ({
 });
 
 describe("skill update queue", () => {
+  it("reports preserved Agent copies as a successful Library update, not a retryable failure", async () => {
+    const progress = vi.fn();
+    const skippedAgentCopies = [{ path: "/target/review", targetIds: ["opencode"] }];
+    const result = await runSkillUpdateQueue([plan("first")], async () => ({
+      ...updatedSkill("first"), skippedAgentCopies
+    }), progress);
+    expect(result.failed).toEqual([]);
+    expect(result.updated[0]?.skippedAgentCopies).toEqual(skippedAgentCopies);
+    expect(progress).toHaveBeenLastCalledWith("first", { status: "updated", skippedAgentCopies });
+  });
   it("updates Skills one at a time and keeps per-item failures", async () => {
     const progress = vi.fn();
     let active = 0;

@@ -38,6 +38,27 @@ const planWithChanges = (count: number): SkillUpdatePlan => ({
 });
 
 describe("SkillUpdateDialog", () => {
+  it("keeps the completed dialog open and lists preserved Agent paths", async () => {
+    vi.useFakeTimers();
+    try {
+      const onClose = vi.fn();
+      const onConfirm = vi.fn().mockResolvedValue({ status: "completed" });
+      const plan = planWithChanges(1);
+      const { rerender } = render(<SkillUpdateDialog plan={plan} onClose={onClose} onConfirm={onConfirm} />);
+      fireEvent.click(screen.getByRole("button", { name: "Apply update claude-api" }));
+      await act(async () => { await Promise.resolve(); });
+      rerender(<SkillUpdateDialog plan={plan} progress={{ status: "updated", skippedAgentCopies: [
+        { path: "/agents/claude/skills/reviewer", targetIds: ["claude-code"] }
+      ] }} onClose={onClose} onConfirm={onConfirm} />);
+      expect(screen.getByRole("region", { name: "Agent copies kept" })).toHaveTextContent("/agents/claude/skills/reviewer");
+      expect(screen.getByRole("status", { name: "claude-api: Library updated" })).toBeInTheDocument();
+      expect(screen.queryByRole("button", { name: /Retry update/ })).not.toBeInTheDocument();
+      await act(async () => { vi.advanceTimersByTime(2_000); });
+      expect(onClose).not.toHaveBeenCalled();
+      fireEvent.click(screen.getByRole("button", { name: "Close" }));
+      expect(onClose).toHaveBeenCalledOnce();
+    } finally { vi.useRealTimers(); }
+  });
   it("separates Profile references, immediate linked changes and optional copy updates", () => {
     const plan = planWithChanges(1);
     plan.impact = {
