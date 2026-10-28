@@ -51,15 +51,25 @@ afterEach(() => {
 });
 
 describe("SkillsEditor v2", () => {
+  it.each(["codex", "ssh:device:codex"])("offers the existing manual mode with Codex invocation syntax on %s", (selectedTargetId) => {
+    const onChange = vi.fn();
+    render(<SkillsEditor value={resources} selectedTargetId={selectedTargetId} librarySkills={skills} onChange={onChange} />);
+    fireEvent.click(screen.getByRole("button", { name: "More actions for Code Review" }));
+    const option = screen.getByRole("menuitemcheckbox", { name: "Explicit only" });
+    expect(option).toBeEnabled();
+    expect(option).toHaveAttribute("title", "Invoke explicitly with $skill-name. Applied as a managed copy.");
+    fireEvent.click(option);
+    expect(onChange.mock.lastCall?.[0].skills[0]).toMatchObject({ enabled: true, invocationMode: "manual" });
+  });
   it("sets manual invocation from the shared menu independently of the enabled switch", () => {
     const onChange = vi.fn();
     const view = render(<SkillsEditor value={resources} selectedTargetId="claude-code" librarySkills={skills} onChange={onChange} />);
     fireEvent.click(screen.getByRole("button", { name: "More actions for Code Review" }));
-    fireEvent.click(screen.getByRole("menuitemcheckbox", { name: "Manual only" }));
+    fireEvent.click(screen.getByRole("menuitemcheckbox", { name: "Explicit only" }));
     const next = onChange.mock.calls[0][0];
     expect(next.skills[0]).toMatchObject({ enabled: true, invocationMode: "manual" });
     view.rerender(<SkillsEditor value={next} selectedTargetId="claude-code" librarySkills={skills} onChange={onChange} />);
-    expect(screen.getByRole("button", { name: "Skill invocation" })).toHaveTextContent("Manual only");
+    expect(screen.getByRole("button", { name: "Skill invocation" })).toHaveTextContent("Explicit only");
     fireEvent.click(screen.getByRole("switch", { name: "Disable Code Review" }));
     expect(onChange.mock.lastCall?.[0].skills[0]).toMatchObject({ enabled: false, invocationMode: "manual" });
   });
@@ -67,7 +77,7 @@ describe("SkillsEditor v2", () => {
   it("does not offer an effective manual mode on unsupported Agents", () => {
     render(<SkillsEditor value={resources} selectedTargetId="opencode" librarySkills={skills} onChange={vi.fn()} />);
     fireEvent.click(screen.getByRole("button", { name: "More actions for Code Review" }));
-    expect(screen.getByRole("menuitemcheckbox", { name: "Manual only" })).toBeDisabled();
+    expect(screen.getByRole("menuitemcheckbox", { name: "Explicit only" })).toBeDisabled();
   });
   it("explains Library-disabled Skills through a quiet off hint without enabling the switch", async () => {
     render(<SkillsEditor

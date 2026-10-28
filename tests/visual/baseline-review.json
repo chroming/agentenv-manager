@@ -1,19 +1,19 @@
 {
   "formatVersion": 1,
-  "reviewedAt": "2026-10-07T09:21:54.964Z",
-  "applicationVersion": "0.2.3",
-  "baseCommit": "1e258192",
+  "reviewedAt": "2026-10-28T03:38:47.753Z",
+  "applicationVersion": "0.2.4",
+  "baseCommit": "cd76a356",
   "build": {
-    "sourceFingerprint": "8556cb7f903d3ef2107ba3f3c54c89486625cf7b21b5aa0d252d6e009a5b9224",
-    "artifactFingerprint": "d0fa55ef939e77a66615eaa67e815bde6d66010bfd615429f92947607038e5e7",
-    "generatedAt": "2026-10-07T09:10:17.767Z"
+    "sourceFingerprint": "4f2084a1408391a93d136dda477717182ea518cc29921f2ba6fd51062ccb64de",
+    "artifactFingerprint": "fad9339b924fc87d5b2e88f9d03d9db2e2e95dee7a9eff5ae1b3e3b673e8ff61",
+    "generatedAt": "2026-10-28T03:36:09.015Z"
   },
   "review": {
-    "scenarios": 106,
-    "method": "Changed scenarios inspected in old/current contact sheets; history, file diff, import, cleanup and group dialogs also inspected at native size. Remaining baselines preserved.",
+    "scenarios": 115,
+    "method": "Invocation state screenshots reviewed at native size against the shared Claude surface and Codex localized variants; other previously reviewed baselines retained.",
     "scope": "Mock Electron workflows on macOS; no real Agent resources or model requests",
     "thresholdsChanged": false,
-    "updatedScenarios": 51
+    "updatedScenarios": 12
   },
   "files": [
     {
@@ -63,18 +63,18 @@
     },
     {
       "file": "skill-invocation-920.png",
-      "sha256": "239de61f5b347c79a2b348ed9c74572d9c13a1d4006ebb917531fe3375ebeac2",
-      "reviewReason": "Compact object header, shared resource groups, green switches, and current AI review"
+      "sha256": "f67ec1ef2bd83e57f7bf2781747021efb04ea4cc749a95070ffe27946703419f",
+      "reviewReason": "Reviewed 2026-10-28: isolated current-build Electron; shared Codex/Claude explicit-invocation control inspected at 920/1180/1440, Codex also in both Chinese locales. Apply, no-op and author-default restoration verified; no threshold changes."
     },
     {
       "file": "skill-invocation-1180.png",
-      "sha256": "4c4bbc0e15813b72b6a73c7bc8afc34893c1d02de254a0da2bdd81914ccfe850",
-      "reviewReason": "Compact object header, shared resource groups, green switches, and current AI review"
+      "sha256": "bbcab4b5bd14dbd6ad551d0a6b3cf567529738d5896bae34eea0e831a4574202",
+      "reviewReason": "Reviewed 2026-10-28: isolated current-build Electron; shared Codex/Claude explicit-invocation control inspected at 920/1180/1440, Codex also in both Chinese locales. Apply, no-op and author-default restoration verified; no threshold changes."
     },
     {
       "file": "skill-invocation-1440.png",
-      "sha256": "c269d64efa86bc23fa548b5af4212e73ccb0439089aee68f7fa72c1f37494c33",
-      "reviewReason": "Compact object header, shared resource groups, green switches, and current AI review"
+      "sha256": "fe43fa7265ddef915dcb6eda2aef833080a22ed4b7a58e23b5e4d666c5bcf752",
+      "reviewReason": "Reviewed 2026-10-28: isolated current-build Electron; shared Codex/Claude explicit-invocation control inspected at 920/1180/1440, Codex also in both Chinese locales. Apply, no-op and author-default restoration verified; no threshold changes."
     },
     {
       "file": "history-sources-920.png",
@@ -545,6 +545,51 @@
       "file": "conversation-restore-920-zh_CN.png",
       "sha256": "ee5edd80743be3bc55d26bbcf138b0797c45652799f6a99558a84edfb59f84ba",
       "reviewReason": "Reviewed 2026-10-25: preserved Chinese restore preview and current occupied-destination error inspected; footer remains usable."
+    },
+    {
+      "file": "skill-invocation-codex-en-1180.png",
+      "sha256": "a8ed163a522afb60d5e609e788a0b7e716ab81c6cae41bdfb6003e627be517f8",
+      "reviewReason": "Reviewed 2026-10-28: isolated current-build Electron; shared Codex/Claude explicit-invocation control inspected at 920/1180/1440, Codex also in both Chinese locales. Apply, no-op and author-default restoration verified; no threshold changes."
+    },
+    {
+      "file": "skill-invocation-codex-en-1440.png",
+      "sha256": "a186aacccc259ecd2465a0d09f7eb9df5c33d94bf6320b338ee8aa9bb6467a5e",
+      "reviewReason": "Reviewed 2026-10-28: isolated current-build Electron; shared Codex/Claude explicit-invocation control inspected at 920/1180/1440, Codex also in both Chinese locales. Apply, no-op and author-default restoration verified; no threshold changes."
+    },
+    {
+      "file": "skill-invocation-codex-en-920.png",
+      "sha256": "4809ee56c31ac420541165ea4c095c49af50b1b144207eb9365f49d2edec426b",
+      "reviewReason": "Reviewed 2026-10-28: isolated current-build Electron; shared Codex/Claude explicit-invocation control inspected at 920/1180/1440, Codex also in both Chinese locales. Apply, no-op and author-default restoration verified; no threshold changes."
+    },
+    {
+      "file": "skill-invocation-codex-zh_CN-1180.png",
+      "sha256": "7c1386d7b2d65db3a4a3d6fd5d3f4688c6a8ff3d37d4cfee69f3dd4a67246dc0",
+      "reviewReason": "Reviewed 2026-10-28: isolated current-build Electron; shared Codex/Claude explicit-invocation control inspected at 920/1180/1440, Codex also in both Chinese locales. Apply, no-op and author-default restoration verified; no threshold changes."
+    },
+    {
+      "file": "skill-invocation-codex-zh_CN-1440.png",
+      "sha256": "503547e53f64baeaf898cc32b4922f92fce8cdb04bc3a1093d6ace7c451660bd",
+      "reviewReason": "Reviewed 2026-10-28: isolated current-build Electron; shared Codex/Claude explicit-invocation control inspected at 920/1180/1440, Codex also in both Chinese locales. Apply, no-op and author-default restoration verified; no threshold changes."
+    },
+    {
+      "file": "skill-invocation-codex-zh_CN-920.png",
+      "sha256": "0980f0e809de146b9c2af4de1b5eb8390fd7112baa8008455d175dd37922a110",
+      "reviewReason": "Reviewed 2026-10-28: isolated current-build Electron; shared Codex/Claude explicit-invocation control inspected at 920/1180/1440, Codex also in both Chinese locales. Apply, no-op and author-default restoration verified; no threshold changes."
+    },
+    {
+      "file": "skill-invocation-codex-zh_TW-1180.png",
+      "sha256": "754b691e1288293941d7ac47dc2e4870f3b30e32f0769abed39470b1787923a0",
+      "reviewReason": "Reviewed 2026-10-28: isolated current-build Electron; shared Codex/Claude explicit-invocation control inspected at 920/1180/1440, Codex also in both Chinese locales. Apply, no-op and author-default restoration verified; no threshold changes."
+    },
+    {
+      "file": "skill-invocation-codex-zh_TW-1440.png",
+      "sha256": "afef9b47d9484b8bbfe2bb6c0645244b3b92de5e19aaffc6d8eca9519f27366e",
+      "reviewReason": "Reviewed 2026-10-28: isolated current-build Electron; shared Codex/Claude explicit-invocation control inspected at 920/1180/1440, Codex also in both Chinese locales. Apply, no-op and author-default restoration verified; no threshold changes."
+    },
+    {
+      "file": "skill-invocation-codex-zh_TW-920.png",
+      "sha256": "ff15b10ecbaae9c19edb9146f05aa1a724bae188ba86f117a70e01ad690fd30e",
+      "reviewReason": "Reviewed 2026-10-28: isolated current-build Electron; shared Codex/Claude explicit-invocation control inspected at 920/1180/1440, Codex also in both Chinese locales. Apply, no-op and author-default restoration verified; no threshold changes."
     }
   ],
   "incrementalReviews": [

@@ -2,16 +2,73 @@ import { lstat, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, expect, it } from "vitest";
-import { manualInvocationContent, hashInvokedSkill } from "../../src/main/skillInvocation";
+import { codexManualInvocationContent, manualInvocationContent, hashInvokedSkill } from "../../src/main/skillInvocation";
 import { deploySkillDirectory } from "../../src/main/skillDeployment";
 import { hashSkillContent } from "../../src/main/skillContentHash";
 import { ProfileSkillSchema } from "../../src/shared/schemas";
 import { materializeProfileSkillGroups } from "../../src/shared/profileSkillGroups";
 import { createProfileContentHash } from "../../src/main/profileFingerprint";
+import { parse } from "yaml";
+import { supportsManualSkillInvocation } from "../../src/shared/skillInvocation";
 
 let root = "";
 afterEach(async () => { if (root) await rm(root, { recursive: true, force: true }); });
 const original = "---\nname: review\ndescription: Review code\nmetadata:\n  version: '1.0'\n# retain comment\nuser-invocable: false\n---\n\n# Review\nDo not edit this body.\n";
+
+it.each(["codex", "ssh:device:codex"])("supports Codex explicit-only invocation: %s", (targetId) => {
+  expect(supportsManualSkillInvocation(targetId)).toBe(true);
+});
+
+it("keeps an existing explicit-only Codex policy byte-for-byte and preserves CRLF on edits", () => {
+  const manual = "# keep\r\npolicy:\r\n  allow_implicit_invocation: false\r\n";
+  expect(codexManualInvocationContent(manual)).toBe(manual);
+  const changed = codexManualInvocationContent(manual.replace("false", "true"));
+  expect(changed).toBe(manual);
+  expect(codexManualInvocationContent("# Comment only\n")).toContain("# Comment only");
+});
+
+it.each([undefined, "", "# retain comment\ninterface:\n  display_name: Review\npolicy:\n  allow_implicit_invocation: true\n  other_setting: keep\ndependencies:\n  tools: []\n"])("materializes Codex policy without changing Library or SKILL.md (%s)", async (metadata) => {
+  root = await mkdtemp(join(tmpdir(), "aem-codex-invocation-"));
+  const sourceDir = join(root, "library");
+  const targetDir = join(root, "agent", "review");
+  await mkdir(sourceDir);
+  await writeFile(join(sourceDir, "SKILL.md"), original);
+  if (metadata !== undefined) {
+    await mkdir(join(sourceDir, "agents"));
+    await writeFile(join(sourceDir, "agents", "openai.yaml"), metadata);
+  }
+  const sourceHash = await hashSkillContent(sourceDir);
+  const expected = await hashInvokedSkill(sourceDir, "codex", "manual");
+  await deploySkillDirectory({ sourceDir, targetDir, syncMethod: "symlink", targetId: "codex", invocationMode: "manual" });
+  expect((await lstat(targetDir)).isSymbolicLink()).toBe(false);
+  expect(await readFile(join(targetDir, "SKILL.md"), "utf8")).toBe(original);
+  const generated = await readFile(join(targetDir, "agents", "openai.yaml"), "utf8");
+  expect(parse(generated).policy.allow_implicit_invocation).toBe(false);
+  if (metadata) {
+    expect(generated).toContain("# retain comment");
+    expect(parse(generated)).toMatchObject({ interface: { display_name: "Review" },
+      policy: { other_setting: "keep" }, dependencies: { tools: [] } });
+  }
+  expect(await hashSkillContent(targetDir)).toBe(expected);
+  expect(await hashSkillContent(sourceDir)).toBe(sourceHash);
+  expect(await hashInvokedSkill(targetDir, "codex", "manual")).toBe(expected);
+  await deploySkillDirectory({ sourceDir, targetDir, syncMethod: "copy", targetId: "codex", invocationMode: "default" });
+  expect(await hashSkillContent(targetDir)).toBe(sourceHash);
+});
+
+it.each(["policy: [\n", "policy: false\n", "- list\n", "null\n"])("refuses malformed Codex metadata before replacing an existing deployment: %s", async (metadata) => {
+  root = await mkdtemp(join(tmpdir(), "aem-codex-invocation-"));
+  const sourceDir = join(root, "library");
+  const targetDir = join(root, "target");
+  await mkdir(join(sourceDir, "agents"), { recursive: true });
+  await mkdir(targetDir);
+  await writeFile(join(sourceDir, "SKILL.md"), original);
+  await writeFile(join(sourceDir, "agents", "openai.yaml"), metadata);
+  await writeFile(join(targetDir, "SKILL.md"), "# Existing content");
+  await expect(deploySkillDirectory({ sourceDir, targetDir, syncMethod: "copy", targetId: "codex", invocationMode: "manual" }))
+    .rejects.toThrow("Codex");
+  expect(await readFile(join(targetDir, "SKILL.md"), "utf8")).toBe("# Existing content");
+});
 
 it("preserves unrelated metadata and body while making explicit invocation usable", () => {
   const result = manualInvocationContent(original);

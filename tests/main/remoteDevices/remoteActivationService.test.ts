@@ -13,6 +13,7 @@ import type {
 import { createSkillLibraryStore } from "../../../src/main/skillLibraryStore";
 import { createOpenCodeTargetAdapter } from "../../../src/main/targets/opencodeTarget";
 import { createClaudeCodeTargetAdapter } from "../../../src/main/targets/claudeCodeTarget";
+import { createCodexTargetAdapter } from "../../../src/main/targets/codexTarget";
 import { createTargetRegistry } from "../../../src/main/targets/registry";
 
 let root = "";
@@ -108,7 +109,8 @@ const createFixture = async (
     },
     expectedContentHash: created.contentHash
   });
-  const targetRegistry = createTargetRegistry([agentId === "claude-code" ? createClaudeCodeTargetAdapter() : createOpenCodeTargetAdapter()]);
+  const targetRegistry = createTargetRegistry([agentId === "codex" ? createCodexTargetAdapter()
+    : agentId === "claude-code" ? createClaudeCodeTargetAdapter() : createOpenCodeTargetAdapter()]);
   const service = createRemoteActivationService({
     paths,
     profileStore,
@@ -132,6 +134,37 @@ const createFixture = async (
 };
 
 describe("remote Profile activation", () => {
+  it("creates Codex metadata only in the SSH deployment and removes it when returning to Default", async () => {
+    const fixture = await createFixture((home) => ({ execute: async (device, command, options) => {
+      const result = await createLocalSshFixture(home).execute(device, command, options);
+      return command.includes("uname -s")
+        ? { ...result, stdout: Buffer.from(result.stdout.toString().replace("CMD\topencode\t/usr/bin/opencode", "CMD\tcodex\t/usr/bin/codex")) }
+        : result;
+    } }), 0, "codex");
+    const { profile, profileStore, service, endpoint, remoteHome, skillLibraryStore } = fixture;
+    expect(endpoint.agentId).toBe("codex");
+    const manual = await profileStore.saveProfile({ ...profile, expectedContentHash: profile.contentHash,
+      resources: { ...profile.resources, skills: profile.resources.skills.map((reference) => ({ ...reference, invocationMode: "manual" })) }
+    });
+    const preview = await service.previewProfile(profile.id, endpoint.id);
+    expect(preview.issues.filter((issue) => issue.disposition === "block")).toEqual([]);
+    expect(await service.applyProfile(profile.id, preview.id)).toMatchObject({ ok: true });
+    const targetDir = join(remoteHome, ".codex", "skills", "review");
+    expect(await readFile(join(targetDir, "agents", "openai.yaml"), "utf8")).toContain("allow_implicit_invocation: false");
+    const library = (await skillLibraryStore.listSkills())[0];
+    expect(await readdir(library.path)).not.toContain("agents");
+    const again = await service.previewProfile(profile.id, endpoint.id);
+    expect(again.resourceChanges).toEqual([]);
+    expect(again.changes).toEqual([]);
+    expect(again.targetStateChanges).toEqual([]);
+    await profileStore.saveProfile({ ...manual, expectedContentHash: manual.contentHash,
+      resources: { ...manual.resources, skills: manual.resources.skills.map((reference) => ({ ...reference, invocationMode: undefined })) }
+    });
+    const restore = await service.previewProfile(profile.id, endpoint.id);
+    expect(await service.applyProfile(profile.id, restore.id)).toMatchObject({ ok: true });
+    expect(await readdir(targetDir)).not.toContain("agents");
+    expect((await service.previewProfile(profile.id, endpoint.id)).resourceChanges).toEqual([]);
+  });
   it("saves remote agent selection while offline without probing or changing deployments", async () => {
     let offline = false;
     const fixture = await createFixture((home) => ({ execute: async (...args) => {

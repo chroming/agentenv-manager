@@ -131,7 +131,7 @@ describe("activation service v2", () => {
   });
   it("applies a manual-only Skill as a copy and recognizes a repeat Apply as unchanged", async () => {
     const { paths, service, profileStore, profile, skillLibraryStore, settingsStore } = await makeEnv();
-    await settingsStore.updateSettings({ enabledTargetIds: ["claude-code", "codex"], skillSyncMethod: "symlink" });
+    await settingsStore.updateSettings({ enabledTargetIds: ["claude-code", "codex", "opencode"], skillSyncMethod: "symlink" });
     await profileStore.saveProfile({ ...profile, expectedContentHash: profile.contentHash, resources: {
       ...profile.resources, mcpByTarget: {},
       skills: profile.resources.skills.map((reference) => ({ ...reference, invocationMode: "manual" }))
@@ -146,12 +146,55 @@ describe("activation service v2", () => {
     expect(again.resourceChanges).toEqual([]);
     expect(again.changes).toEqual([]);
     expect(blockingMessages(again.issues)).toEqual([]);
+    expect(again.targetStateChanges).toEqual([]);
     const states = await service.listTargetStates();
     expect(states.find((state) => state.targetId === "claude-code")?.lifecycleStatus).toBe("applied");
     const library = await skillLibraryStore.listSkills();
     expect(await readFile(join(library[0].path, "SKILL.md"), "utf8")).not.toContain("disable-model-invocation");
-    const unsupported = await service.previewProfile(profile.id, "codex");
+    const unsupported = await service.previewProfile(profile.id, "opencode");
     expect(blockingMessages(unsupported.issues).join(" ")).toContain("Default invocation");
+  });
+  it("applies Codex manual policy, preserves it during updates, and restores author defaults without false drift", async () => {
+    const { paths, service, profileStore, profile, skillLibraryStore, settingsStore } = await makeEnv();
+    await settingsStore.updateSettings({ enabledTargetIds: ["codex"], skillSyncMethod: "symlink" });
+    await writeCodexLiveFiles(paths);
+    const configBefore = await readFile(paths.codexConfigPath, "utf8");
+    const manual = await profileStore.saveProfile({ ...profile, expectedContentHash: profile.contentHash,
+      resources: { ...profile.resources, mcpByTarget: {},
+        skills: profile.resources.skills.map((reference) => ({ ...reference, invocationMode: "manual" })) }
+    });
+    const library = (await skillLibraryStore.listSkills())[0];
+    const preview = await service.previewProfile(profile.id, "codex");
+    expect(blockingMessages(preview.issues)).toEqual([]);
+    expect(await service.applyProfile(profile.id, preview.id)).toMatchObject({ ok: true });
+    const targetDir = join(paths.codexHome, "skills", "review");
+    expect((await lstat(targetDir)).isSymbolicLink()).toBe(false);
+    expect(await readFile(join(targetDir, "agents", "openai.yaml"), "utf8")).toContain("allow_implicit_invocation: false");
+    const again = await service.previewProfile(profile.id, "codex");
+    expect(again.resourceChanges).toEqual([]);
+    expect(again.changes).toEqual([]);
+    expect(again.targetStateChanges).toEqual([]);
+    expect((await service.listTargetStates())[0].lifecycleStatus).toBe("applied");
+    await expect(access(join(library.path, "agents", "openai.yaml"))).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(readFile(paths.codexConfigPath, "utf8")).resolves.toBe(configBefore);
+    const updatedSource = join(root, "source", "review");
+    await writeFile(join(updatedSource, "SKILL.md"), "---\nname: review\ndescription: Updated review\n---\n# Updated review\n");
+    await skillLibraryStore.setUpdateSource({ id: "review", sourceType: "local", source: updatedSource });
+    const update = await skillLibraryStore.previewUpdate("review");
+    expect((await skillLibraryStore.updateSkill({ id: "review", previewId: update.previewId!, syncCopiedInstalls: true })).skippedAgentCopies).toBeUndefined();
+    expect(await readFile(join(targetDir, "agents", "openai.yaml"), "utf8")).toContain("allow_implicit_invocation: false");
+    expect(await readFile(join(targetDir, "SKILL.md"), "utf8")).toContain("# Updated review");
+    expect((await service.previewProfile(profile.id, "codex")).resourceChanges).toEqual([]);
+    await profileStore.saveProfile({ ...manual, expectedContentHash: manual.contentHash,
+      resources: { ...manual.resources, skills: manual.resources.skills.map((reference) => ({ ...reference, invocationMode: undefined })) }
+    });
+    const restore = await service.previewProfile(profile.id, "codex");
+    expect(await service.applyProfile(profile.id, restore.id)).toMatchObject({ ok: true });
+    expect((await lstat(targetDir)).isSymbolicLink()).toBe(true);
+    await expect(access(join(targetDir, "agents", "openai.yaml"))).rejects.toMatchObject({ code: "ENOENT" });
+    expect((await service.previewProfile(profile.id, "codex")).resourceChanges).toEqual([]);
+    expect((await service.listTargetStates())[0].lifecycleStatus).toBe("applied");
+    await expect(readFile(paths.codexConfigPath, "utf8")).resolves.toBe(configBefore);
   });
   it("fails closed when persisted Agent management state is invalid", async () => {
     const { paths, service } = await makeEnv();

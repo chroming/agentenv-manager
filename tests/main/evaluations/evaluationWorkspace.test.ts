@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createEvaluationWorkspace } from "../../../src/main/evaluations/evaluationWorkspace";
 import { createOpenCodeTargetAdapter } from "../../../src/main/targets/opencodeTarget";
+import { createCodexTargetAdapter } from "../../../src/main/targets/codexTarget";
 import type { ProfileDetail, SkillLibraryEntry } from "../../../src/shared/types";
 
 let root = "";
@@ -46,6 +47,28 @@ const librarySkill = (path: string): SkillLibraryEntry => ({
 });
 
 describe("evaluation workspace", () => {
+  it("uses Codex explicit invocation in the isolated comparison without changing Library or the real Agent", async () => {
+    root = await mkdtemp(join(tmpdir(), "aem-compare-codex-invocation-"));
+    const path = join(root, "library");
+    await mkdir(path);
+    await writeFile(join(path, "SKILL.md"), "---\nname: review-skill\ndescription: Review changes\n---\n# Review\n");
+    const skill = librarySkill(path);
+    const profile = profileFor(skill);
+    profile.resources.skills[0].invocationMode = "manual";
+    const adapter = createCodexTargetAdapter();
+    const sourcePaths = adapter.createTargetPaths({ homeDir: join(root, "real-home") });
+    const workspace = createEvaluationWorkspace({ cacheRoot: join(root, "cache") });
+    const prepared = await workspace.prepare({ adapter, profile, librarySkills: [skill],
+      workspace: await workspace.inspectWorkspace({ kind: "empty" }), sourceTargetPaths: sourcePaths });
+    try {
+      const deployed = join(prepared.resources.targetPaths.skillsDir!, skill.name);
+      expect(await readFile(join(deployed, "agents", "openai.yaml"), "utf8")).toContain("allow_implicit_invocation: false");
+      expect(await readFile(join(deployed, "SKILL.md"), "utf8")).toBe(await readFile(join(path, "SKILL.md"), "utf8"));
+      expect(existsSync(join(path, "agents"))).toBe(false);
+      expect(existsSync(sourcePaths.configDir)).toBe(false);
+      await workspace.verifyOriginals(prepared);
+    } finally { await workspace.cleanup(prepared); }
+  });
   it("removes only stale comparison run directories", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-comparison-cleanup-"));
     const cacheRoot = join(root, "cache");

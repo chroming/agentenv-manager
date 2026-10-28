@@ -19,6 +19,43 @@ const createSkill = async (name: string) => {
 };
 
 describe("Skill content hash v2", () => {
+  it.each([false, true])("hashes added invocation files identically to materialized output (existing agents: %s)", async (existingAgents) => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-hash-"));
+    const source = await createSkill("source");
+    const materialized = await createSkill("materialized");
+    for (const path of [source, materialized]) await writeFile(join(path, "SKILL.md"), "# Review");
+    if (existingAgents) await mkdir(join(source, "agents"));
+    await mkdir(join(materialized, "agents"));
+    const content = "policy:\n  allow_implicit_invocation: false\n";
+    await writeFile(join(materialized, "agents", "openai.yaml"), content);
+    const overrides = new Map([["agents/openai.yaml", Buffer.from(content)]]);
+    // Existing v2 identities must not change just because previews can add files.
+    expect(await hashSkillContent(source)).toBe(existingAgents
+      ? "b04901148708c4506f9e83e995acbfa072657d29dbd6c966eac5089b4ffa7d8a"
+      : "b89edddab7456bb525c394c94c4c9d3f839383495386a3b2241505ae62845667");
+    expect(await hashSkillContent(source, { fileOverrides: overrides })).toBe(await hashSkillContent(materialized));
+    expect(await hashSkillContent(source)).not.toBe(await hashSkillContent(materialized));
+  });
+  it.each(["../outside", "/absolute", "agents/../outside", "agents\\outside", "C:/outside", ".agentenv-skill.json"])("rejects unsafe override path %s", async (path) => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-hash-"));
+    await expect(hashSkillContent(root, { fileOverrides: new Map([[path, Buffer.from("content")]]) }))
+      .rejects.toThrow("override path");
+  });
+
+  it("enforces materialization limits and rejects file/directory collisions in added files", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-skill-hash-"));
+    const overrides = new Map([["agents/openai.yaml", Buffer.from("policy: {}\n")]]);
+    await expect(hashSkillContent(root, { fileOverrides: overrides, maxBytes: 1 })).rejects.toThrow("content read limit");
+    await expect(hashSkillContent(root, { fileOverrides: overrides, maxEntries: 1 })).rejects.toThrow("too many entries");
+    await expect(hashSkillContent(root, { fileOverrides: overrides, maxDepth: 0 })).rejects.toThrow("nesting");
+    await writeFile(join(root, "agents"), "existing file");
+    await expect(hashSkillContent(root, { fileOverrides: overrides })).rejects.toThrow("not a directory");
+    await rm(join(root, "agents"));
+    await mkdir(join(root, "agents", "openai.yaml"), { recursive: true });
+    await expect(hashSkillContent(root, { fileOverrides: overrides })).rejects.toThrow("replace a directory");
+    await expect(hashSkillContent(root, { fileOverrides: new Map([["agents", Buffer.from("file")], ...overrides]) }))
+      .rejects.toThrow("also a directory");
+  });
   it("rejects cycles, unavailable links, and bounded work without producing a hash", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-skill-hash-"));
     await writeFile(join(root, "SKILL.md"), "content");

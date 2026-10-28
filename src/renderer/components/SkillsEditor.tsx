@@ -366,7 +366,7 @@ export const SkillsEditor = ({
         title={<OverflowTooltip className="profile-skill-name" text={skillName} />}
         titleAside={reference.invocationMode === "manual" ? (
             <ToolbarOverflowMenu
-              triggerVariant="tag" triggerContent={t("Manual only")}
+              triggerVariant="tag" triggerContent={t("Explicit only")}
               label={t("Skill invocation")} menuLabel={t("Skill invocation")}
               disabled={disabled || !profileManagesSkills}
               items={invocationItems}

@@ -4,7 +4,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { DiagnosticIssueDialog } from "../../src/renderer/components/DiagnosticIssueDialog";
 import { Notice } from "../../src/renderer/components/ui/Notice";
-import { I18nProvider } from "../../src/renderer/i18n";
+import { I18nProvider, translate } from "../../src/renderer/i18n";
 import { SkillSummaryContent } from "../../src/renderer/components/SkillSummaryContent";
 import { constants } from "node:fs";
 import { access } from "node:fs/promises";
@@ -1568,7 +1568,7 @@ describe("Electron UI profile switching e2e", () => {
     const row = page.getByRole("listitem", { name: "Profile Skill ui-alpha-skill" });
     await row.getByRole("button", { name: "More actions for ui-alpha-skill" }).focus();
     await row.getByRole("button", { name: "More actions for ui-alpha-skill" }).click();
-    await page.getByRole("menuitemcheckbox", { name: "Manual only", exact: true }).click();
+    await page.getByRole("menuitemcheckbox", { name: "Explicit only", exact: true }).click();
     await expect.poll(async () => (await page.evaluate(() => window.agentEnv.readProfile("ui-opencode-alpha"))).resources.skills[0]?.invocationMode).toBe("manual");
     await row.getByRole("button", { name: "Skill invocation" }).waitFor({ state: "visible" });
     for (const [width, height] of [[920, 620], [1180, 728], [1440, 900]]) {
@@ -1585,6 +1585,56 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("menuitemcheckbox", { name: "Default invocation" }).click();
     await expect.poll(async () => (await page.evaluate(() => window.agentEnv.readProfile("ui-opencode-alpha"))).resources.skills[0]?.invocationMode).toBeUndefined();
   }, standardElectronTestTimeout);
+  it("persists manual Skill invocation on Codex through Apply and renders the shared control across locales", async () => {
+    const { page, codexDir } = await launchApp({ enabledTargetIds: ["opencode", "codex"] });
+    const configBefore = await readFile(join(codexDir, "config.toml"), "utf8");
+    await selectProfile(page, "UI OpenCode alpha");
+    await selectTarget(page, "Codex");
+    await expandComposerSection(page, "Skills");
+    let row = page.getByRole("listitem", { name: "Profile Skill ui-alpha-skill" });
+    await row.getByRole("button", { name: "More actions for ui-alpha-skill" }).focus();
+    await row.getByRole("button", { name: "More actions for ui-alpha-skill" }).click();
+    await page.getByRole("menuitemcheckbox", { name: "Explicit only", exact: true }).click();
+    await saveProfile(page);
+    await previewAndApply(page, "Codex");
+    const deployed = join(codexDir, "skills", "ui-alpha-skill");
+    expect((await lstat(deployed)).isSymbolicLink()).toBe(false);
+    expect(await readFile(join(deployed, "agents", "openai.yaml"), "utf8")).toContain("allow_implicit_invocation: false");
+    const again = await page.evaluate(() => window.agentEnv.previewApply("ui-opencode-alpha", "codex"));
+    expect(again.resourceChanges).toEqual([]);
+    expect(again.changes).toEqual([]);
+    expect(again.targetStateChanges).toEqual([]);
+    for (const locale of ["en", "zh_CN", "zh_TW"] as const) {
+      await page.locator('[data-workspace="settings"]').click();
+      await page.getByTestId("locale-select").selectOption(locale);
+      await page.locator('[data-workspace="profiles"]').click();
+      const trigger = page.locator('[data-profile-composer-id="skills"]').getByRole("button", { name: translate(locale, "Skills"), exact: true });
+      if (await trigger.getAttribute("aria-expanded") !== "true") await trigger.click();
+      row = page.getByRole("listitem", { name: translate(locale, "Profile Skill {{id}}", { id: "ui-alpha-skill" }) });
+      const mode = row.getByRole("button", { name: translate(locale, "Skill invocation") });
+      await mode.waitFor();
+      expect(await mode.textContent()).toBe(translate(locale, "Explicit only"));
+      for (const [width, height] of [[920, 620], [1180, 728], [1440, 900]]) {
+        await resizeAppWindow(page, width, height);
+        await expectNoHorizontalOverflow(page);
+        await expectNoOverlap(mode, row.getByRole("switch"));
+        await expectTextFits(mode);
+        if (process.env.AGENTENV_STATUS_CAPTURE_DIR) {
+          await mkdir(process.env.AGENTENV_STATUS_CAPTURE_DIR, { recursive: true });
+          await page.screenshot({ path: join(process.env.AGENTENV_STATUS_CAPTURE_DIR, `skill-invocation-codex-${locale}-${width}.png`) });
+        }
+      }
+    }
+    await row.getByRole("button", { name: translate("zh_TW", "Skill invocation") }).click();
+    await page.getByRole("menuitemcheckbox", { name: translate("zh_TW", "Default invocation") }).click();
+    await expect.poll(async () => (await page.evaluate(() => window.agentEnv.readProfile("ui-opencode-alpha"))).resources.skills[0]?.invocationMode).toBeUndefined();
+    const restore = await page.evaluate(() => window.agentEnv.previewApply("ui-opencode-alpha", "codex"));
+    expect(await page.evaluate((previewId) => window.agentEnv.applyProfile("ui-opencode-alpha", previewId), restore.id)).toMatchObject({ ok: true });
+    expect((await lstat(deployed)).isSymbolicLink()).toBe(true);
+    expect(await fileExists(join(deployed, "agents", "openai.yaml"))).toBe(false);
+    expect(await readFile(join(codexDir, "config.toml"), "utf8")).toBe(configBefore);
+  }, 60_000);
+
   it("keeps quiet Agent identities and device navigation readable across locales and widths", async () => {
     const { page } = await launchApp();
     for (const locale of ["en", "zh_CN", "zh_TW"]) {

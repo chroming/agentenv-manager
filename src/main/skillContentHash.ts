@@ -35,7 +35,7 @@ const writeFrame = (
 };
 
 export interface SkillHashOptions {
-  /** Internal materialization preview; keys must name existing regular files. */
+  /** Internal materialization preview; safe relative paths may replace or add regular files. */
   fileOverrides?: ReadonlyMap<string, Buffer>;
   maxEntries?: number;
   maxBytes?: number;
@@ -56,6 +56,20 @@ const hashSnapshot = async (rootPath: string, options: SkillHashOptions) => {
   let count = 0;
   let bytes = 0;
   const buffer = Buffer.allocUnsafe(64 * 1024);
+  const overrideChildren = new Map<string, Set<string>>();
+  for (const path of options.fileOverrides?.keys() ?? []) {
+    const parts = path.split("/");
+    if (path.includes("\\") || path.includes(":") || parts.some((part) => !part || part === "." || part === ".." || EXCLUDED_METADATA_FILES.has(part))) {
+      throw new Error(`Invalid Skill override path: ${path}`);
+    }
+    for (let index = 0; index < parts.length; index++) {
+      const parent = parts.slice(0, index).join("/");
+      if (options.fileOverrides?.has(parent)) throw new Error(`Skill override file is also a directory: ${parent}`);
+      const children = overrideChildren.get(parent) ?? new Set<string>();
+      children.add(parts[index]);
+      overrideChildren.set(parent, children);
+    }
+  }
   const check = () => {
     options.signal?.throwIfAborted();
     if (Date.now() - started > (options.timeoutMs ?? 30_000)) {
@@ -68,40 +82,57 @@ const hashSnapshot = async (rootPath: string, options: SkillHashOptions) => {
     if (previous && previous !== value) throw new ChangedSkillError(`Skill changed while reading: ${path}`);
     stamps.set(path, value);
   };
-  const hashDirectory = async (path: string, ancestorPaths = new Set<string>(), depth = 0): Promise<void> => {
+  const hashDirectory = async (path: string, ancestorPaths = new Set<string>(), depth = 0, virtual = false): Promise<void> => {
     check();
     if (depth > (options.maxDepth ?? 64)) throw new Error(`Skill directory nesting exceeds the read limit: ${path}`);
-    await remember(path);
-    const canonicalPath = await realpath(path);
-    await remember(canonicalPath);
+    if (!virtual) await remember(path);
+    const canonicalPath = virtual ? path : await realpath(path);
+    if (!virtual) await remember(canonicalPath);
     if (ancestorPaths.has(canonicalPath)) {
       throw new Error(`Skill contains a symbolic link cycle: ${path}`);
     }
     const nextAncestors = new Set(ancestorPaths).add(canonicalPath);
-    const entries = await readdir(path, { withFileTypes: true });
-    for (const entry of entries.sort((left, right) => left.name.localeCompare(right.name))) {
-      if (EXCLUDED_METADATA_FILES.has(entry.name)) {
+    const entries = new Map((virtual ? [] : await readdir(path, { withFileTypes: true })).map((entry) => [entry.name, entry]));
+    const parentRelative = relative(rootPath, path).split(sep).join("/");
+    const names = new Set([...entries.keys(), ...(overrideChildren.get(parentRelative) ?? [])]);
+    for (const name of [...names].sort((left, right) => left.localeCompare(right))) {
+      if (EXCLUDED_METADATA_FILES.has(name)) {
         continue;
       }
-      const child = join(path, entry.name);
+      const entry = entries.get(name);
+      const child = join(path, name);
       check();
       if (++count > (options.maxEntries ?? 100_000)) throw new Error(`Skill contains too many entries to read completely: ${rootPath}`);
-      await remember(child);
       const relativePath = relative(rootPath, child);
+      const normalizedPath = relativePath.split(sep).join("/");
+      const override = options.fileOverrides?.get(normalizedPath);
+      if (!entry) {
+        if (override !== undefined) {
+          bytes += override.length;
+          if (bytes > (options.maxBytes ?? 512 * 1024 * 1024)) throw new Error(`Skill exceeds the content read limit: ${rootPath}`);
+          writeFrame(hash, "file", relativePath, override);
+        } else {
+          writeFrame(hash, "directory", relativePath);
+          await hashDirectory(child, nextAncestors, depth + 1, true);
+        }
+        continue;
+      }
+      await remember(child);
       const childStats = entry.isSymbolicLink() ? await stat(child) : undefined;
       if (entry.isSymbolicLink()) await remember(await realpath(child));
       if (entry.isDirectory() || childStats?.isDirectory()) {
+        if (override !== undefined) throw new Error(`Skill override cannot replace a directory: ${normalizedPath}`);
         writeFrame(hash, "directory", relativePath);
         await hashDirectory(child, nextAncestors, depth + 1);
       } else if (entry.isFile() || childStats?.isFile()) {
+        if (overrideChildren.has(normalizedPath)) throw new Error(`Skill override parent is not a directory: ${normalizedPath}`);
         const file = await open(child, "r");
         try {
           const before = await file.stat();
           if (!before.isFile()) throw new Error(`Skill entry is not a regular file: ${child}`);
-          bytes += before.size;
+          bytes += override?.length ?? before.size;
           if (bytes > (options.maxBytes ?? 512 * 1024 * 1024)) throw new Error(`Skill exceeds the content read limit: ${rootPath}`);
-          const override = options.fileOverrides?.get(relativePath.split(sep).join("/"));
-          if (override) {
+          if (override !== undefined) {
             writeFrame(hash, "file", relativePath, override);
             continue;
           }

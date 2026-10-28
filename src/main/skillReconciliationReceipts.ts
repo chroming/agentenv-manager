@@ -33,16 +33,14 @@ export const skillReceiptsEqual = (
   right: readonly AppliedSkillReceipt[] = []
 ) =>
   JSON.stringify(
-    normalizeSkillReceipts(left).map((receipt) => ({
-      ...receipt,
-      contentHash: undefined
-    }))
+    normalizeSkillReceipts(left).map((receipt) => Object.entries(receipt)
+      .filter(([key, value]) => key !== "contentHash" && value !== undefined)
+      .sort(([leftKey], [rightKey]) => leftKey.localeCompare(rightKey)))
   ) ===
   JSON.stringify(
-    normalizeSkillReceipts(right).map((receipt) => ({
-      ...receipt,
-      contentHash: undefined
-    }))
+    normalizeSkillReceipts(right).map((receipt) => Object.entries(receipt)
+      .filter(([key, value]) => key !== "contentHash" && value !== undefined)
+      .sort(([leftKey], [rightKey]) => leftKey.localeCompare(rightKey)))
   );
 
 export const skillReceiptsFor = ({
