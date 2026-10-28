@@ -1,5 +1,5 @@
-import { randomUUID } from "node:crypto";
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { createHash, randomUUID } from "node:crypto";
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -34,6 +34,45 @@ const setup = async (fetchImpl = vi.fn<typeof fetch>().mockImplementation(async 
 };
 
 describe("manual Skill update summaries", () => {
+  it("maps short IDs to exact files and saves partial output without further requests", async () => {
+    const output = { ...result, items: [{ ...result.items[0], paths: ["F1"] }, { ...result.items[0], category: "unexpected", paths: ["F1"] }, { malformed: true }] };
+    const f = await setup(vi.fn<typeof fetch>().mockImplementation(async () => response(output as typeof result)));
+    const record = await f.service.generate(input());
+    expect(record.items.map((item) => item.paths)).toEqual([["SKILL.md"], ["SKILL.md"]]);
+    expect(record.items[1].category).toBe("unclassified");
+    expect(record).toMatchObject({ coverage: "partial", responseIssues: ["invalid-items", "unclassified"] });
+    expect(record.unparsedOutput).toContain("malformed");
+    expect(await f.service.generate(input())).toEqual(record);
+    expect(f.fetchImpl).toHaveBeenCalledTimes(1);
+  });
+  it("does not let a corrupt history neighbor prevent generation and preserves it on replacement", async () => {
+    const f = await setup(); const key = summaryKey("review", "old", "new");
+    const dir = join(f.root, "skill-update-summaries", createHash("sha256").update("review").digest("hex"));
+    await mkdir(dir, { recursive: true }); await writeFile(join(dir, `${key}.json`), "damaged-original");
+    await writeFile(join(dir, `${"a".repeat(64)}.json`), "another bad neighbor");
+    expect(await f.store.history("review")).toEqual([]);
+    const record = await f.service.generate(input());
+    expect(await f.store.history("review")).toEqual([record]);
+    const backups = await readdir(join(dir, "recovery"));
+    expect(await readFile(join(dir, "recovery", backups[0]), "utf8")).toBe("damaged-original");
+    expect(await readFile(join(dir, `${"a".repeat(64)}.json`), "utf8")).toBe("another bad neighbor");
+  });
+  it("returns an unsaved result and retries saving without credentials or another model call", async () => {
+    const f = await setup(); const save = vi.spyOn(f.store, "save").mockRejectedValueOnce(new Error("disk full"));
+    const first = await f.service.generate(input());
+    expect(first.savePending).toBe(true);
+    const credentials = vi.spyOn(f.store, "credentials").mockRejectedValue(new Error("credentials unavailable"));
+    const second = await f.service.generate({ ...input(), retrySave: true });
+    expect(second.savePending).toBeUndefined(); expect(second.overview).toBe(first.overview);
+    expect(f.fetchImpl).toHaveBeenCalledTimes(1);
+    expect(credentials).not.toHaveBeenCalled(); expect(save).toHaveBeenCalledTimes(2);
+    expect(await f.store.read(second.key, "review")).toEqual(second);
+  });
+  it("does not turn a missing save-only retry into a paid generation", async () => {
+    const f = await setup();
+    await expect(f.service.generate({ ...input(), retrySave: true })).rejects.toThrow("No request was sent");
+    expect(f.fetchImpl).not.toHaveBeenCalled();
+  });
   it("sends an explicit evidence allowlist and persists canonical citations without extra requests", async () => {
     const output = { ...result, items: [{ ...result.items[0], paths: ["`./references/guide.md`"] }] };
     const { service, readInput, fetchImpl, store } = await setup(vi.fn<typeof fetch>().mockImplementation(async () => response(output)));
@@ -63,7 +102,7 @@ describe("manual Skill update summaries", () => {
     expect(prompt).toContain("Never translate category values or invent categories");
     expect(prompt).toContain('Classify breaking changes as "important"');
     expect(fetchImpl).toHaveBeenCalledTimes(1);
-    fetchImpl.mockImplementation(async () => response({ ...result, items: [{ ...result.items[0], category: "unknown" }] }));
+    fetchImpl.mockImplementation(async () => new Response(JSON.stringify({ choices: [{ finish_reason: "stop", message: { content: '{"overview":"broken","items":"not-an-array"}' } }] })));
     await expect(service.generate({ ...input(), regenerate: true })).rejects.toThrow("invalid fields");
     expect(fetchImpl).toHaveBeenCalledTimes(2);
     expect(await store.read(first.key, "review")).toEqual(first);
@@ -137,7 +176,7 @@ describe("manual Skill update summaries", () => {
     });
     const summary = await service.generate(input());
     const payload = JSON.parse(JSON.parse(String(fetchImpl.mock.calls[0][1]?.body)).messages[1].content);
-    expect(payload.files[1]).toEqual({ path: "reference.md", sameDiffAs: "SKILL.md" });
+    expect(payload.files[1]).toEqual({ id: "F2", path: "reference.md", sameDiffAs: "SKILL.md" });
     expect(payload.context).not.toContain("sk-12345678901234567890");
     expect(summary.files).toHaveLength(2);
     expect(summary.files[1].diff).toContain("Send logs");
@@ -152,14 +191,15 @@ describe("manual Skill update summaries", () => {
   });
 
   it.each(["length", "tool_calls"])("rejects incomplete responses (%s)", async (finish) => {
-    const { service, store } = await setup(vi.fn<typeof fetch>().mockResolvedValue(response(result, finish)));
+    const body = finish === "length" ? new Response(JSON.stringify({ choices: [{ finish_reason: finish, message: { content: '{"overview":"unfinished"' } }] })) : response(result, finish);
+    const { service, store } = await setup(vi.fn<typeof fetch>().mockResolvedValue(body));
     await expect(service.generate(input())).rejects.toThrow(finish === "length" ? "output limit" : "tool calls");
     expect(await store.history("review")).toEqual([]);
   });
 
   it("distinguishes empty answers from invalid JSON without exposing reasoning or response content", async () => {
     const { service, store } = await setup(vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ choices: [{ finish_reason: "stop", message: { content: "", reasoning_content: "private reasoning" } }] }))));
-    await expect(service.generate(input())).rejects.toThrow("empty summary (content characters: 0; reasoning characters: 17)");
+    await expect(service.generate(input())).rejects.toThrow("empty response");
     expect(await store.history("review")).toEqual([]);
   });
 

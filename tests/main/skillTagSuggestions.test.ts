@@ -31,6 +31,16 @@ const setup = async () => {
 };
 
 describe("manual AI Skill tags", () => {
+  it("accepts fenced JSON and optional null reasons while retaining valid tags", async () => {
+    const f = await setup();
+    f.fetchImpl.mockImplementation(async () => new Response(JSON.stringify({ choices: [{ finish_reason: "stop", message: { content: "```json\n" + JSON.stringify({ tags: [
+      { tag: "Testing", reason: null }, { tag: "bad\u0001tag", reason: "invalid" }
+    ] }) + "\n```" } }] })));
+    const result = await f.service.generate(await f.input());
+    expect(result.tags).toEqual([{ tag: "Testing", reason: "" }]);
+    expect(result).toMatchObject({ partial: true, responseIssues: ["invalid-items"] });
+    expect(f.fetchImpl).toHaveBeenCalledTimes(1);
+  });
   it("reads cache without requests and sends only name, description and vocabulary", async () => {
     const f = await setup();
     await f.service.prepare("review", "en");
@@ -131,13 +141,16 @@ describe("manual AI Skill tags", () => {
     expect((await f.service.prepare("review", "en")).key).not.toBe(before.key);
   });
   it.each(["length", "tool_calls"])("rejects incomplete output %s", async (finish) => {
-    const f = await setup(); f.fetchImpl.mockImplementation(async () => response(undefined, finish));
-    await expect(f.service.generate(await f.input())).rejects.toThrow("invalid tag");
+    const f = await setup(); f.fetchImpl.mockImplementation(async () => finish === "length"
+      ? new Response(JSON.stringify({ choices: [{ finish_reason: finish, message: { content: '{"tags":[' } }] })) : response(undefined, finish));
+    await expect(f.service.generate(await f.input())).rejects.toThrow(finish === "length" ? "output limit" : "tool calls");
     expect((await f.service.prepare("review", "en")).cached).toBeUndefined();
   });
-  it("rejects invalid output and oversized/binary inputs", async () => {
+  it("retains malformed tags as a partial result and rejects oversized/binary inputs", async () => {
     const f = await setup(); f.fetchImpl.mockImplementation(async () => response([{ tag: "x".repeat(33), reason: "Too long" }]));
-    await expect(f.service.generate(await f.input())).rejects.toThrow("invalid tag");
+    const result = await f.service.generate(await f.input());
+    expect(result).toMatchObject({ tags: [], partial: true, responseIssues: ["invalid-items"] });
+    expect(result.unparsedOutput).toContain("Too long");
     await writeFile(join(f.path, "SKILL.md"), Buffer.from([0, 1, 2]));
     await expect(f.service.prepare("review", "en")).rejects.toThrow("readable text");
     await writeFile(join(f.path, "SKILL.md"), "x".repeat(1_000_001));

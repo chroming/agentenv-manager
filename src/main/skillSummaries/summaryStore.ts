@@ -1,10 +1,12 @@
 import { createHash } from "node:crypto";
-import { mkdir, readdir, readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { z } from "zod";
 import { writeAtomic } from "../fileUtils";
 import type { GitHubTokenCipher } from "../githubAuthService";
 import type { SkillSummary, SkillSummaryConfigInput } from "../../shared/skillSummaries";
+import { resultQualityShape } from "../ai/aiResponse";
+import { readAIResultFile, saveAIResultFile } from "../ai/aiResultCache";
 
 export const summaryKey = (skillId: string, beforeHash: string, afterHash: string) =>
   createHash("sha256").update(JSON.stringify([skillId, beforeHash, afterHash])).digest("hex");
@@ -12,10 +14,10 @@ export const summaryKey = (skillId: string, beforeHash: string, afterHash: strin
 export const SummarySchema = z.object({
   schemaVersion: z.literal(1), key: z.string().regex(/^[a-f0-9]{64}$/),
   skillId: z.string(), beforeHash: z.string(), afterHash: z.string(),
-  generatedAt: z.string(), model: z.string(), overview: z.string().max(1500),
+  generatedAt: z.string(), model: z.string(), overview: z.string().min(1).max(1500),
   items: z.array(z.object({
-    category: z.enum(["important", "usage", "security", "other"]),
-    fact: z.string().max(1500), implication: z.string().max(1500),
+    category: z.enum(["important", "usage", "security", "other", "unclassified"]),
+    fact: z.string().min(1).max(1500), implication: z.string().max(1500),
     paths: z.array(z.string()).max(20),
     evidenceStatus: z.literal("unverified").optional()
   })).max(30),
@@ -25,7 +27,8 @@ export const SummarySchema = z.object({
   context: z.string().optional(),
   changeInventory: z.array(z.object({ path: z.string(), action: z.enum(["added", "removed", "modified"]), coverage: z.enum(["full", "partial", "omitted"]) })).optional(),
   timings: z.object({ preparationMs: z.number().nonnegative(), requestMs: z.number().nonnegative() }).optional(),
-  usage: z.object({ inputTokens: z.number().optional(), outputTokens: z.number().optional() }).optional()
+  usage: z.object({ inputTokens: z.number().optional(), outputTokens: z.number().optional() }).optional(),
+  ...resultQualityShape
 });
 
 const ConfigSchema = z.object({ endpoint: z.string().max(2048), model: z.string().trim().min(1).max(150), encryptedKey: z.string() });
@@ -74,25 +77,22 @@ export const createSummaryStore = (root: string, cipher: GitHubTokenCipher) => {
     },
     async read(key: string, skillId: string): Promise<SkillSummary | undefined> {
       if (!/^[a-f0-9]{64}$/.test(key)) throw new Error("Invalid summary key");
-      try {
-        const value = SummarySchema.parse(JSON.parse(await readFile(join(skillDir(skillId), `${key}.json`), "utf8")));
-        if (value.key !== key || summaryKey(value.skillId, value.beforeHash, value.afterHash) !== key) throw new Error("Summary identity mismatch");
-        return value;
-      }
-      catch (error) { if (missing(error)) return undefined; throw new Error("Saved summary could not be read. Original Skill files are unchanged."); }
+      return (await readAIResultFile(join(skillDir(skillId), `${key}.json`), SummarySchema,
+        (value) => value.key === key && value.skillId === skillId && summaryKey(value.skillId, value.beforeHash, value.afterHash) === key)).cached;
     },
     async save(summary: SkillSummary) {
-      SummarySchema.parse(summary);
-      await mkdir(skillDir(summary.skillId), { recursive: true, mode: 0o700 });
-      await privateWrite(join(skillDir(summary.skillId), `${summary.key}.json`), summary);
+      await saveAIResultFile(join(skillDir(summary.skillId), `${summary.key}.json`), summary, SummarySchema,
+        (value) => value.key === summary.key && value.skillId === summary.skillId && summaryKey(value.skillId, value.beforeHash, value.afterHash) === summary.key);
     },
     async history(skillId: string): Promise<SkillSummary[]> {
       let names: string[];
       try { names = await readdir(skillDir(skillId)); } catch (error) { if (missing(error)) return []; throw error; }
       const results: SkillSummary[] = [];
       for (const name of names.filter((name) => /^[a-f0-9]{64}\.json$/.test(name))) {
-        const parsed = SummarySchema.safeParse(JSON.parse(await readFile(join(skillDir(skillId), name), "utf8")));
-        if (parsed.success && parsed.data.skillId === skillId) results.push(parsed.data);
+        const key = name.slice(0, -5);
+        const parsed = await readAIResultFile(join(skillDir(skillId), name), SummarySchema,
+          (value) => value.key === key && value.skillId === skillId && summaryKey(value.skillId, value.beforeHash, value.afterHash) === key);
+        if (parsed.cached) results.push(parsed.cached);
       }
       return results.sort((a, b) => b.generatedAt.localeCompare(a.generatedAt));
     }

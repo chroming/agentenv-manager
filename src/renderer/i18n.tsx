@@ -13,6 +13,18 @@ export type ResolvedAppLocale = Exclude<AppLocale, "system">;
 export type TranslationValues = Record<string, string | number>;
 
 const zhCN: Record<string, string> = {
+  "Retry saving": "重试保存",
+  "Generated, but not saved on this device. Keep this window open and retry saving; this does not call the AI service again.": "结果已生成，但尚未保存到本机。请保留此窗口并重试保存，不会再次调用 AI 服务。",
+  "The service reached its output limit. This is only a partial result.": "服务已达到输出上限，以下仅为部分结果。",
+  "Some returned findings could not be displayed. Review the original response before deciding.": "部分返回内容无法按条目展示。请查看原始响应后再做决定。",
+  "Some findings could not be classified. They are kept for review, not treated as ordinary changes.": "部分发现未能分类，已保留供核对，不会将其当作普通变更。",
+  "Original AI response": "AI 原始响应",
+  "Unclassified finding": "未分类发现",
+  "Preparing analysis": "正在准备分析",
+  "Waiting for AI service": "正在等待 AI 服务",
+  "Receiving AI response": "正在接收 AI 响应",
+  "Checking AI response": "正在检查 AI 响应",
+  "Saving result": "正在保存结果",
   "Conversation": "对话",
   "Undo": "撤销",
   "Backups & recovery": "备份与恢复",
@@ -2730,6 +2742,18 @@ Object.assign(zhCN, {
 });
 
 const zhTW: Record<string, string> = {
+  "Retry saving": "重試儲存",
+  "Generated, but not saved on this device. Keep this window open and retry saving; this does not call the AI service again.": "結果已產生，但尚未儲存到本機。請保留此視窗並重試儲存，不會再次呼叫 AI 服務。",
+  "The service reached its output limit. This is only a partial result.": "服務已達到輸出上限，以下僅為部分結果。",
+  "Some returned findings could not be displayed. Review the original response before deciding.": "部分傳回內容無法按項目顯示。請檢視原始回應後再做決定。",
+  "Some findings could not be classified. They are kept for review, not treated as ordinary changes.": "部分發現未能分類，已保留供核對，不會將其當作一般變更。",
+  "Original AI response": "AI 原始回應",
+  "Unclassified finding": "未分類發現",
+  "Preparing analysis": "正在準備分析",
+  "Waiting for AI service": "正在等待 AI 服務",
+  "Receiving AI response": "正在接收 AI 回應",
+  "Checking AI response": "正在檢查 AI 回應",
+  "Saving result": "正在儲存結果",
   "1 recovery point": "1 個復原點",
   "{{count}} recovery points": "{{count}} 個復原點",
   "1 conversation record": "1 條對話記錄",

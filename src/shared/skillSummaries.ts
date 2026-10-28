@@ -1,3 +1,5 @@
+import type { AIResultQuality } from "./aiReliability";
+
 export interface SkillSummaryConfig {
   endpoint: string;
   model: string;
@@ -10,9 +12,9 @@ export interface SkillSummaryConfigInput {
   apiKey?: string;
 }
 
-export type SkillSummaryCategory = "important" | "usage" | "security" | "other";
+export type SkillSummaryCategory = "important" | "usage" | "security" | "other" | "unclassified";
 
-export interface SkillSummary {
+export interface SkillSummary extends AIResultQuality {
   schemaVersion: 1;
   key: string;
   skillId: string;
@@ -45,6 +47,7 @@ export interface SkillSummaryGenerateInput {
   expectedModel: string;
   confirmed: boolean;
   regenerate?: boolean;
+  retrySave?: boolean;
   locale: string;
 }
 

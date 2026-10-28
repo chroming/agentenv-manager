@@ -1,4 +1,6 @@
-export interface SkillTagSuggestion {
+import type { AIResultQuality } from "./aiReliability";
+
+export interface SkillTagSuggestion extends AIResultQuality {
   schemaVersion: 1;
   key: string;
   skillId: string;
@@ -33,4 +35,5 @@ export interface SkillTagGenerateInput {
   confirmed: boolean;
   locale: string;
   regenerate?: boolean;
+  retrySave?: boolean;
 }

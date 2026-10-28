@@ -1,37 +1,46 @@
 import { z } from "zod";
+import { decodeAIResponse, invalidAIFields, jsonObjectSchema, parseAIItems, referencesSchema, resultQualityShape, stringSchema } from "./aiResponse";
 
-export const analysisOutputSchema = z.object({
-  overview: z.string().max(1600),
-  findings: z.array(z.object({
-    category: z.preprocess((value) => typeof value === "string" ? value.trim().toLowerCase() : value, z.enum(["observation", "suggestion", "risk"])),
-    title: z.string().max(120).optional(), detail: z.string().max(1600),
+const findingSchema = z.object({
+    category: z.enum(["observation", "suggestion", "risk", "unclassified"]),
+    title: z.string().max(120).optional(), detail: z.string().min(1).max(1600),
     suggestion: z.string().max(1600).nullish().transform((value) => value ?? ""),
     evidence: z.preprocess((value) => typeof value === "string" ? [value] : value ?? [], z.array(z.string().max(256)).max(12)),
     evidenceStatus: z.literal("unverified").optional()
-  })).max(20),
-  limitations: z.array(z.string().max(800)).max(10).default([])
 });
+export const analysisOutputSchema = z.object({
+  overview: z.string().min(1).max(1600), findings: z.array(findingSchema).max(20),
+  limitations: z.array(z.string().max(800)).max(10).default([]), ...resultQualityShape
+});
+export const analysisModelSchema = (ids: string[]) => ({ name: "analysis", schema: jsonObjectSchema({
+  overview: stringSchema, findings: { type: "array", items: jsonObjectSchema({
+    category: { type: "string", enum: ["observation", "suggestion", "risk"] }, title: { type: ["string", "null"] },
+    detail: stringSchema, suggestion: stringSchema, evidence: referencesSchema(ids)
+  }) }, limitations: { type: "array", items: stringSchema }
+}) });
 
-export function parseAnalysisResponse(response: unknown, ids: string[]) {
-  const fail = (reason: string): never => { throw new Error(`${reason}. Previous results are kept; retry manually.`); };
-  const envelope = z.object({ choices: z.array(z.object({ finish_reason: z.string().nullable().optional(),
-    message: z.object({ content: z.string().nullable().optional() }) })).min(1) }).safeParse(response);
-  if (!envelope.success) return fail("AI returned an invalid response envelope");
-  const choice = envelope.data.choices[0];
-  if (choice.finish_reason === "length") return fail("AI analysis was truncated by the service");
-  if (choice.finish_reason !== "stop") return fail("AI analysis did not finish normally");
-  const content = choice.message.content?.trim();
-  if (!content) return fail("AI returned an empty analysis");
-  let json: unknown;
-  try { json = JSON.parse(content.replace(/^```(?:json)?\s*\n([\s\S]*?)\n```$/i, "$1")); }
-  catch { return fail("AI returned invalid analysis JSON"); }
-  const parsed = analysisOutputSchema.safeParse(json);
-  if (!parsed.success) return fail(`AI analysis has invalid fields (${parsed.error.issues.slice(0, 5).map((issue) => `${issue.path.join(".")}: ${issue.code}`).join(", ")})`);
+export function parseAnalysisResponse(response: unknown, ids: string[], aliases = new Map<string, string>()) {
+  const decoded = decodeAIResponse(response);
+  const root = z.object({ overview: analysisOutputSchema.shape.overview, findings: z.array(z.unknown()), limitations: z.unknown().optional() }).safeParse(decoded.data);
+  if (!root.success) throw new Error(`AI analysis has invalid fields (${invalidAIFields(root.error)}). Previous results are kept; retry manually.`);
+  const normalized = root.data.findings.map((value) => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+    const item = value as Record<string, unknown>;
+    const category = typeof item.category === "string" ? item.category.trim().toLowerCase() : "";
+    return { ...item, title: item.title ?? undefined, category: ["observation", "suggestion", "risk"].includes(category) ? category : "unclassified" };
+  });
+  const parsed = parseAIItems(normalized, findingSchema.omit({ evidenceStatus: true }), 20);
+  const limitations = analysisOutputSchema.shape.limitations.safeParse(root.data.limitations ?? []);
+  const responseIssues = [...decoded.responseIssues];
+  if (parsed.invalid || !limitations.success) responseIssues.push("invalid-items");
+  if (parsed.items.some((item) => item.category === "unclassified")) responseIssues.push("unclassified");
   const allowed = new Set(ids);
-  return { ...parsed.data, findings: parsed.data.findings.map((finding) => {
+  return { overview: root.data.overview, findings: parsed.items.map((finding) => {
     const references = finding.evidence.map((id) => id.trim().replace(/^`([^`]+)`$/, "$1"));
-    const evidence = [...new Set(references.filter((id) => allowed.has(id)))];
-    const unverified = !references.length || references.some((id) => !allowed.has(id));
+    const mapped = references.map((id) => allowed.has(id) ? id : aliases.get(id));
+    const evidence = [...new Set(mapped.filter((id): id is string => id !== undefined && allowed.has(id)))];
+    const unverified = !references.length || mapped.some((id) => id === undefined || !allowed.has(id));
     return { ...finding, evidence, ...(unverified ? { evidenceStatus: "unverified" as const } : {}) };
-  }) };
+  }), limitations: limitations.success ? limitations.data : [],
+    ...(responseIssues.length ? { responseIssues, ...(parsed.invalid || !limitations.success ? { unparsedOutput: decoded.raw } : {}) } : {}) };
 }

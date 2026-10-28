@@ -21,11 +21,11 @@ describe("analysis response boundaries", () => {
     expect(parsed.findings[0]).toMatchObject({ evidence: [], evidenceStatus: "unverified" });
   });
   it.each(["length", "content_filter", "tool_calls"])("rejects unfinished responses (%s)", (reason) => {
-    expect(() => parseAnalysisResponse(response(JSON.stringify(analysis), reason), ["state"])).toThrow("Previous results are kept");
+    expect(() => parseAnalysisResponse(response(reason === "length" ? '{"overview":"unfinished"' : JSON.stringify(analysis), reason), ["state"])).toThrow("Previous results are kept");
   });
   it("reports schema paths without exposing model content in diagnostics", () => {
-    expect(() => parseAnalysisResponse(response(JSON.stringify({ ...analysis, findings: [{ ...analysis.findings[0], category: "private-secret" }] })), ["state"]))
-      .toThrow("findings.0.category: invalid_value");
-    expect(() => parseAnalysisResponse(response("not JSON"), ["state"])).toThrow("invalid analysis JSON");
+    expect(() => parseAnalysisResponse(response(JSON.stringify({ ...analysis, findings: "private-secret" })), ["state"]))
+      .toThrow("findings: invalid_type");
+    expect(() => parseAnalysisResponse(response("not JSON"), ["state"])).toThrow("invalid JSON");
   });
 });

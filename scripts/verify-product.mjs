@@ -114,6 +114,10 @@ await run(
   ],
   { env: { ...process.env, AGENTENV_STATUS_CAPTURE_DIR: captureRoot } }
 );
+await run(process.platform === "win32" ? "npx.cmd" : "npx", [
+  "vitest", "run", "tests/e2e/aiAssistance.e2e.test.ts",
+  "-t", "recovers partial analysis", "--maxWorkers=1"
+], { env: { ...process.env, AGENTENV_CAPTURE_AI_DIR: captureRoot } });
 await rm(visualReportRoot, { recursive: true, force: true });
 await run("swift", [
   "scripts/compare-ui-captures.swift",

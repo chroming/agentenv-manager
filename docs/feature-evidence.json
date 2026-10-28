@@ -145,11 +145,11 @@
         "rollback": "Failed regeneration preserves prior atomic cache; no original resource changes occur."
       },
       "evidence": {
-        "domain": ["tests/main/aiAssistance.test.ts"],
-        "renderer": ["tests/renderer/AIAssistance.test.tsx"],
+        "domain": ["tests/main/aiAssistance.test.ts", "tests/main/aiResponse.test.ts", "tests/main/aiJsonClient.test.ts", "tests/main/aiResultCache.test.ts"],
+        "renderer": ["tests/renderer/AIAssistance.test.tsx", "tests/renderer/AIResponseNotice.test.tsx"],
         "desktop": ["tests/e2e/aiAssistance.e2e.test.ts"],
         "persistence": ["tests/main/aiAssistance.test.ts"],
-        "visual": ["ai-analysis-profile-920x620.png", "settings-ai-920x620.png"]
+        "visual": ["ai-analysis-profile-920x620.png", "settings-ai-920x620.png", "ai-reliability-unsaved-en-920.png", "ai-reliability-partial-en-920.png", "ai-reliability-partial-zh_CN-920.png", "ai-reliability-partial-zh_TW-920.png"]
       }
     },
     {

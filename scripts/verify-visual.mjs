@@ -67,6 +67,10 @@ await run(process.platform === "win32" ? "npx.cmd" : "npx", [
   "vitest", "run", "tests/e2e/electronUiProfileSwitching.e2e.test.ts",
   "-t", "persists manual Skill invocation", "--maxWorkers=1"
 ], { AGENTENV_STATUS_CAPTURE_DIR: captureRoot });
+await run(process.platform === "win32" ? "npx.cmd" : "npx", [
+  "vitest", "run", "tests/e2e/aiAssistance.e2e.test.ts",
+  "-t", "recovers partial analysis", "--maxWorkers=1"
+], { AGENTENV_CAPTURE_AI_DIR: captureRoot });
 const comparisonArguments = [
   "scripts/compare-ui-captures.swift",
   "--config",

@@ -22,10 +22,11 @@ describe("summary response diagnostics", () => {
     const result = parseSummaryResponse(envelope(JSON.stringify({ ...valid, items: [item] })), ["SKILL.md"]);
     expect(result.parsed.items).toEqual([{ ...item, category: expected }]);
   });
-  it("rejects unknown categories instead of downgrading an unknown risk", () => {
+  it("retains unknown categories explicitly instead of downgrading an unknown risk", () => {
     const item = { ...valid.items[0], category: "private-unknown-category" };
-    expect(() => parseSummaryResponse(envelope(JSON.stringify({ ...valid, items: [item] })), ["SKILL.md"]))
-      .toThrow("items.0.category: invalid_value");
+    const result = parseSummaryResponse(envelope(JSON.stringify({ ...valid, items: [item] })), ["SKILL.md"]).parsed;
+    expect(result.items[0]).toEqual({ ...item, category: "unclassified" });
+    expect(result.responseIssues).toEqual(["unclassified"]);
   });
   it("retains findings with excluded evidence without storing invented paths", () => {
     const output = { ...valid, items: [{ ...valid.items[0], paths: ["private-file.md"] }] };

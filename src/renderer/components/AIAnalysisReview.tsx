@@ -4,11 +4,14 @@ import { RotateCw, Sparkles } from "lucide-react";
 import type { AIAnalysisSubject, AIAnalysisPreview, AIAnalysisRecord } from "../../shared/aiAssistance";
 import { useAIPreferences } from "../hooks/useAIPreferences";
 import { useI18n } from "../i18n";
-import { Button, DiagnosticMessage, DialogBody, DialogFooter, EmptyState, IconButton, Notice, TextAction } from "./ui";
+import { Button, DialogBody, DialogFooter, EmptyState, IconButton, InteractiveStatus, Notice, TextAction } from "./ui";
 import { AIReviewHeading } from "./AIReviewHeading";
 import { SyntaxCodePreview } from "./SyntaxCodePreview";
 import { AIServiceSetup } from "./AIServiceSetup";
 import { AIReviewFindings, splitAIReviewFindings } from "./AIReviewFindings";
+import { AIOriginalResponse, AIResponseNotice } from "./AIResponseNotice";
+import { useAIRequestProgress } from "../hooks/useAIRequestProgress";
+import { AIErrorNotice } from "./AIErrorNotice";
 
 export const AIAnalysisReview = ({ subject, standalone = false, onClose, closeRef, actionsTarget }: {
   subject: AIAnalysisSubject; standalone?: boolean; onClose?(): void; closeRef?: Ref<HTMLButtonElement>; actionsTarget?: HTMLElement | null;
@@ -31,6 +34,7 @@ export const AIAnalysisReview = ({ subject, standalone = false, onClose, closeRe
   const [evidence, setEvidence] = useState("");
   const active = useRef(true);
   const request = useRef("");
+  const progress = useAIRequestProgress(request);
   const cancelled = useRef(false);
   const revealRequested = useRef(false);
   const feedbackRef = useRef<HTMLDivElement>(null);
@@ -54,20 +58,20 @@ export const AIAnalysisReview = ({ subject, standalone = false, onClose, closeRe
       revealRequested.current = false;
     }
   }, [busy, error, needsConfig, record, stopped]);
-  const prepare = async () => {
-    if (!allowed || busy) return;
+  const prepare = async (retrySave = false) => {
+    if ((!allowed && !retrySave) || busy) return;
     setBusy("loading"); setError(""); setStopped(false); cancelled.current = false; revealRequested.current = true;
     try {
       const value = await window.agentEnv.prepareAIAnalysis(subject, locale);
-      const config = await window.agentEnv.readSkillSummaryConfig();
+      const config = retrySave ? { endpoint: "", model: "" } : await window.agentEnv.readSkillSummaryConfig();
       if (active.current && currentIdentity.current === identity) {
         setPreview(value); setRecord(value.cached);
-        if (!config.model || !config.endpoint) { setNeedsConfig(true); return; }
+        if (!retrySave && (!config.model || !config.endpoint)) { setNeedsConfig(true); return; }
         setNeedsConfig(false); setBusy("generating");
         const id = crypto.randomUUID(); request.current = id;
         try {
           const generated = await window.agentEnv.generateAIAnalysis({ subject, locale, expectedKey: value.key, requestId: id,
-            expectedEndpoint: config.endpoint, expectedModel: config.model, confirmed: true, regenerate: Boolean(record) });
+            expectedEndpoint: config.endpoint, expectedModel: config.model, confirmed: true, regenerate: Boolean(record) && !retrySave, retrySave });
           if (active.current && currentIdentity.current === identity) setRecord(generated);
         } finally { if (request.current === id) request.current = ""; }
       }
@@ -81,11 +85,11 @@ export const AIAnalysisReview = ({ subject, standalone = false, onClose, closeRe
   const heading = subject.kind === "duplicates" ? "Duplicate Skill analysis" : subject.kind === "worktree" ? "Worktree retention analysis" : "AI analysis";
   const partialMessage = "Partial analysis: some evidence is unavailable or could not be verified.";
   const shownDocument = record?.documents.find((doc) => doc.id === evidence);
-  const priority = { risk: 0, suggestion: 1, observation: 2 };
+  const priority = { risk: 0, unclassified: 1, suggestion: 2, observation: 3 };
   const findings = [...(record?.findings ?? [])].sort((a, b) => priority[a.category] - priority[b.category])
-    .map((finding) => ({ ...finding, risk: finding.category === "risk", note: finding.evidenceStatus === "unverified" ? t("Evidence could not be verified") : undefined }));
+    .map((finding) => ({ ...finding, risk: finding.category === "risk" || finding.category === "unclassified",
+      note: finding.category === "unclassified" ? t("Unclassified finding") : finding.evidenceStatus === "unverified" ? t("Evidence could not be verified") : undefined }));
   const { visible: visibleFindings, remaining: remainingFindings } = splitAIReviewFindings(findings);
-  const configurationError = /AI service returned HTTP (401|403|404)\b|Configure the AI service in Settings first/.test(error);
   if (!allowed && !record && !standalone) return null;
   const actions = <>
     {busy === "generating" ? <Button onClick={() => { cancelled.current = true; void window.agentEnv.cancelAIAnalysis(request.current); }}>{t("Stop")}</Button> : null}
@@ -98,17 +102,20 @@ export const AIAnalysisReview = ({ subject, standalone = false, onClose, closeRe
       description={t("Find conflicting instructions, resource gaps and practical improvements. Your Profile will not be changed.")} /> : null}
     <div ref={feedbackRef} />
     {stopped ? <Notice role="status">{t("Cancelled")}</Notice> : null}
-    {error ? <Notice tone="warning" role="alert" actions={allowed && !configuring ? <Button disabled={Boolean(busy)} onClick={() => configurationError ? setConfiguring(true) : void prepare()}>{t(configurationError ? "Configure AI service" : "Retry")}</Button> : undefined}><DiagnosticMessage message={error} /></Notice> : null}
-    {preview?.cacheDamaged ? <Notice tone="warning">{t("Saved analysis is unreadable. Generate a new analysis; the old file will be preserved for diagnostics.")}</Notice> : null}
+    {busy === "generating" ? <div role="status"><InteractiveStatus busy statusKind="working" label={progress ?? t("Analyzing")} /></div> : null}
+    {error ? <AIErrorNotice message={error} disabled={Boolean(busy)} onRetry={allowed && !configuring ? () => void prepare() : undefined} onConfigure={allowed && !configuring ? () => setConfiguring(true) : undefined} /> : null}
+    {preview?.cacheDamaged && (!record || record.key !== preview.key) ? <Notice tone="warning">{t("Saved analysis is unreadable. Generate a new analysis; the old file will be preserved for diagnostics.")}</Notice> : null}
     {needsConfig || configuring ? <AIServiceSetup editing={configuring} onEditingChange={setConfiguring} onSaved={() => { setNeedsConfig(false); setError(""); }} /> : null}
     {record ? <div className="skill-summary-content">
       {(!preview || record.key !== preview.key) ? <Notice tone="warning">{t("Inputs changed. This is the previous analysis; regenerate to analyze the current content.")}</Notice> : null}
       {standalone ? <AIReviewHeading title={t("AI analysis")} actions={actions} /> : null}
       <p className="ai-review-overview">{record.overview}</p>
-      {record.partial ? <Notice tone="warning">{t(partialMessage)}</Notice> : null}
+      <AIResponseNotice result={record} busy={Boolean(busy)} onRetrySave={() => void prepare(true)} />
+      {record.partial && !record.responseIssues?.length ? <Notice tone="warning">{t(partialMessage)}</Notice> : null}
       <AIReviewFindings items={visibleFindings} />
       <details className="ai-review-details"><summary>{remainingFindings.length ? t("More findings ({{count}})", { count: remainingFindings.length }) : t("Evidence and scope")}</summary><div className="skill-summary-content">
       <AIReviewFindings items={remainingFindings} />
+      <AIOriginalResponse result={record} />
       <p className="muted">{t("AI-generated")} · {record.model} · {formatDate(record.generatedAt)}</p>
       <div className="skill-summary-files">{[...new Set(record.findings.flatMap((finding) => finding.evidence))].map((id) => <TextAction key={id} onClick={() => setEvidence(evidence === id ? "" : id)}>{record.documents.find((doc) => doc.id === id)?.label ?? id}</TextAction>)}</div>
       {shownDocument ? <SyntaxCodePreview path="evidence.md" code={shownDocument.content} /> : null}

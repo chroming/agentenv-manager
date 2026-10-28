@@ -5,6 +5,7 @@ import type { SkillSummaryConfig } from "../../shared/skillSummaries";
 import { replaceSuggestedTags, skillTagKey, splitSkillTags } from "../../shared/skillTags";
 import { useI18n } from "../i18n";
 import { useAIPreferences } from "./useAIPreferences";
+import { useAIRequestProgress } from "./useAIRequestProgress";
 
 export interface TagReviewRow {
   analysis?: SkillTagAnalysis;
@@ -27,6 +28,7 @@ export const useSkillTagSuggestions = (skills: SkillLibraryEntry[], onSave: (inp
   const stopped = useRef(false);
   const ai = useAIPreferences();
   const requestId = useRef("");
+  const progress = useAIRequestProgress(requestId);
   const patch = (id: string, values: Partial<TagReviewRow>) => {
     if (active.current) setRows((current) => ({ ...current, [id]: { ...(current[id] ?? { draft: [], status: "idle" }), ...values } }));
   };
@@ -53,18 +55,18 @@ export const useSkillTagSuggestions = (skills: SkillLibraryEntry[], onSave: (inp
       if (requestId.current) void window.agentEnv.cancelSkillTagSuggestions(requestId.current);
     };
   }, []);
-  const prepare = async (ids = [...selected], regenerate = false) => {
-    if (busy || !ai.enabled("tags") || !ids.length) return;
+  const prepare = async (ids = [...selected], regenerate = false, retrySave = false) => {
+    if (busy || (!ai.enabled("tags") && !retrySave) || !ids.length) return;
     stopped.current = false;
     setBusy("preparing"); setError("");
     try {
       const result = await load(ids);
-      const items = result.items.filter((item) => regenerate || !item.cached);
+      const items = result.items.filter((item) => retrySave || regenerate || !item.cached);
       if (!items.length || !active.current) return;
-      const config = await window.agentEnv.readSkillSummaryConfig();
-      if (!config.model || !config.endpoint) { setNeedsConfig(true); return; }
+      const config = retrySave ? { endpoint: "", model: "", hasKey: false } : await window.agentEnv.readSkillSummaryConfig();
+      if (!retrySave && (!config.model || !config.endpoint)) { setNeedsConfig(true); return; }
       setNeedsConfig(false);
-      if (active.current && !stopped.current) await generate({ config, items, regenerate });
+      if (active.current && !stopped.current) await generate({ config, items, regenerate, retrySave });
     } catch (error) { if (active.current) setError(error instanceof Error ? error.message : String(error)); }
     finally { if (active.current) setBusy(undefined); }
   };
@@ -72,7 +74,7 @@ export const useSkillTagSuggestions = (skills: SkillLibraryEntry[], onSave: (inp
     stopped.current = true;
     if (requestId.current) void window.agentEnv.cancelSkillTagSuggestions(requestId.current);
   };
-  const generate = async (pending: { config: SkillSummaryConfig; items: SkillTagAnalysis[]; regenerate: boolean }) => {
+  const generate = async (pending: { config: SkillSummaryConfig; items: SkillTagAnalysis[]; regenerate: boolean; retrySave: boolean }) => {
     setBusy("generating");
     for (const item of pending.items) {
       if (!active.current) break;
@@ -81,7 +83,7 @@ export const useSkillTagSuggestions = (skills: SkillLibraryEntry[], onSave: (inp
       patch(item.skillId, { status: "running", error: undefined });
       try {
         const record = await window.agentEnv.generateSkillTagSuggestions({ skillId: item.skillId, expectedKey: item.key,
-          requestId: id, expectedEndpoint: pending.config.endpoint, expectedModel: pending.config.model, confirmed: true, locale, regenerate: pending.regenerate });
+          requestId: id, expectedEndpoint: pending.config.endpoint, expectedModel: pending.config.model, confirmed: true, locale, regenerate: pending.regenerate, retrySave: pending.retrySave });
         if (active.current) setRows((current) => ({ ...current, [item.skillId]: {
           ...current[item.skillId], record,
           draft: mergeDraftTags(current[item.skillId]?.fixedDraft, record.tags.map((item) => item.tag)), status: "ready"
@@ -95,6 +97,7 @@ export const useSkillTagSuggestions = (skills: SkillLibraryEntry[], onSave: (inp
   const saveable = skills.filter((skill) => {
     const row = rows[skill.id];
     if (!selected.has(skill.id) || !row?.record || row.status === "saved") return false;
+    if (!row.draft.length && !row.record.tags.length && row.record.responseIssues?.length) return false;
     try {
       const next = replaceSuggestedTags(skill, row.draft, row.record.tags.map((tag) => tag.tag), row.fixedDraft);
       return JSON.stringify(next.tags) !== JSON.stringify(skill.tags ?? []) ||
@@ -116,6 +119,6 @@ export const useSkillTagSuggestions = (skills: SkillLibraryEntry[], onSave: (inp
     }
     if (active.current) setBusy(undefined);
   };
-  return { allowed: ai.enabled("tags"), rows, selected, setSelected, busy, error, needsConfig, setNeedsConfig, prepare, stop, save,
+  return { allowed: ai.enabled("tags"), rows, selected, setSelected, busy, progress, error, needsConfig, setNeedsConfig, prepare, stop, save,
     saveable, patch, savedCount: Object.values(rows).filter((row) => row.status === "saved").length };
 };

@@ -1,19 +1,19 @@
 {
   "formatVersion": 1,
-  "reviewedAt": "2026-10-28T03:38:47.753Z",
+  "reviewedAt": "2026-10-28T16:16:24.236Z",
   "applicationVersion": "0.2.4",
-  "baseCommit": "cd76a356",
+  "baseCommit": "3f0a831e",
   "build": {
-    "sourceFingerprint": "4f2084a1408391a93d136dda477717182ea518cc29921f2ba6fd51062ccb64de",
-    "artifactFingerprint": "fad9339b924fc87d5b2e88f9d03d9db2e2e95dee7a9eff5ae1b3e3b673e8ff61",
-    "generatedAt": "2026-10-28T03:36:09.015Z"
+    "sourceFingerprint": "72bbaccd5dda286d42def8923e3b08565007fc66f639c86a39536f5fe9636d59",
+    "artifactFingerprint": "a6416bad4ef727da81e8cc35f2cee40495613e3e3b19a6252ac8542f37475b50",
+    "generatedAt": "2026-10-28T16:12:37.671Z"
   },
   "review": {
-    "scenarios": 115,
-    "method": "Invocation state screenshots reviewed at native size against the shared Claude surface and Codex localized variants; other previously reviewed baselines retained.",
+    "scenarios": 126,
+    "method": "New AI reliability states reviewed at native size against the existing analysis, summary and tag components; all other previously reviewed baselines retained.",
     "scope": "Mock Electron workflows on macOS; no real Agent resources or model requests",
     "thresholdsChanged": false,
-    "updatedScenarios": 12
+    "updatedScenarios": 11
   },
   "files": [
     {
@@ -590,6 +590,61 @@
       "file": "skill-invocation-codex-zh_TW-920.png",
       "sha256": "ff15b10ecbaae9c19edb9146f05aa1a724bae188ba86f117a70e01ad690fd30e",
       "reviewReason": "Reviewed 2026-10-28: isolated current-build Electron; shared Codex/Claude explicit-invocation control inspected at 920/1180/1440, Codex also in both Chinese locales. Apply, no-op and author-default restoration verified; no threshold changes."
+    },
+    {
+      "file": "ai-reliability-unsaved-en-920.png",
+      "sha256": "b63b797cd818c56846dc1a8d09c335ab4270eb0fdf2c878838e06a2f177fdb04",
+      "reviewReason": "Reviewed 2026-10-29: isolated current-build Electron captures at 920/1180/1440 and en/zh_CN/zh_TW; one combined recovery notice, valid findings, unclassified warning, save-only retry and readable maximized original response. No threshold changes."
+    },
+    {
+      "file": "ai-reliability-original-en-920.png",
+      "sha256": "db75fb23c7a8e320cd596be9d10e82a90d50babf66f86af8d9174cff52727acc",
+      "reviewReason": "Reviewed 2026-10-29: isolated current-build Electron captures at 920/1180/1440 and en/zh_CN/zh_TW; one combined recovery notice, valid findings, unclassified warning, save-only retry and readable maximized original response. No threshold changes."
+    },
+    {
+      "file": "ai-reliability-partial-en-920.png",
+      "sha256": "19d2f1e31f10ad3b66feef6474b5b73f02595b1cdaddf62ebeda2ff3f83a9f42",
+      "reviewReason": "Reviewed 2026-10-29: isolated current-build Electron captures at 920/1180/1440 and en/zh_CN/zh_TW; one combined recovery notice, valid findings, unclassified warning, save-only retry and readable maximized original response. No threshold changes."
+    },
+    {
+      "file": "ai-reliability-partial-en-1180.png",
+      "sha256": "a9ecbfc400b8d626192c10d61d84fee7a01b81ca55cc2cf5f54987fcc8b72800",
+      "reviewReason": "Reviewed 2026-10-29: isolated current-build Electron captures at 920/1180/1440 and en/zh_CN/zh_TW; one combined recovery notice, valid findings, unclassified warning, save-only retry and readable maximized original response. No threshold changes."
+    },
+    {
+      "file": "ai-reliability-partial-en-1440.png",
+      "sha256": "0c8501ab263ccbf801f3e80d73f2b6ad7a5e516466fec555d7ab04e529f11a16",
+      "reviewReason": "Reviewed 2026-10-29: isolated current-build Electron captures at 920/1180/1440 and en/zh_CN/zh_TW; one combined recovery notice, valid findings, unclassified warning, save-only retry and readable maximized original response. No threshold changes."
+    },
+    {
+      "file": "ai-reliability-partial-zh_CN-920.png",
+      "sha256": "a409c915e3bd7ae4e96f27d952ba274496b264e15953ef3f7b972eb89119a161",
+      "reviewReason": "Reviewed 2026-10-29: isolated current-build Electron captures at 920/1180/1440 and en/zh_CN/zh_TW; one combined recovery notice, valid findings, unclassified warning, save-only retry and readable maximized original response. No threshold changes."
+    },
+    {
+      "file": "ai-reliability-partial-zh_CN-1180.png",
+      "sha256": "b77f8e857d040fc3c1fe3690a167770f7e1f33028e842a2518db923ebb23bff6",
+      "reviewReason": "Reviewed 2026-10-29: isolated current-build Electron captures at 920/1180/1440 and en/zh_CN/zh_TW; one combined recovery notice, valid findings, unclassified warning, save-only retry and readable maximized original response. No threshold changes."
+    },
+    {
+      "file": "ai-reliability-partial-zh_CN-1440.png",
+      "sha256": "97b5e96f8c157afb1d8196f4d588c5222af92fb1289ab9bcbf73a5113a85abb2",
+      "reviewReason": "Reviewed 2026-10-29: isolated current-build Electron captures at 920/1180/1440 and en/zh_CN/zh_TW; one combined recovery notice, valid findings, unclassified warning, save-only retry and readable maximized original response. No threshold changes."
+    },
+    {
+      "file": "ai-reliability-partial-zh_TW-920.png",
+      "sha256": "34c657f4f74f7dd669dab93cc9c98af157eac736000d101a23b34be397fd8cde",
+      "reviewReason": "Reviewed 2026-10-29: isolated current-build Electron captures at 920/1180/1440 and en/zh_CN/zh_TW; one combined recovery notice, valid findings, unclassified warning, save-only retry and readable maximized original response. No threshold changes."
+    },
+    {
+      "file": "ai-reliability-partial-zh_TW-1180.png",
+      "sha256": "8f23884a46c598af737678a2972284d9b50d90f0a7dbb77874d7d1a8ca06adaf",
+      "reviewReason": "Reviewed 2026-10-29: isolated current-build Electron captures at 920/1180/1440 and en/zh_CN/zh_TW; one combined recovery notice, valid findings, unclassified warning, save-only retry and readable maximized original response. No threshold changes."
+    },
+    {
+      "file": "ai-reliability-partial-zh_TW-1440.png",
+      "sha256": "df1360f1b343b4111f88149bc4e92aa597c67965ba4afa9d7465e142347cd8f3",
+      "reviewReason": "Reviewed 2026-10-29: isolated current-build Electron captures at 920/1180/1440 and en/zh_CN/zh_TW; one combined recovery notice, valid findings, unclassified warning, save-only retry and readable maximized original response. No threshold changes."
     }
   ],
   "incrementalReviews": [

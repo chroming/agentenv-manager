@@ -15,6 +15,93 @@ afterEach(async () => {
   await new Promise<void>((resolve) => server ? server.close(() => resolve()) : resolve()); server = undefined;
   if (root) await rm(root, { recursive: true, force: true });
 });
+it("recovers partial analysis and retries persistence without another model call", async () => {
+  root = await mkdtemp(join(tmpdir(), "aem-ai-reliability-"));
+  let calls = 0;
+  server = createServer((request, response) => {
+    calls++; request.resume(); response.setHeader("Content-Type", "application/json");
+    if (calls === 1) {
+      response.writeHead(429, { "x-request-id": "req_fixture_quota" });
+      response.end(JSON.stringify({ error: { code: "insufficient_quota", message: "private-provider-message" } })); return;
+    }
+    response.end(JSON.stringify({ choices: [{ finish_reason: "stop", message: { content: JSON.stringify({
+      overview: "Review the changed instructions before applying.", findings: [
+        { category: "risk", title: null, detail: "The workflow can send project logs outside the device.", suggestion: null, evidence: ["D1"] },
+        { category: "new-category", detail: "The destination needs verification.", suggestion: "", evidence: ["D1"] },
+        { category: "risk", detail: { unexpected: "Inspect this original finding." } }
+      ], limitations: []
+    }) } }] }));
+  });
+  await new Promise<void>((resolve) => server!.listen(0, "127.0.0.1", resolve));
+  const port = (server.address() as { port: number }).port;
+  app = await electron.launch({ executablePath: electronPath as unknown as string,
+    args: [`--user-data-dir=${join(root, "electron")}`, join(process.cwd(), "out/main/main.js")],
+    env: { ...process.env, AGENTENV_AUTOMATION: "1", AGENTENV_DATA_ROOT: join(root, "data"), AGENTENV_HOME: join(root, "home"), AGENTENV_CACHE_ROOT: join(root, "cache"), AGENTENV_AUTOMATION_TARGET_PATH: join(root, "bin") }
+  });
+  const page = await app.firstWindow(); page.setDefaultTimeout(10_000);
+  await page.getByRole("button", { name: "Profiles", exact: true }).waitFor();
+  const id = await page.evaluate(async (port) => {
+    await window.agentEnv.saveSkillSummaryConfig({ endpoint: `http://127.0.0.1:${port}/api`, model: "mock-analysis" });
+    return (await window.agentEnv.createProfile({ name: "Reliability fixture", preferredTargetId: "codex" })).id;
+  }, port);
+  const before = await page.evaluate((id) => window.agentEnv.readProfile(id), id);
+  const captures = process.env.AGENTENV_CAPTURE_AI_DIR ?? "/tmp/agentenv-ai-reliability-evidence"; await mkdir(captures, { recursive: true });
+  for (const locale of ["en", "zh_CN", "zh_TW"] as const) {
+    await page.evaluate((locale) => window.agentEnv.updateSettings({ locale }), locale); await page.reload();
+    await page.getByRole("button", { name: locale === "en" ? "Profiles" : locale === "zh_CN" ? "配置方案" : "設定檔", exact: true }).click();
+    await page.getByRole("button", { name: /More Profile actions|更多配置方案操作|更多.*操作/ }).click();
+    await page.getByRole("menuitem", { name: locale === "en" ? "Analyze Profile" : "分析 Profile", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: locale === "en" ? "Profile analysis" : "Profile 分析", exact: true });
+    const analyze = dialog.getByRole("button", { name: locale === "en" ? "Analyze Profile" : "分析 Profile", exact: true });
+    if (locale === "en") {
+      await analyze.click();
+      await dialog.getByRole("alert").filter({ hasText: "no available quota" }).waitFor();
+      expect(calls).toBe(1);
+      expect(await dialog.getByText("private-provider-message").count()).toBe(0);
+      const preview = await page.evaluate((id) => window.agentEnv.prepareAIAnalysis({ kind: "profile", profileId: id, targetId: "codex" }, "en"), id);
+      const cachePath = join(root, "data", "ai-analyses", `${preview.key}.json`);
+      await mkdir(cachePath, { recursive: true });
+      await dialog.getByRole("button", { name: "Retry", exact: true }).click();
+      await dialog.getByText("Review the changed instructions before applying.", { exact: true }).waitFor();
+      await dialog.getByRole("button", { name: "Retry saving", exact: true }).waitFor();
+      expect(calls).toBe(2);
+      await page.setViewportSize({ width: 920, height: 620 });
+      await page.screenshot({ path: join(captures, "ai-reliability-unsaved-en-920.png"), animations: "disabled" });
+      await rm(cachePath, { recursive: true });
+      await page.evaluate(async () => { const prefs = await window.agentEnv.readAIPreferences(); await window.agentEnv.saveAIPreferences({ ...prefs, enabled: false }); });
+      await dialog.getByRole("button", { name: "Retry saving", exact: true }).click();
+      await dialog.getByRole("button", { name: "Retry saving", exact: true }).waitFor({ state: "hidden" });
+      expect(calls).toBe(2);
+      const stored = JSON.parse(await readFile(cachePath, "utf8"));
+      expect(stored.partial).toBe(true); expect(stored.responseIssues).toEqual(["invalid-items", "unclassified"]);
+      expect(stored.findings).toHaveLength(2); expect(stored.savePending).toBeUndefined();
+      await page.evaluate(async () => { const prefs = await window.agentEnv.readAIPreferences(); await window.agentEnv.saveAIPreferences({ ...prefs, enabled: true }); });
+    } else {
+      await analyze.click();
+      await dialog.getByText("Review the changed instructions before applying.", { exact: true }).waitFor();
+    }
+    for (const [width, height] of [[920, 620], [1180, 728], [1440, 900]]) {
+      await page.setViewportSize({ width, height });
+      expect(await dialog.evaluate((node) => [...node.querySelectorAll<HTMLElement>("button, .ui-notice, .ui-dialog-footer")].filter((el) => {
+        const outer = node.getBoundingClientRect(); const rect = el.getBoundingClientRect();
+        return rect.width > 0 && (rect.left < outer.left - 1 || rect.right > outer.right + 1 || el.scrollWidth > el.clientWidth + 2);
+      }).map((el) => el.className))).toEqual([]);
+      await page.screenshot({ path: join(captures, `ai-reliability-partial-${locale}-${width}.png`), animations: "disabled" });
+    }
+    if (locale === "en") {
+      await page.setViewportSize({ width: 920, height: 620 });
+      await dialog.getByText("Evidence and scope", { exact: true }).click();
+      await dialog.getByText("Original AI response", { exact: true }).click();
+      await expect.poll(() => dialog.locator(".syntax-code-preview").textContent()).toContain("Inspect this original finding.");
+      await dialog.getByRole("button", { name: "Maximize preview", exact: true }).click();
+      await page.screenshot({ path: join(captures, "ai-reliability-original-en-920.png"), animations: "disabled" });
+      expect(calls).toBe(2);
+    }
+    await page.keyboard.press("Escape"); await dialog.waitFor({ state: "hidden" });
+  }
+  expect(calls).toBe(4);
+  expect((await page.evaluate((id) => window.agentEnv.readProfile(id), id)).contentHash).toBe(before.contentHash);
+}, 120_000);
 it("analyzes two local versions before import, configures in place and leaves originals untouched", async () => {
   root = await mkdtemp(join(tmpdir(), "aem-local-analysis-")); let calls = 0;
   server = createServer((request, response) => {

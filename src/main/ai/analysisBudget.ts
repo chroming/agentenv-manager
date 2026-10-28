@@ -6,12 +6,14 @@ export const analysisPayload = (documents: AIAnalysisDocument[], warnings: strin
   JSON.stringify({ documents, limitations: warnings, partial });
 
 export const planAnalysisBudget = (input: { documents: AIAnalysisDocument[]; warnings: string[]; partial?: boolean }) => {
+  // Reserve system/schema space and measure the content as it is escaped inside the HTTP JSON body.
+  const fits = (documents: AIAnalysisDocument[], warnings: string[]) => Buffer.byteLength(JSON.stringify(analysisPayload(documents, warnings, false))) <= AI_INPUT_BYTES - 8192;
   const warnings = input.warnings.map(redactSensitiveValues);
   const documents: AIAnalysisDocument[] = [];
   let truncated = 0;
   let omitted = 0;
   const redactedPrefixes = new Map<string, string[]>();
-  if (Buffer.byteLength(analysisPayload([], warnings, false)) > AI_INPUT_BYTES) {
+  if (!fits([], warnings)) {
     throw new Error("Analysis scope exceeds the size limit. Select fewer resources.");
   }
   for (const original of input.documents) {
@@ -28,10 +30,10 @@ export const planAnalysisBudget = (input: { documents: AIAnalysisDocument[]; war
     while (low < high) {
       const middle = Math.ceil((low + high) / 2);
       const candidate = { ...doc, content: text.slice(0, middle).join("") };
-      if (Buffer.byteLength(analysisPayload([...documents, candidate], warnings, false)) <= AI_INPUT_BYTES) low = middle;
+      if (fits([...documents, candidate], warnings)) low = middle;
       else high = middle - 1;
     }
-    if ((text.length > 0 && low === 0) || Buffer.byteLength(analysisPayload([...documents, doc], warnings, false)) > AI_INPUT_BYTES) {
+    if ((text.length > 0 && low === 0) || !fits([...documents, doc], warnings)) {
       omitted += 1;
       continue;
     }

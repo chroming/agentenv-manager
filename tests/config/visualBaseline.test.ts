@@ -27,5 +27,7 @@ it("captures history and invocation scenarios in both visual verification entry 
     expect(source, file).toContain("AGENTENV_CAPTURE_DELETION_DIR");
     expect(source, file).toContain("persists manual Skill invocation");
     expect(source, file).toContain("AGENTENV_STATUS_CAPTURE_DIR");
+    expect(source, file).toContain("recovers partial analysis");
+    expect(source, file).toContain("AGENTENV_CAPTURE_AI_DIR");
   }
 });

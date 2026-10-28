@@ -9,6 +9,11 @@ describe("AI connection probe", () => {
     expect(request).toHaveBeenCalledOnce();
     expect(request.mock.calls[0][0]).toMatchObject({ ...config, maxTokens: 64, content: "Connection test." });
   });
+  it("uses the same fenced JSON handling as the real features", async () => {
+    const request = vi.fn().mockResolvedValue({ choices: [{ finish_reason: "stop", message: { content: '```json\n{"ok":true}\n```' } }] });
+    await expect(testAIService(config, request)).resolves.toBeUndefined();
+    expect(request).toHaveBeenCalledOnce();
+  });
   it.each([{}, { choices: [{ finish_reason: "length", message: { content: '{"ok":true}' } }] },
     { choices: [{ finish_reason: "stop", message: { content: "not json" } }] }])("rejects unusable output", async (response) => {
     await expect(testAIService(config, vi.fn().mockResolvedValue(response))).rejects.toThrow("JSON output");

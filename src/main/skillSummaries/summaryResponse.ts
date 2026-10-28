@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { SummarySchema } from "./summaryStore";
+import { decodeAIResponse, invalidAIFields, jsonObjectSchema, parseAIItems, referencesSchema, stringSchema } from "../ai/aiResponse";
 
 const categoryAliases = new Map<string, string>([
   ["breaking", "important"], ["breaking_change", "important"], ["breaking_changes", "important"],
@@ -9,64 +10,47 @@ const categoryAliases = new Map<string, string>([
   ["安全风险", "security"], ["安全風險", "security"], ["其他", "other"]
 ]);
 const ItemSchema = SummarySchema.shape.items.element;
-// Normalize only equivalent transport labels. Stored categories and evidence remain strict.
-const OutputSchema = SummarySchema.pick({ overview: true }).extend({
-  items: z.array(ItemSchema.omit({ evidenceStatus: true }).extend({
+const transportItemSchema = ItemSchema.omit({ evidenceStatus: true }).extend({
     paths: z.preprocess((value) => value == null ? [] : typeof value === "string" ? [value] : value, ItemSchema.shape.paths),
-    category: z.preprocess((value) => {
-    if (typeof value !== "string") return value;
-    const normalized = value.trim().toLowerCase().replace(/[\s-]+/g, "_");
-    return categoryAliases.get(normalized) ?? normalized;
-  }, ItemSchema.shape.category) })).max(30)
+    implication: z.string().max(1500).nullish().transform((value) => value ?? "")
 });
-const EnvelopeSchema = z.object({
-  choices: z.array(z.object({ finish_reason: z.string().nullable().optional(),
-    message: z.object({ content: z.string().nullable().optional(), reasoning_content: z.string().nullable().optional() }) })).min(1),
-  usage: z.unknown().optional()
-});
-const fail = (reason: string): never => {
-  throw new Error(`${reason} The previous summary is kept. No automatic retry was made; regenerate manually or review the original diff.`);
-};
+export const summaryModelSchema = (ids: string[]) => ({ name: "skill_summary", schema: jsonObjectSchema({ overview: stringSchema,
+  items: { type: "array", items: jsonObjectSchema({ category: { type: "string", enum: ["important", "usage", "security", "other"] },
+    fact: stringSchema, implication: stringSchema, paths: referencesSchema(ids) }) }
+}) });
 
-export const parseSummaryResponse = (response: unknown, suppliedPaths: string[]) => {
-  const envelope = EnvelopeSchema.safeParse(response);
-  if (!envelope.success) return fail("The AI service returned an invalid Chat Completions response.");
-  const choice = envelope.data.choices[0];
-  const content = choice.message.content?.trim() ?? "";
-  const counts = `content characters: ${content.length}; reasoning characters: ${choice.message.reasoning_content?.length ?? 0}`;
-  if (choice.finish_reason === "length") return fail(`The summary reached the model output limit (${counts}).`);
-  if (choice.finish_reason === "content_filter") return fail("The AI service filtered the summary.");
-  if (choice.finish_reason === "tool_calls" || choice.finish_reason === "function_call") return fail("The AI service returned tool calls instead of a summary. No tools were executed.");
-  if (choice.finish_reason !== "stop") return fail("The AI service did not report a completed summary.");
-  if (!content) return fail(`The AI service returned an empty summary (${counts}).`);
-  // Some compatible services wrap otherwise valid JSON in a single code fence.
-  const fenced = /^```(?:json)?\s*\n([\s\S]*?)\n```$/i.exec(content);
-  let json: unknown;
-  try { json = JSON.parse(fenced?.[1] ?? content); }
-  catch { return fail(`The AI service returned invalid JSON (${counts}).`); }
-  const parsed = OutputSchema.safeParse(json);
-  if (!parsed.success) {
-    const issues = parsed.error.issues.slice(0, 3).map((issue) => `${issue.path.join(".") || "summary"}: ${issue.code}`).join(", ");
-    return fail(`The AI summary has invalid fields (${issues}).`);
-  }
+export const parseSummaryResponse = (response: unknown, suppliedPaths: string[], aliases = new Map<string, string>()) => {
+  const decoded = decodeAIResponse(response);
+  const root = z.object({ overview: SummarySchema.shape.overview, items: z.array(z.unknown()) }).safeParse(decoded.data);
+  if (!root.success) throw new Error(`The AI summary has invalid fields (${invalidAIFields(root.error)}). The previous summary is kept; retry manually.`);
+  const normalized = root.data.items.map((value) => {
+    if (!value || typeof value !== "object" || Array.isArray(value)) return value;
+    const item = value as Record<string, unknown>;
+    const label = typeof item.category === "string" ? item.category.trim().toLowerCase().replace(/[\s-]+/g, "_") : "";
+    const category = categoryAliases.get(label) ?? label;
+    return { ...item, category: ["important", "usage", "security", "other"].includes(category) ? category : "unclassified" };
+  });
+  const parsed = parseAIItems(normalized, transportItemSchema, 30);
+  const responseIssues = [...decoded.responseIssues];
+  if (parsed.invalid) responseIssues.push("invalid-items");
+  if (parsed.items.some((item) => item.category === "unclassified")) responseIssues.push("unclassified");
   const paths = new Set(suppliedPaths);
   const canonicalPath = (path: string) => {
     if (paths.has(path)) return path;
     let normalized = path.trim();
     if (/^`[^`]+`$/.test(normalized)) normalized = normalized.slice(1, -1);
     normalized = normalized.replace(/^(\.\/)+/, "");
-    return paths.has(normalized) ? normalized : undefined;
+    return paths.has(normalized) ? normalized : aliases.get(normalized);
   };
-  const items = parsed.data.items.map((item) => {
+  const items = parsed.items.map((item) => {
     const resolved = item.paths.map(canonicalPath);
-    const unverified = !resolved.length || resolved.some((path) => path === undefined);
+    const unverified = !resolved.length || resolved.some((path) => path === undefined || !paths.has(path));
     return {
       ...item,
-      paths: [...new Set(resolved.filter((path): path is string => path !== undefined))],
+      paths: [...new Set(resolved.filter((path): path is string => path !== undefined && paths.has(path)))],
       ...(unverified ? { evidenceStatus: "unverified" as const } : {})
     };
   });
-  // Optional billing metadata must not invalidate an otherwise valid summary.
-  const usage = z.object({ prompt_tokens: z.number().nonnegative().optional(), completion_tokens: z.number().nonnegative().optional() }).safeParse(envelope.data.usage);
-  return { parsed: { ...parsed.data, items }, usage: usage.success ? { inputTokens: usage.data.prompt_tokens, outputTokens: usage.data.completion_tokens } : undefined };
+  return { parsed: { overview: root.data.overview, items,
+    ...(responseIssues.length ? { responseIssues, ...(parsed.invalid ? { unparsedOutput: decoded.raw } : {}) } : {}) }, usage: decoded.usage };
 };

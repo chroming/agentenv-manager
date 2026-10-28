@@ -7,7 +7,9 @@ import { useModalDialog } from "../hooks/useModalDialog";
 import { useI18n } from "../i18n";
 import { SkillTagList } from "./SkillTags";
 import { AIServiceSetup } from "./AIServiceSetup";
-import { Button, ChoiceInput, DialogBody, DialogFooter, DialogHeader, IconButton, InteractiveStatus, ModalFrame, Notice, ResourcePanelToolbar, TagChip, TextField } from "./ui";
+import { AIOriginalResponse, AIResponseNotice } from "./AIResponseNotice";
+import { AIErrorNotice } from "./AIErrorNotice";
+import { Button, ChoiceInput, DialogBody, DialogFooter, DialogHeader, IconButton, InteractiveStatus, ModalFrame, ResourcePanelToolbar, TagChip, TextField } from "./ui";
 
 const TagSuggestions = ({ row, skill, vocabulary, disabled, onChange }: {
   row: TagReviewRow; skill: SkillLibraryEntry; vocabulary: string[]; disabled: boolean; onChange(tags: string[], fixed: string[]): void;
@@ -74,8 +76,8 @@ export const SkillTagSuggestionsDialog = ({ skills, vocabulary, onClose, onSave 
         {state.allowed ? <Button icon={<Sparkles size={15} />} busy={state.busy === "loading" || state.busy === "preparing"} disabled={locked || !state.selected.size}
           onClick={() => void state.prepare(undefined, allCached)}>{t(allCached ? "Regenerate selected" : "Suggest tags")}</Button> : null}
       </ResourcePanelToolbar>
-      {state.error ? <Notice tone="warning" role="alert">{state.error}</Notice> : null}
-      {state.needsConfig && state.allowed ? <AIServiceSetup editing={configuring} onEditingChange={setConfiguring} onSaved={() => state.setNeedsConfig(false)} /> : null}
+      {state.error ? <AIErrorNotice message={state.error} disabled={locked} onConfigure={state.allowed ? () => setConfiguring(true) : undefined} /> : null}
+      {(state.needsConfig || configuring) && state.allowed ? <AIServiceSetup editing={configuring} onEditingChange={setConfiguring} onSaved={() => state.setNeedsConfig(false)} /> : null}
       <div className="skill-ai-tags-list">
         {skills.map((skill) => {
           const row = state.rows[skill.id];
@@ -89,17 +91,20 @@ export const SkillTagSuggestionsDialog = ({ skills, vocabulary, onClose, onSave 
                 <span title={skill.name}>{skill.name}</span></label>
               <InteractiveStatus size="metadata" busy={working} icon={saved ? <CheckCircle2 size={14} /> : undefined}
                 statusKind={working ? "working" : saved ? "success" : row?.error ? "error" : "neutral"}
-                label={t(statusLabel)} />
+                label={working && waiting && state.progress ? state.progress : t(statusLabel)} />
               {state.allowed ? <Button size="compact" disabled={locked || saved} onClick={() => void state.prepare([skill.id], Boolean(row?.record))}>
                 {t(row?.record ? "Regenerate" : row?.error || row?.status === "skipped" ? "Retry" : "Suggest tags")}
               </Button> : null}
             </div>
             {skill.tags?.length ? <div className="skill-ai-tags-existing"><span>{t("Existing tags")}</span><SkillTagList tags={skill.tags} aiTags={skill.aiTags} maxVisible={12} /></div> : null}
-            {row?.error ? <Notice tone="warning" role="alert">{row.error}</Notice> : null}
+            {row?.error ? <AIErrorNotice message={row.error} disabled={locked}
+              onConfigure={state.allowed ? () => setConfiguring(true) : undefined} /> : null}
             {row?.record ? <>
-              {row.record.partial ? <p className="settings-muted">{t("Partial analysis")}</p> : null}
-              {!row.record.tags.length ? <p className="settings-muted">{t("No distinctive tags were found. You can add your own.")}</p> : null}
+              <AIResponseNotice result={row.record} busy={locked} onRetrySave={() => void state.prepare([skill.id], false, true)} />
+              {row.record.partial && !row.record.responseIssues?.length ? <p className="settings-muted">{t("Partial analysis")}</p> : null}
+              {!row.record.tags.length && !row.record.responseIssues?.length ? <p className="settings-muted">{t("No distinctive tags were found. You can add your own.")}</p> : null}
               <TagSuggestions row={row} skill={skill} vocabulary={vocabulary} disabled={locked || saved} onChange={(draft, fixedDraft) => state.patch(skill.id, { draft, fixedDraft })} />
+              <AIOriginalResponse result={row.record} />
             </> : null}
           </section>;
         })}

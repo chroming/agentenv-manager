@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
@@ -30,6 +30,24 @@ const fixture = async () => {
   return { dir, config, input, readInput, request, service, args };
 };
 describe("AI assistance privacy gates", () => {
+  it("does not lose analysis when the UI progress observer is gone", async () => {
+    const f = await fixture();
+    const service = createAnalysisService({ root: f.dir, readInput: f.readInput, configStore: f.config, request: f.request,
+      progress: () => { throw new Error("window closed"); } });
+    expect((await service.generate(f.args)).overview).toBe("Adds code review");
+    expect(f.request).toHaveBeenCalledTimes(1);
+  });
+  it("recovers a save failure without another request and retains exact evidence identity", async () => {
+    const f = await fixture(); const path = join(f.dir, "ai-analyses", `${f.args.expectedKey}.json`);
+    await mkdir(path, { recursive: true });
+    f.request.mockResolvedValue({ choices: [{ finish_reason: "stop", message: { content: JSON.stringify({ overview: "Review", findings: [{ category: "risk", title: null, detail: "Check exposure", evidence: ["D2"] }] }) } }] });
+    const result = await f.service.generate(f.args);
+    expect(result.savePending).toBe(true); expect(result.findings[0].evidence).toEqual(["b"]);
+    await rm(path, { recursive: true });
+    const retry = await f.service.generate({ ...f.args, retrySave: true });
+    expect(retry.savePending).toBeUndefined(); expect(f.request).toHaveBeenCalledTimes(1);
+    expect((await f.service.prepare(subject, "en")).cached).toEqual(retry);
+  });
   it("loads existing preferences without reenabling the master switch or older features", async () => {
     const dir = await root();
     const prefs = defaultAIPreferences();
@@ -215,7 +233,7 @@ describe("immutable AI analyses", () => {
   });
   it.each(["length", "invalid-fields"])("preserves old results after %s regeneration failure", async (failure) => {
     const f = await fixture(); const old = await f.service.generate(f.args);
-    f.request.mockResolvedValue({ choices: [{ finish_reason: failure === "length" ? "length" : "stop", message: { content: JSON.stringify({ overview: "Wrong", findings: [{ category: "invalid", detail: "Unknown", suggestion: "", evidence: ["not-supplied"] }], limitations: [] }) } }] });
+    f.request.mockResolvedValue({ choices: [{ finish_reason: failure === "length" ? "length" : "stop", message: { content: failure === "length" ? '{"overview":"unfinished"' : JSON.stringify({ overview: "Wrong", findings: "not-an-array" }) } }] });
     await expect(f.service.generate({ ...f.args, regenerate: true })).rejects.toThrow("Previous results are kept");
     expect((await f.service.prepare(subject, "en")).cached).toEqual(old);
   });

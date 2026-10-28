@@ -7,6 +7,11 @@ const api: AgentEnvApi = {
   platform: process.platform,
   readAIPreferences: () => ipcRenderer.invoke("ai:preferences"),
   saveAIPreferences: (input) => ipcRenderer.invoke("ai:configure", input),
+  onAIRequestProgress: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, value: import("../shared/aiReliability").AIRequestProgress) => callback(value);
+    ipcRenderer.on("ai:progress", listener);
+    return () => { ipcRenderer.removeListener("ai:progress", listener); };
+  },
   onAIPreferencesChanged: (callback) => {
     const listener = (_event: Electron.IpcRendererEvent, value: import("../shared/aiAssistance").AIPreferences) => callback(value);
     ipcRenderer.on("ai:preferences-changed", listener);

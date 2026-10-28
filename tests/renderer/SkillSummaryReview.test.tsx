@@ -18,6 +18,17 @@ const install = (history: SkillSummary[] = []) => {
   return api;
 };
 describe("Skill summary review", () => {
+  it("does not attach a late response to a newer preview of the same Skill", async () => {
+    const api = install(); let finish!: (value: SkillSummary) => void;
+    api.generateSkillSummary.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    const view = render(<SkillSummaryReview plans={[plan]} onViewFile={vi.fn()} />);
+    fireEvent.click(await screen.findByRole("button", { name: "Generate summary" }));
+    await waitFor(() => expect(api.generateSkillSummary).toHaveBeenCalledOnce());
+    view.rerender(<SkillSummaryReview plans={[{ ...plan, previewId: "new-preview", afterContentHash: "next" }]} onViewFile={vi.fn()} />);
+    await act(async () => finish(record));
+    expect(screen.queryByText("Adds log upload")).not.toBeInTheDocument();
+    expect(api.cancelSkillSummary).toHaveBeenCalledOnce();
+  });
   it("configures a missing AI service without navigating away or sending content", async () => {
     const api = install(); api.readSkillSummaryConfig.mockResolvedValue({ endpoint: "", model: "", hasKey: false });
     const save = vi.fn().mockImplementation(async () => {

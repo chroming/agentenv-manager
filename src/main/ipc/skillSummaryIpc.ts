@@ -29,10 +29,16 @@ export const registerSkillSummaryIpc = (
     })
   });
   const request = createAIJsonClient();
-  const service = createSummaryService({ store, readInput: library.readSummaryInput, request });
-  const tags = createSkillTagSuggestionService({ root, library, configStore: store, request });
+  const progress = (value: import("../../shared/aiReliability").AIRequestProgress) => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      try { if (!window.isDestroyed() && !window.webContents.isDestroyed()) window.webContents.send("ai:progress", value); }
+      catch { /* Another window can close during a request. */ }
+    }
+  };
+  const service = createSummaryService({ store, readInput: library.readSummaryInput, request, progress });
+  const tags = createSkillTagSuggestionService({ root, library, configStore: store, request, progress });
   const preferences = createAIPreferences(root);
-  const analyses = createAnalysisService({ root, configStore: store, request, readInput: createAnalysisInputs({ ...dependencies, library }) });
+  const analyses = createAnalysisService({ root, configStore: store, request, progress, readInput: createAnalysisInputs({ ...dependencies, library }) });
   const guarded = <T,>(feature: AIFeature, id: string, cancel: (id: string) => void, run: () => Promise<T>) =>
     preferences.run(feature, async (signal) => {
       const stop = () => cancel(id);
@@ -49,11 +55,12 @@ export const registerSkillSummaryIpc = (
   diagnosticHandle("ai:prepare", (_event, subject, locale) => analyses.prepare(AnalysisSubjectSchema.parse(subject), z.enum(["en", "zh_CN", "zh_TW"]).parse(locale)));
   diagnosticHandle("ai:generate", (_event, input) => {
     const subject = AnalysisSubjectSchema.parse(input.subject);
+    if (input.retrySave === true) return analyses.generate({ ...input, subject });
     return guarded(subject.kind, input.requestId, analyses.cancel, () => analyses.generate({ ...input, subject }));
   });
   diagnosticHandle("ai:cancel", (_event, id) => analyses.cancel(z.string().uuid().parse(id)));
   diagnosticHandle("skill-tags:prepare", (_event, ids, locale) => tags.prepareBatch(z.array(z.string()).parse(ids), z.enum(["en", "zh_CN", "zh_TW"]).parse(locale)));
-  diagnosticHandle("skill-tags:generate", (_event, input) => guarded("tags", input.requestId, tags.cancel, () => tags.generate(input)));
+  diagnosticHandle("skill-tags:generate", (_event, input) => input.retrySave === true ? tags.generate(input) : guarded("tags", input.requestId, tags.cancel, () => tags.generate(input)));
   diagnosticHandle("skill-tags:cancel", (_event, id) => tags.cancel(z.string().uuid().parse(id)));
   handleMutation("skills:set-tags", (_event, raw) => {
     const input = z.object({ id: z.string(), tags: z.array(z.string()), fixedTags: z.array(z.string()).max(12).optional(), suggestionKey: z.string().regex(/^[a-f0-9]{64}$/).optional() }).parse(raw);
@@ -69,6 +76,6 @@ export const registerSkillSummaryIpc = (
     z.object({ endpoint: z.string().max(2048), model: z.string().max(150), apiKey: z.string().max(4096).optional() }).parse(input)
   ));
   diagnosticHandle("skill-summaries:history", (_event, id) => store.history(parseId(id, "Skill id")));
-  diagnosticHandle("skill-summaries:generate", (_event, input) => guarded("summaries", input.requestId, service.cancel, () => service.generate(input)));
+  diagnosticHandle("skill-summaries:generate", (_event, input) => input.retrySave === true ? service.generate(input) : guarded("summaries", input.requestId, service.cancel, () => service.generate(input)));
   diagnosticHandle("skill-summaries:cancel", (_event, id) => service.cancel(z.string().uuid().parse(id)));
 };

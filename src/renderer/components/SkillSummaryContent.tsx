@@ -2,29 +2,32 @@ import type { SkillSummary, SkillSummaryCategory } from "../../shared/skillSumma
 import { useI18n } from "../i18n";
 import { Notice, TextAction } from "./ui";
 import { AIReviewFindings, splitAIReviewFindings } from "./AIReviewFindings";
+import { AIOriginalResponse, AIResponseNotice } from "./AIResponseNotice";
 
 const categories: Array<[SkillSummaryCategory, string]> = [
   ["important", "Important changes"], ["usage", "Usage impact"],
-  ["security", "Security concerns"], ["other", "Other changes"]
+  ["security", "Security concerns"], ["other", "Other changes"], ["unclassified", "Unclassified finding"]
 ];
 
-export const SkillSummaryContent = ({ summary, onViewFile }: {
-  summary: SkillSummary; onViewFile?(path: string): void;
+export const SkillSummaryContent = ({ summary, onViewFile, onRetrySave, busy }: {
+  summary: SkillSummary; onViewFile?(path: string): void; onRetrySave?(): void; busy?: boolean;
 }) => {
   const { t } = useI18n();
-  const priority = { security: 0, usage: 1, important: 2, other: 3 };
+  const priority = { security: 0, unclassified: 1, usage: 2, important: 3, other: 4 };
   const items = [...summary.items].sort((a, b) => priority[a.category] - priority[b.category]);
   const evidence = (paths: string[]) => <div className="skill-summary-files">{paths.map((path) => onViewFile
     ? <TextAction key={path} onClick={() => onViewFile(path)}>{path}</TextAction>
     : <code key={path}>{path}</code>)}</div>;
   const { visible, remaining } = splitAIReviewFindings(items.map((item) => ({
-    detail: item.fact, suggestion: item.implication, risk: item.category === "security",
-    note: item.evidenceStatus === "unverified" ? <p className="muted">{t("File references could not be verified. Check this finding against the original diff.")}</p> : undefined
+    detail: item.fact, suggestion: item.implication, risk: item.category === "security" || item.category === "unclassified",
+    note: item.category === "unclassified" ? <p className="muted">{t("Unclassified finding")}</p>
+      : item.evidenceStatus === "unverified" ? <p className="muted">{t("File references could not be verified. Check this finding against the original diff.")}</p> : undefined
   })));
   return <div className="skill-summary-content">
     <p className="ai-review-overview">{summary.overview}</p>
+    <AIResponseNotice result={summary} onRetrySave={onRetrySave} busy={busy} />
     <AIReviewFindings items={visible} />
-    {summary.coverage === "partial" ? <Notice tone="warning" title={t("Partial analysis")}>
+    {summary.coverage === "partial" && !summary.responseIssues?.length ? <Notice tone="warning" title={t("Partial analysis")}>
       {t("Some changed content was not analyzed. Review the coverage in Details.")}
     </Notice> : null}
     <details className="ai-review-details">
@@ -32,6 +35,7 @@ export const SkillSummaryContent = ({ summary, onViewFile }: {
     <div className="skill-summary-content">
     <p className="muted">{t("AI-generated")} · {summary.model} · {new Date(summary.generatedAt).toLocaleString()}</p>
     <AIReviewFindings items={remaining} />
+    <AIOriginalResponse result={summary} />
     <ol className="ai-review-evidence">{items.map((item, index) => <li key={index}>
       <span className="muted">{t(categories.find(([category]) => category === item.category)![1])}</span>
       <p>{item.fact}</p>
