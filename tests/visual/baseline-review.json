@@ -1,19 +1,19 @@
 {
   "formatVersion": 1,
-  "reviewedAt": "2026-10-28T16:16:24.236Z",
-  "applicationVersion": "0.2.4",
-  "baseCommit": "3f0a831e",
+  "reviewedAt": "2026-10-31T08:15:20Z",
+  "applicationVersion": "0.2.5",
+  "baseCommit": "f1342a90",
   "build": {
-    "sourceFingerprint": "72bbaccd5dda286d42def8923e3b08565007fc66f639c86a39536f5fe9636d59",
-    "artifactFingerprint": "a6416bad4ef727da81e8cc35f2cee40495613e3e3b19a6252ac8542f37475b50",
-    "generatedAt": "2026-10-28T16:12:37.671Z"
+    "sourceFingerprint": "2c0570c25f607ae9510181fa2acd25c662e6c2c5f64677ecfe64db0c45872d04",
+    "artifactFingerprint": "05abb72caf28dcdabe29049d805aec0de66ed55a09849cda7594c32cd8bca1a8",
+    "generatedAt": "2026-10-31T08:00:16.049Z"
   },
   "review": {
     "scenarios": 126,
-    "method": "New AI reliability states reviewed at native size against the existing analysis, summary and tag components; all other previously reviewed baselines retained.",
+    "method": "Two obsolete conversation captures reviewed at native size against the current Largest conversation view and continuation menu; neutral Continue controls, persistent file sizes, row geometry and menu containment checked. The other 124 reviewed baselines are retained.",
     "scope": "Mock Electron workflows on macOS; no real Agent resources or model requests",
     "thresholdsChanged": false,
-    "updatedScenarios": 11
+    "updatedScenarios": 2
   },
   "files": [
     {
@@ -468,8 +468,8 @@
     },
     {
       "file": "conversations-detail-920x620.png",
-      "sha256": "2e9e3e092b16b19857383bd80b5be9a180d4cd38e1db0e13f66fb3432b81805e",
-      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
+      "sha256": "8d539866feebbff045101e9f86ad2c63b37cc5ade66c73148b9d261e627123f9",
+      "reviewReason": "Reviewed 2026-10-31 native CI capture against the existing Largest-view baseline: current neutral Continue button, persistent conversation sizes and compact toolbar are consistent; title, message layout and controls remain contained. Replaces an obsolete primary-button capture; thresholds unchanged."
     },
     {
       "file": "conversations-largest-920x620.png",
@@ -483,8 +483,8 @@
     },
     {
       "file": "conversations-continue-menu-920x620.png",
-      "sha256": "016aa4860fcc3280e9f55418d301c78a38ddf18f1c43490de0caa019a57d9b20",
-      "reviewReason": "Reviewed old/current native mock screenshots: Worktrees navigation and existing unified catalog controls retained; current monospace metrics and dialog containment checked. Pixel thresholds unchanged."
+      "sha256": "96b222677b9c3a5a830b1943122bf51e6c8ecf9c107114e1722a67e67f29dd7b",
+      "reviewReason": "Reviewed 2026-10-31 native CI capture with the current detail and Largest views: neutral Continue control, persistent file sizes and scrollable Agent menu share the current component grammar with no clipped controls. Replaces an obsolete primary-button capture; thresholds unchanged."
     },
     {
       "file": "conversations-detail-920x620-move.png",
