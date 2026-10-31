@@ -8244,6 +8244,7 @@ describe("Electron UI profile switching e2e", () => {
     const sharedDuplicateContent =
       "---\nname: Auto Shared Reviewer\ndescription: Identical shared copies.\n---\n\n# Shared\n";
     const { appDataRoot, opencodeDir, homeDir, librarySkill, page } = await launchApp({
+      initialWorkspace: null,
       beforeLaunch: async ({ opencodeDir, homeDir, librarySkill }) => {
     const managedSkill = join(opencodeDir, "skills", "shared-reviewer");
     await mkdir(dirname(managedSkill), { recursive: true });
