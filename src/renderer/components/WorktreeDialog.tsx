@@ -7,7 +7,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import type {
   WorktreeCleanupPreview, WorktreeEntry, WorktreeInventory, WorktreeRecoveryRecord
 } from "../../shared/worktrees";
-import { isBatchCleanupCandidate } from "../../shared/worktrees";
+import { canSelectWorktreeForCleanup, isAutomaticCleanupCandidate } from "../../shared/worktrees";
 import type { UiState, UiStateUpdate, WorktreeSort } from "../../shared/uiState";
 import { sortWorktreeGroups, worktreeGroupMetric, worktreeName } from "../worktreeSort";
 import { formatBytes } from "../formatBytes";
@@ -21,11 +21,8 @@ import {
 } from "./ui";
 import { AIAnalysisReview } from "./AIAnalysisReview";
 import { useSearchDisclosure } from "../hooks/useSearchDisclosure";
+import { selectWorktreeManually, toggleAutomaticWorktreeSelection, worktreeEntryKey as entryKey, type WorktreeSelection } from "../worktreeSelection";
 
-const entryKey = (entry: WorktreeEntry) => `${entry.commonDir}\0${entry.path}`;
-const canReviewRemoval = (entry: WorktreeEntry) => entry.manualReviewAvailable && entry.exists && Boolean(entry.head) &&
-  !entry.main && !entry.locked && !entry.prunable && !entry.submodules && !entry.keptReason && !entry.repositoryKeptReason &&
-  (entry.state === "candidate" || entry.state === "review");
 const nameFromPath = worktreeName;
 const totalBytes = (values: Array<number | undefined>) =>
   values.some((value) => value === undefined) ? undefined : values.reduce<number>((sum, value) => sum + value!, 0);
@@ -54,7 +51,7 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
   const [view, setView] = useState<"list" | "locations" | "detail" | "confirm" | "results" | "recovery">("list");
   const [detail, setDetail] = useState<WorktreeEntry>();
   const [previews, setPreviews] = useState<WorktreeCleanupPreview[]>([]);
-  const [selected, setSelected] = useState<string[]>([]);
+  const [selected, setSelected] = useState<WorktreeSelection[]>([]);
   const [results, setResults] = useState<CleanupResult[]>([]);
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
@@ -122,7 +119,7 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
     const needle = query.trim().toLocaleLowerCase();
     for (const entry of inventory?.entries ?? []) {
       if (needle && ![entry.path, entry.repositoryPath, entry.branch ?? ""].some((value) => value.toLocaleLowerCase().includes(needle))) continue;
-      if (filter === "candidate" && !isBatchCleanupCandidate(entry)) continue;
+      if (filter === "candidate" && !isAutomaticCleanupCandidate(entry)) continue;
       if (filter === "review" && (entry.main || entry.keptReason || entry.repositoryKeptReason || entry.state !== "review")) continue;
       if (filter === "kept" && entry.state !== "kept") continue;
       const rows = groups.get(entry.commonDir) ?? [];
@@ -136,20 +133,18 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
   }, [inventory, filter, query, sort]);
 
   const visibleEntries = entriesByRepo.flatMap(([, entries]) => entries);
-  const eligibleEntries = visibleEntries.filter(isBatchCleanupCandidate);
-  const selectedEntries = eligibleEntries.filter((entry) => selected.includes(entryKey(entry)));
+  const eligibleEntries = visibleEntries.filter(isAutomaticCleanupCandidate);
+  const selectionIndex = new Map(selected.map((value) => [value.key, value.origin]));
+  const selectedEntries = visibleEntries.filter((entry) => canSelectWorktreeForCleanup(entry) && selectionIndex.has(entryKey(entry)));
   const needsReviewCount = visibleEntries.filter((entry) => !entry.main && !entry.keptReason &&
     !entry.repositoryKeptReason && entry.state === "review").length;
   const selectionControl = (entries: WorktreeEntry[], label: string) => {
-    const count = entries.filter((entry) => selected.includes(entryKey(entry))).length;
+    const count = entries.filter((entry) => selectionIndex.has(entryKey(entry))).length;
     const checked = entries.length > 0 && count === entries.length;
     return <ChoiceInput type="checkbox" alignment="flush" aria-label={label} title={label}
       indeterminate={count > 0 && !checked}
       checked={checked} disabled={Boolean(busy) || entries.length === 0}
-      onChange={() => setSelected((current) => {
-        const keys = new Set(entries.map(entryKey));
-        return checked ? current.filter((key) => !keys.has(key)) : [...new Set([...current, ...keys])];
-      })} />;
+      onChange={() => setSelected((current) => toggleAutomaticWorktreeSelection(current, entries))} />;
   };
 
   const addLocation = async () => {
@@ -201,18 +196,20 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
     } catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); }
     finally { setBusy(""); }
   };
-  const prepare = async (entries: WorktreeEntry[], allowDirty = false, batch = false) => {
+  const prepare = async (entries: WorktreeEntry[], mode: "manual" | "selection" = "manual") => {
     if (!entries.length) return;
     setBusy("preview");
-    setPreparingPath(batch ? "" : entries[0].path);
+    setPreparingPath(mode === "selection" ? "" : entries[0].path);
     setError("");
     const ready: WorktreeCleanupPreview[] = [];
     const failures: string[] = [];
     for (const entry of entries) {
       setPreparationProgress(`${ready.length + failures.length + 1}/${entries.length}`);
       try {
-        const preview = await window.agentEnv.previewWorktreeCleanup(entry.commonDir, entry.path, allowDirty);
-        if (batch && !isBatchCleanupCandidate(preview.entry)) throw new Error(t("This Worktree now needs individual review. Refresh and review it separately."));
+        const origin = mode === "selection" ? selectionIndex.get(entryKey(entry)) : "manual";
+        const preview = await window.agentEnv.previewWorktreeCleanup(entry.commonDir, entry.path, origin === "manual");
+        if (origin !== "manual" && !isAutomaticCleanupCandidate(preview.entry)) throw new Error(t("This Worktree changed after automatic selection. Refresh and select it individually to include it."));
+        if (!canSelectWorktreeForCleanup(preview.entry)) throw new Error(t("This Worktree is now protected. Refresh to review its current state."));
         ready.push(preview);
       } catch (cause) {
         failures.push(`${entry.path}: ${cause instanceof Error ? cause.message : String(cause)}`);
@@ -337,10 +334,10 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
               { value: "size-desc", label: t("Largest size") },
               { value: "status", label: t("Cleanup status") }
             ]} onChange={(value) => { setSort(value); onUpdateUiState?.({ worktreeSort: value }); }} />
-          <CatalogFilters count={Number(filter !== "all")} summary={filter === "candidate" ? t("Eligible for batch cleanup") : filter === "review" ? t("Needs review") : t("Excluded")}>
+          <CatalogFilters count={Number(filter !== "all")} summary={filter === "candidate" ? t("Automatically selectable") : filter === "review" ? t("Needs review") : t("Excluded")}>
             <SelectField label={t("Worktree filter")} value={filter} onChange={(event) => { setFilter(event.currentTarget.value as typeof filter); setSelected([]); }}>
               <option value="all">{t("All")}</option>
-              <option value="candidate">{t("Eligible for batch cleanup")}</option>
+              <option value="candidate">{t("Automatically selectable")}</option>
               <option value="review">{t("Needs review")}</option>
               <option value="kept">{t("Excluded")}</option>
             </SelectField>
@@ -359,20 +356,20 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
   const list = <>
           {view === "list" ? failure : null}
           {visibleEntries.some((entry) => !entry.main) ? <ResourceRow density="compact" appearance="plain" icon={null}
-            title={<ControlGroup>{selectionControl(eligibleEntries, t("Select all eligible Worktrees in this view"))}<span>{t("Batch cleanup")}</span></ControlGroup>}
+            title={<ControlGroup>{selectionControl(eligibleEntries, t("Select all clean Worktrees in this view"))}<span>{t("Batch cleanup")}</span></ControlGroup>}
             metadata={<span title={t("Selected size")}>{busy === "preview" && !preparingPath ? preparationProgress : `${t("{{count}} selected", { count: selectedEntries.length })} · ${sizeLabel(totalBytes(selectedEntries.map((entry) => entry.sizeBytes)))}`}</span>}
-            state={needsReviewCount ? <span title={t("These Worktrees are not included in bulk selection.")}>{t("{{count}} need review", { count: needsReviewCount })}</span> : undefined}
+            state={needsReviewCount ? <span title={t("Not selected automatically. Select individual Worktrees to include them.")}>{t("{{count}} need review", { count: needsReviewCount })}</span> : undefined}
             actions={<Button size="compact" icon={<ClipboardCheck size={15} />} aria-label={`${t("Review cleanup")} (${selectedEntries.length})`}
               busy={busy === "preview" && !preparingPath} disabled={Boolean(busy) || !selectedEntries.length}
-              onClick={() => void prepare(selectedEntries, false, true)}>{t("Review cleanup")}</Button>} /> : null}
+              onClick={() => void prepare(selectedEntries, "selection")}>{t("Review cleanup")}</Button>} /> : null}
           {busy === "scan" && !inventory ? <EmptyState icon={<LoaderCircle className="is-spinning" size={25} />} title={t("Scanning Worktrees...")} /> : null}
           {entriesByRepo.length === 0 && busy !== "scan" ? <EmptyState icon={<FolderGit2 size={25} />}
-            title={filter === "all" ? t("No Worktrees found") : filter === "candidate" ? t("No Worktrees eligible for batch cleanup") : filter === "review" ? t("No Worktrees to review") : t("No excluded Worktrees")}
+            title={filter === "all" ? t("No Worktrees found") : filter === "candidate" ? t("No automatically selectable Worktrees") : filter === "review" ? t("No Worktrees to review") : t("No excluded Worktrees")}
             description={filter === "all" ? t("Add a scan location to look for local Git working directories.") : undefined} /> : null}
           {[false, true].map((ignored) => {
             const groups = entriesByRepo.filter(([, entries]) => entries.some((entry) => Boolean(entry.repositoryKeptReason)) === ignored);
             const sections = groups.map(([commonDir, entries]) => {
-            const eligible = entries.filter(isBatchCleanupCandidate);
+            const eligible = entries.filter(isAutomaticCleanupCandidate);
             const kept = entries.some((entry) => Boolean(entry.repositoryKeptReason));
             return <Fragment key={commonDir}>
             <ResourceDisclosureSection className="worktree-dialog__group" id={commonDir}
@@ -385,9 +382,9 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
               })} actions={<ControlGroup>
               <CatalogSortMetric kind="size" label={t("Total size")} value={worktreeGroupMetric(entries, "size-desc")} />
               <IconButton data-repository-keep label={t(kept ? "Stop ignoring repository" : "Ignore repository")} variant="ghost" busy={busy === commonDir} disabled={Boolean(busy)} onClick={() => void setRepositoryKeep(commonDir, kept)}>{kept ? <Eye size={15} /> : <EyeOff size={15} />}</IconButton>
-              {!kept ? <span className="worktree-dialog__row-action">{selectionControl(eligible, t("Select all eligible Worktrees"))}</span> : null}
+              {!kept ? <span className="worktree-dialog__row-action">{selectionControl(eligible, t("Select all clean Worktrees"))}</span> : null}
             </ControlGroup>}>
-            <AlignedResourceList actionTrack="compact" className="worktree-dialog__entries">
+            <AlignedResourceList actionTrack="compact" className="worktree-dialog__entries worktree-dialog__selectable-entries">
             {entries.map((entry) => <ResourceRow
               key={entryKey(entry)} density="compact" appearance="plain" icon={entry.locked ? <LockKeyhole size={16} /> : <FolderGit2 size={16} />}
               title={<TextAction title={[entry.path, entry.branch ? `${t("Branch")}: ${entry.branch}` : entry.head].filter(Boolean).join("\n")} onClick={() => review(entry)}>{nameFromPath(entry.path)}</TextAction>}
@@ -399,15 +396,16 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
               state={<InteractiveStatus size="metadata" tone={entry.state === "review" ? "warning" : "neutral"} title={reasonLabels(entry).join("\n")} reviewLabel={t("Review {{name}}", { name: nameFromPath(entry.path) })} onReview={() => review(entry)}
                 label={entry.main ? t("Main") : entry.state === "candidate" ? t("Clean") : entry.state === "kept" ? t("Kept") : entry.state === "review" ? t("Needs review") : t("Unavailable")} />}
               actions={<span className="worktree-dialog__row-action">
-                {isBatchCleanupCandidate(entry) ? <ChoiceInput
+                {canSelectWorktreeForCleanup(entry) ? <ChoiceInput
                   type="checkbox" alignment="flush" aria-label={t("Select Worktree for review")}
                   disabled={Boolean(busy)}
-                  checked={selected.includes(entryKey(entry))}
-                  onChange={(event) => setSelected((current) => event.target.checked ? [...current, entryKey(entry)] : current.filter((key) => key !== entryKey(entry)))}
-                /> : canReviewRemoval(entry) ? <IconButton label={t("Remove Worktree...")} title={t("Review removal of {{name}}", { name: nameFromPath(entry.path) })}
-                  variant="ghost" busy={busy === "preview" && preparingPath === entry.path} disabled={Boolean(busy)}
-                  onClick={() => void prepare([entry], true)}><Trash2 size={15} /></IconButton> : null}
+                  checked={selectionIndex.has(entryKey(entry))}
+                  onChange={(event) => { const checked = event.currentTarget.checked; setSelected((current) => selectWorktreeManually(current, entry, checked)); }}
+                /> : null}
               </span>}
+              secondaryActions={canSelectWorktreeForCleanup(entry) ? <IconButton label={t("Remove Worktree...")} title={t("Review removal of {{name}}", { name: nameFromPath(entry.path) })}
+                  variant="ghost" busy={busy === "preview" && preparingPath === entry.path} disabled={Boolean(busy)}
+                  onClick={() => void prepare([entry])}><Trash2 size={15} /></IconButton> : undefined}
             />)}
             </AlignedResourceList>
           </ResourceDisclosureSection></Fragment>; });
@@ -459,7 +457,8 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
         {view === "confirm" ? <>
           <DetailList items={[
             { label: t("Selected size"), value: sizeLabel(totalBytes(previews.map((preview) => preview.entry.sizeBytes))) },
-            { label: t("Estimated space freed"), value: sizeLabel(totalBytes(previews.map((preview) => preview.backupRequired ? 0 : preview.entry.sizeBytes))) }
+            { label: t("Estimated space freed"), value: sizeLabel(totalBytes(previews.map((preview) => preview.backupRequired ? 0 : preview.entry.sizeBytes))) },
+            { label: t("Local recovery copies"), value: String(previews.filter((preview) => preview.backupRequired).length) }
           ]} />
           <p>{t("Only working directories are removed. Git commits are retained; local-only files receive a verified recovery copy first.")}</p>
           <p>{t("Confirm each selected task is finished; code integration is not inferred from commit IDs.")}</p>
@@ -471,7 +470,9 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
             <br />{t("Recovery copies of local-only files remain in AgentEnv data and may still use disk space.")}
           </Notice> : null}
           <AlignedResourceList actionTrack="compact" className="worktree-dialog__entries">
-            {previews.map((preview) => <ResourceRow key={entryKey(preview.entry)} density="compact" appearance="plain" icon={<FolderGit2 size={16} />} title={<span title={preview.entry.branch ?? preview.entry.head}>{nameFromPath(preview.entry.path)}</span>} description={<span className="selectable">{preview.entry.path}</span>} metadata={modifiedMetric(preview.entry)} state={<CatalogSortMetric kind="size" label={t("Size")} value={preview.entry.sizeBytes} />} />)}
+            {previews.map((preview) => <ResourceRow key={entryKey(preview.entry)} density="compact" appearance="plain" icon={<FolderGit2 size={16} />} title={<span title={preview.entry.branch ?? preview.entry.head}>{nameFromPath(preview.entry.path)}</span>} description={<span className="selectable">{preview.entry.path}</span>}
+              metadata={<span className="worktree-dialog__metrics">{modifiedMetric(preview.entry)}<CatalogSortMetric kind="size" label={t("Size")} value={preview.entry.sizeBytes} /></span>}
+              state={<InteractiveStatus size="metadata" tone={preview.backupRequired ? "warning" : "neutral"} label={t(preview.backupRequired ? "Recovery copy required" : "Commits retained")} />} />)}
           </AlignedResourceList>
         </> : null}
         {view === "results" ? <>
@@ -523,7 +524,7 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
           {detail.repositoryKeptReason ? <ControlGroup><InteractiveStatus size="metadata" label={t("Repository ignored")} />
             <TextAction disabled={Boolean(busy)} onClick={() => { setQuery(""); setFilter("all"); setIgnoredExpanded(true); setRepositoryFocus(detail.commonDir); dismissReview(); }}>{t("View repository")}</TextAction></ControlGroup>
             : !detail.main ? <Button busy={busy === "keep"} disabled={Boolean(busy)} onClick={() => void setKeep(detail)}>{detail.keptReason ? t("Stop keeping Worktree") : t("Keep Worktree")}</Button> : null}
-          {canReviewRemoval(detail) ? <Button icon={<Trash2 size={15} />} disabled={Boolean(busy)} busy={busy === "preview"} onClick={() => void prepare([detail], true)}>{t("Remove Worktree...")}</Button> : null}
+          {canSelectWorktreeForCleanup(detail) ? <Button icon={<Trash2 size={15} />} disabled={Boolean(busy)} busy={busy === "preview"} onClick={() => void prepare([detail])}>{t("Remove Worktree...")}</Button> : null}
         </> : <Button variant={view === "results" && !busy && results.length > 0 && results.every((result) => result.error === undefined && !result.skipped && !result.verificationWarnings?.length) ? "primary" : "secondary"} disabled={Boolean(busy) && busy !== "scan"} onClick={dismiss}>{t("Close")}</Button>}
       </DialogFooter>;
   const modal = (

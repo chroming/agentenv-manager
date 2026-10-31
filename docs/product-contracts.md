@@ -312,8 +312,8 @@ The toolbar owns scanning feedback without moving an existing list. Scope, revie
 confirmation and recovery use shared modal shells; metadata, state and action lanes
 are aligned across all inventory rows. Scan-location editing never deletes folders.
 The selection strip says Batch cleanup, not an internal candidate classification.
-Filters distinguish trees eligible for batch cleanup from those needing individual
-review and from kept trees; they never change safety eligibility or perform Git work.
+Filters distinguish automatically selectable trees from those needing review and
+from kept trees; they never change safety eligibility or perform Git work.
 The default list and cleanup confirmation expose measured file modification dates
 alongside sizes without requiring date sorting. Calendar dates include the year and
 expose their full timestamp on inspection. File times exclude root .git metadata,
@@ -364,32 +364,40 @@ It warns when any saved local Workspace is inside the directory being removed, i
 a Workspace rooted in a subdirectory; the Workspace shortcut itself is preserved.
 Cleanup requires a fresh Git check before invoking `git worktree remove`. Clean trees
 retain their exact commit through a recovery ref without duplicating their files. Dirty
-or ignored-content trees require a verified full recovery copy and individual review
-and explicit consent before Git's force option can be used; they never enter batch
-selection. Main, locked, missing, and submodule worktrees are not cleanup candidates.
-Individual review is not a mandatory navigation step. A reviewable non-batch tree
-has a compact Remove Worktree... row action that prepares the same fresh preview
+or ignored-content trees require a verified full recovery copy and explicit user
+selection/confirmation before Git's force option can be used. They may be selected
+individually for a combined preview, but automatic selection never includes them.
+Main, locked, missing, and submodule worktrees are not cleanup candidates.
+Individual review is not a mandatory navigation step. A reviewable tree
+has a compact Remove Worktree... secondary row action that prepares the same fresh preview
 as the detail footer, then requires one final destructive confirmation. The detail
 does not require a separate acknowledgment checkbox before opening confirmation.
 Preview is read-only: cancellation writes nothing. Dirty/ignored content still
 requires a full verified recovery copy and staged-index protection before removal;
-the final confirmation explains that consequence. Main, locked, missing, ignored,
-kept, submodule and otherwise unsafe trees do not acquire this shortcut. Preparing
+the final confirmation explains that consequence. Main, locked, missing, repository-ignored,
+kept, submodule and otherwise unsafe trees do not acquire selection or this shortcut. Preparing
 one row shows progress on that initiating action, not on the batch command.
 Detached commits without another ref receive a recovery ref before removal.
 An operation cannot claim success until the directory and Git registration are both
 verified absent. Recovery must not overwrite a path created after cleanup.
-The list and each repository offer selection of all Clean (`candidate`) trees
+The list and each repository offer automatic selection of all Clean (`candidate`) trees
 within the current search/filter scope, including collapsed groups. Selection
 controls remain visible when no candidates qualify, but are disabled; partial
 selection uses the native indeterminate state. The list shows selected count and
 size, with unknown measurements never treated as zero, plus the count requiring
 individual review. Changing search/filter or refreshing clears selection.
-Cleanup-preview capability alone is not batch eligibility: trees with
-unconfirmed branch work (`review`) require individual review even when Git permits
-a non-force removal. Main, detached, dirty, ignored-content, locked, kept and unsafe
-trees stay excluded, including all trees in an ignored repository. Row, repository,
-and global selection share the same predicate.
+Automatic selection is distinct from manual selection. Each selected identity retains
+its origin. Row checkboxes may explicitly select reviewable dirty, ignored-content,
+detached or unconfirmed trees. Automatic repository/global controls only add clean
+integrated trees and never downgrade an existing manual selection. Clearing automatic
+selection removes only that control's clean scope and preserves manual dirty choices.
+Main, locked, kept, repository-ignored, missing, submodule and unsafe trees stay excluded.
+Automatically selected trees that become dirty fail preview rather than silently
+obtaining force permission; the user must select that tree individually. A manual
+selection may include multiple trees without opening their details one by one.
+One combined confirmation identifies which trees need full local recovery copies,
+the total copy count, sizes and estimated freed space. Each resource's original
+backup, freshness and transaction rules still apply; Preview alone changes no files.
 Selection is not removal authorization or proof of code integration. Each tree is
 revalidated during Preview and again during Remove.
 Batch cleanup can stop after the current tree finishes its transaction. Remaining
@@ -397,11 +405,11 @@ trees are marked Not run, without interrupting an active backup or Git removal.
 User-requested stops are distinguished from repository-level failure skips.
 Selection and cleanup never trigger AI analysis; retention analysis remains an
 explicit single-worktree action.
-Batch eligibility requires an unchanged clean tree whose HEAD is contained in a named
+Automatic eligibility requires an unchanged clean tree whose HEAD is contained in a named
 integration target. The device-local target defaults to origin/HEAD, then local main/master;
 review can explicitly choose another local or remote branch. The Worktree's own branch,
 unrelated feature branches, tags and recovery refs never implicitly prove integration.
-Unknown, missing, unrelated-history and squash-equivalent targets require individual review;
+Unknown, missing, unrelated-history and squash-equivalent targets require explicit selection;
 checks never fetch or mutate remote refs. Preview binds the target ref and revision, branch,
 HEAD, Git status, index bytes and working-content hash. These are revalidated after Backup,
 immediately before removal; active Git operations and lock files reject cleanup.

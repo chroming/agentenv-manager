@@ -36,6 +36,11 @@
   --resource-row-actions-compact: 32px;
 }
 
+.worktree-dialog__selectable-entries {
+  --resource-row-actions-compact: calc(2 * var(--control-height-default) + var(--space-2));
+  --resource-row-state-track: 120px;
+}
+
 .worktree-dialog__recovery {
   --resource-row-metadata-track: minmax(100px, 150px);
   --resource-row-state-track: 150px;

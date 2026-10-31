@@ -10,6 +10,7 @@ interface ResourceRowProps extends Omit<HTMLAttributes<HTMLDivElement>, "title">
   description?: ReactNode;
   icon: ReactNode;
   metadata?: ReactNode;
+  secondaryActions?: ReactNode;
   state?: ReactNode;
   title: ReactNode;
   titleAside?: ReactNode;
@@ -25,6 +26,7 @@ export const ResourceRow = ({
   description,
   icon,
   metadata,
+  secondaryActions,
   state,
   title,
   titleAside,
@@ -47,6 +49,9 @@ export const ResourceRow = ({
     </div>
     {metadata ? <div className="ui-resource-row__metadata">{metadata}</div> : null}
     {state ? <div className="ui-resource-row__state">{state}</div> : null}
-    {actions ? <div className="ui-resource-row__actions">{actions}</div> : null}
+    {actions || secondaryActions ? <div className="ui-resource-row__actions">
+      {secondaryActions ? <span className="ui-resource-row__secondary-actions">{secondaryActions}</span> : null}
+      {actions}
+    </div> : null}
   </div>
 );

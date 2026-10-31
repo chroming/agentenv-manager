@@ -1207,6 +1207,26 @@ button.ui-interactive-status.is-interactive:hover:not(:disabled) {
   min-width: var(--icon-box-compact);
 }
 
+.ui-resource-row__secondary-actions {
+  align-items: center;
+  display: flex;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .ui-resource-row__secondary-actions {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--motion-fast);
+  }
+
+  .ui-resource-row:hover .ui-resource-row__secondary-actions,
+  .ui-resource-row:focus-within .ui-resource-row__secondary-actions,
+  .ui-resource-row__secondary-actions:has([aria-busy="true"]) {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
 .ui-notice {
   align-items: center;
   background: var(--info-bg);

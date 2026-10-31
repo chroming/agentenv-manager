@@ -30,7 +30,7 @@ afterEach(async () => {
 
 describe("Worktrees desktop workflow", () => {
   it.each(["en", "zh_CN", "zh_TW"] as const)("keeps discovery, aligned rows and review dialogs consistent in %s", async (locale) => {
-    const t = (message: string) => translate(locale, message);
+    const t = (message: string, values?: Record<string, string | number>) => translate(locale, message, values);
     root = await realpath(await mkdtemp(join(tmpdir(), "agentenv-worktrees-e2e-")));
     const home = join(root, "home");
     const data = join(root, "data");
@@ -153,7 +153,7 @@ describe("Worktrees desktop workflow", () => {
             .some((metric) => metric.getAttribute("aria-label")?.startsWith(`${dateLabel}:`))),
           selectionClearance: [...body.querySelectorAll('input[type="checkbox"]')].every((input) =>
             input.getBoundingClientRect().right <= body.getBoundingClientRect().right - 16),
-          rowActionCenters: rows.flatMap((row) => [...row.querySelectorAll<HTMLElement>(".ui-resource-row__actions input, .ui-resource-row__actions button")])
+          rowActionCenters: rows.flatMap((row) => [...row.querySelectorAll<HTMLElement>(".ui-resource-row__actions input")])
             .map((action) => { const bounds = action.getBoundingClientRect(); return bounds.left + bounds.width / 2; }),
           aligned: lanes.every((xs) => Math.max(...xs) - Math.min(...xs) <= 1),
           stateFits: rows.every((row) => {
@@ -219,7 +219,7 @@ describe("Worktrees desktop workflow", () => {
       expect(await workspace.getByText(unique, { exact: true }).count()).toBe(0);
       if (captureDir) await page.screenshot({ path: join(captureDir, `worktree-eligible-${locale}-${viewport.width}.png`) });
       await filterSelect.selectOption("review");
-      expect(await workspace.getByRole("checkbox", { name: t("Select Worktree for review") }).count()).toBe(0);
+      expect(await workspace.getByRole("checkbox", { name: t("Select Worktree for review") }).count()).toBe(2);
       expect(await workspace.getByText(dirty, { exact: true }).count()).toBe(1);
       expect(await workspace.getByText(unique, { exact: true }).count()).toBe(1);
       await filterSelect.selectOption("kept");
@@ -280,9 +280,9 @@ describe("Worktrees desktop workflow", () => {
     await disclosure.click();
     expect(await group.locator(".ui-resource-row").count()).toBe(0);
     await disclosure.click();
-    await group.getByRole("checkbox", { name: t("Select all eligible Worktrees"), exact: true }).click();
+    await group.getByRole("checkbox", { name: t("Select all clean Worktrees"), exact: true }).click();
     expect(await group.getByRole("checkbox", { name: t("Select Worktree for review"), checked: true }).count()).toBe(9);
-    const globalSelection = workspace.getByRole("checkbox", { name: t("Select all eligible Worktrees in this view"), exact: true });
+    const globalSelection = workspace.getByRole("checkbox", { name: t("Select all clean Worktrees in this view"), exact: true });
     expect(await globalSelection.isChecked()).toBe(true);
     await globalSelection.uncheck();
     expect(await group.getByRole("checkbox", { name: t("Select Worktree for review"), checked: true }).count()).toBe(0);
@@ -290,7 +290,7 @@ describe("Worktrees desktop workflow", () => {
     for (const width of [920, 1180, 1440]) {
       await page.setViewportSize({ width, height: width === 920 ? 620 : 900 });
       const selectionRow = workspace.locator(".ui-resource-row").filter({
-        has: page.getByRole("checkbox", { name: t("Select all eligible Worktrees in this view"), exact: true })
+        has: page.getByRole("checkbox", { name: t("Select all clean Worktrees in this view"), exact: true })
       });
       expect(await selectionRow.evaluate((row) => [...row.querySelectorAll<HTMLElement>("button, input, .ui-resource-row__metadata")]
         .every((element) => {
@@ -301,14 +301,14 @@ describe("Worktrees desktop workflow", () => {
     }
     await page.setViewportSize({ width: 920, height: 620 });
     expect(await group.locator(".ui-resource-row").filter({ hasText: "locked-worktree" }).getByRole("checkbox").count()).toBe(0);
-    expect(await group.locator(".ui-resource-row").filter({ hasText: "long-name-with-uncommitted-work" }).getByRole("checkbox").count()).toBe(0);
-    expect(await group.locator(".ui-resource-row").filter({ hasText: "needs-review" }).getByRole("checkbox").count()).toBe(0);
+    expect(await group.locator(".ui-resource-row").filter({ hasText: "long-name-with-uncommitted-work" }).getByRole("checkbox").isChecked()).toBe(false);
+    expect(await group.locator(".ui-resource-row").filter({ hasText: "needs-review" }).getByRole("checkbox").isChecked()).toBe(false);
     await workspace.getByRole("button", { name: `${t("Review cleanup")} (9)`, exact: true }).click();
     const batchDialog = page.getByRole("dialog");
     await batchDialog.getByText(t("Selected size"), { exact: true }).waitFor();
-    expect(await batchDialog.locator(".ui-resource-row__state .ui-catalog-sort-metric").count()).toBe(9);
+    expect(await batchDialog.locator(".ui-resource-row__metadata .ui-catalog-sort-metric").count()).toBe(18);
     await batchDialog.getByRole("button", { name: t("Cancel"), exact: true }).click();
-    await group.getByRole("checkbox", { name: t("Select all eligible Worktrees"), exact: true }).click();
+    await group.getByRole("checkbox", { name: t("Select all clean Worktrees"), exact: true }).click();
     await group.getByRole("button", { name: t("Ignore repository"), exact: true }).click();
     const ignoredSection = workspace.getByRole("button", { name: t("Ignored repositories"), exact: true });
     await ignoredSection.waitFor();
@@ -326,7 +326,7 @@ describe("Worktrees desktop workflow", () => {
     expect(await unkeep.evaluate((element) => document.activeElement === element)).toBe(true);
     await unkeep.click();
     await group.getByRole("button", { name: t("Ignore repository"), exact: true }).waitFor();
-    expect(await group.getByRole("checkbox", { name: t("Select Worktree for review") }).count()).toBe(9);
+    expect(await group.getByRole("checkbox", { name: t("Select Worktree for review") }).count()).toBe(11);
     await workspace.getByRole("button", { name: t("Scan locations") }).click();
     const scope = page.getByRole("dialog", { name: t("Scan locations") });
     await scope.getByText(join(home, ".codex", "worktrees"), { exact: true }).waitFor();
@@ -436,7 +436,7 @@ describe("Worktrees desktop workflow", () => {
     await linkedRow.getByRole("button", { name: "review-change", exact: true }).click();
     await dialog.getByRole("button", { name: t("Remove Worktree...") }).click();
     await dialog.getByRole("button", { name: t("Remove Worktree"), exact: true }).waitFor();
-    expect(await dialog.locator(".ui-resource-row__state .ui-catalog-sort-metric").textContent()).toBe("5 B");
+    expect(await dialog.locator(`.ui-resource-row__metadata .ui-catalog-sort-metric[aria-label^="${t("Size")}:"]`).textContent()).toBe("5 B");
     await dialog.getByText(t("Estimated space freed"), { exact: true }).waitFor();
     for (const width of [920, 1180, 1440]) {
       await page.setViewportSize({ width, height: width === 920 ? 620 : 900 });
@@ -496,6 +496,7 @@ describe("Worktrees desktop workflow", () => {
     await writeFile(join(dirty, "cache", "result.txt"), "ignored experiment\n");
     const beforeDirtyStatus = (await run("git", ["-C", dirty, "status", "--porcelain=v1", "-z", "--ignored=matching"])).stdout;
     const dirtyRow = reopened.locator(".worktree-workspace .ui-resource-row").filter({ has: reopened.getByText(dirty, { exact: true }) });
+    await dirtyRow.hover();
     await dirtyRow.getByRole("button", { name: t("Remove Worktree..."), exact: true }).click();
     const dirtyConfirm = reopened.getByRole("dialog", { name: t("Remove this Worktree?"), exact: true });
     await dirtyConfirm.getByText(t("These worktrees contain local files. Git will force-remove only the reviewed paths after their recovery copies are verified.")).waitFor();
@@ -512,6 +513,7 @@ describe("Worktrees desktop workflow", () => {
     expect((await run("git", ["-C", dirty, "status", "--porcelain=v1", "-z", "--ignored=matching"])).stdout).toBe(beforeDirtyStatus);
     await dirtyConfirm.getByRole("button", { name: t("Cancel"), exact: true }).click();
     expect(await readFile(join(dirty, "notes.txt"), "utf8")).toBe("unsaved work\n");
+    await dirtyRow.hover();
     await dirtyRow.getByRole("button", { name: t("Remove Worktree..."), exact: true }).click();
     await dirtyConfirm.getByRole("button", { name: t("Remove Worktree"), exact: true }).click();
     const dirtyResults = reopened.getByRole("dialog", { name: t("Cleanup results"), exact: true });
@@ -533,6 +535,65 @@ describe("Worktrees desktop workflow", () => {
     expect(await readFile(join(dirty, "cache", "result.txt"), "utf8")).toBe("ignored experiment\n");
     for (let index = 0; index < 20; index++) expect(await readFile(join(dirty, `experiment-${index}.txt`), "utf8")).toBe("keep this experiment\n");
     expect((await run("git", ["-C", dirty, "status", "--porcelain=v1", "-z", "--ignored=matching"])).stdout).toBe(beforeDirtyStatus);
+    expect(calls).toBe(1);
+
+    // Explicitly select two dirty trees and a clean tree, then authorize one combined removal.
+    await reopened.getByRole("dialog", { name: t("Worktree recovery"), exact: true })
+      .getByRole("button", { name: t("Close"), exact: true }).last().click();
+    const secondDirty = join(home, ".codex", "worktrees", "manual-second");
+    await run("git", ["-C", repo, "worktree", "add", "-b", "manual-second", secondDirty]);
+    await writeFile(join(secondDirty, "README.md"), "second staged change\n");
+    await run("git", ["-C", secondDirty, "add", "README.md"]);
+    await writeFile(join(secondDirty, "extra.txt"), "second untracked note\n");
+    const secondStatus = (await run("git", ["-C", secondDirty, "status", "--porcelain=v1", "-z", "--ignored=matching"])).stdout;
+    const reopenedWorkspace = reopened.locator(".worktree-workspace");
+    await reopenedWorkspace.getByRole("button", { name: t("Refresh Worktrees"), exact: true }).click();
+    await reopenedWorkspace.getByText(secondDirty, { exact: true }).waitFor();
+    for (const path of [dirty, secondDirty, linked]) {
+      await reopenedWorkspace.locator(".ui-resource-row").filter({ has: reopened.getByText(path, { exact: true }) })
+        .getByRole("checkbox", { name: t("Select Worktree for review"), exact: true }).check();
+    }
+    const previewSelection = reopenedWorkspace.getByRole("button", { name: `${t("Review cleanup")} (3)`, exact: true });
+    await previewSelection.click();
+    const combinedConfirm = reopened.getByRole("dialog", { name: t("Remove {{count}} Worktrees?", { count: 3 }), exact: true });
+    await combinedConfirm.getByText(t("Local recovery copies"), { exact: true }).waitFor();
+    expect(await combinedConfirm.getByText(t("Recovery copy required"), { exact: true }).count()).toBe(2);
+    expect(await combinedConfirm.getByText(t("Commits retained"), { exact: true }).count()).toBe(1);
+    for (const [width, height] of [[920, 620], [1180, 728], [1440, 900]]) {
+      await reopened.setViewportSize({ width, height });
+      expect(await combinedConfirm.evaluate((element) => {
+        const body = element.querySelector<HTMLElement>(".ui-dialog-body")!;
+        const footer = element.querySelector(".ui-dialog-footer")!.getBoundingClientRect();
+        return body.scrollWidth <= body.clientWidth + 1 && footer.bottom <= innerHeight;
+      })).toBe(true);
+      if (process.env.AGENTENV_CAPTURE_WORKTREES_DIR) await reopened.screenshot({ path: join(process.env.AGENTENV_CAPTURE_WORKTREES_DIR, `worktree-manual-batch-${locale}-${width}.png`) });
+    }
+    await combinedConfirm.getByRole("button", { name: t("Cancel"), exact: true }).click();
+    expect((await run("git", ["-C", dirty, "status", "--porcelain=v1", "-z", "--ignored=matching"])).stdout).toBe(beforeDirtyStatus);
+    expect((await run("git", ["-C", secondDirty, "status", "--porcelain=v1", "-z", "--ignored=matching"])).stdout).toBe(secondStatus);
+    await previewSelection.click();
+    await combinedConfirm.getByRole("button", { name: t("Remove Worktrees"), exact: true }).click();
+    const combinedResults = reopened.getByRole("dialog", { name: t("Cleanup results"), exact: true });
+    await combinedResults.getByRole("button", { name: t("Close"), exact: true }).last().click({ trial: true });
+    expect(await combinedResults.getByText(t("Removed"), { exact: true }).count(), await combinedResults.textContent()).toBe(3);
+    for (const path of [dirty, secondDirty, linked]) {
+      await expect(readFile(join(path, "README.md"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+      expect((await run("git", ["-C", repo, "worktree", "list", "--porcelain"])).stdout).not.toContain(path);
+    }
+    await combinedResults.getByRole("button", { name: t("Close"), exact: true }).last().click();
+    await reopenedWorkspace.getByRole("button", { name: t("Worktree recovery"), exact: true }).click();
+    for (const path of [dirty, secondDirty]) {
+      const rows = reopened.getByRole("dialog", { name: t("Worktree recovery"), exact: true }).locator(".ui-resource-row")
+        .filter({ has: reopened.getByText(path, { exact: true }) });
+      const restore = rows.getByRole("button", { name: t("Restore"), exact: true });
+      await restore.click();
+      await restore.waitFor({ state: "hidden" });
+    }
+    expect((await run("git", ["-C", dirty, "status", "--porcelain=v1", "-z", "--ignored=matching"])).stdout).toBe(beforeDirtyStatus);
+    expect((await run("git", ["-C", secondDirty, "status", "--porcelain=v1", "-z", "--ignored=matching"])).stdout).toBe(secondStatus);
+    expect(await readFile(join(dirty, "notes.txt"), "utf8")).toBe("unsaved work\n");
+    expect(await readFile(join(dirty, "cache", "result.txt"), "utf8")).toBe("ignored experiment\n");
+    expect(await readFile(join(secondDirty, "extra.txt"), "utf8")).toBe("second untracked note\n");
     expect(calls).toBe(1);
   }, 90_000);
 });

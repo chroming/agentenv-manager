@@ -39,9 +39,14 @@ export interface WorktreeEntry {
   integration?: WorktreeIntegration;
 }
 
-export const isBatchCleanupCandidate = (entry: WorktreeEntry): boolean =>
-  entry.state === "candidate" && entry.cleanupReviewAvailable && entry.exists &&
-  !entry.main && !entry.keptReason && !entry.repositoryKeptReason && !entry.locked && !entry.prunable &&
+export const canSelectWorktreeForCleanup = (entry: WorktreeEntry): boolean =>
+  entry.manualReviewAvailable && entry.exists && Boolean(entry.head) &&
+  !entry.main && !entry.locked && !entry.prunable && !entry.submodules && !entry.keptReason && !entry.repositoryKeptReason &&
+  (entry.state === "candidate" || entry.state === "review");
+
+export const isAutomaticCleanupCandidate = (entry: WorktreeEntry): boolean =>
+  canSelectWorktreeForCleanup(entry) &&
+  entry.state === "candidate" && entry.cleanupReviewAvailable &&
   !entry.detached && !entry.headNeedsProtection && !entry.submodules &&
   entry.reasons.length === 0 && entry.changes.length === 0 && entry.ignored.length === 0;
 
