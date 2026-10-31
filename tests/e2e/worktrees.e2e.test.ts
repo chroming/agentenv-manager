@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { createServer, type Server } from "node:http";
-import { chmod, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { chmod, mkdir, mkdtemp, readFile, realpath, rm, utimes, writeFile } from "node:fs/promises";
 import { delimiter, join } from "node:path";
 import { tmpdir } from "node:os";
 import { promisify } from "node:util";
@@ -43,6 +43,7 @@ describe("Worktrees desktop workflow", () => {
     await run("git", ["-C", repo, "add", "."]);
     await run("git", ["-C", repo, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.com", "commit", "-m", "base"]);
     await run("git", ["-C", repo, "worktree", "add", "-b", "review-change", linked]);
+    await utimes(join(linked, "README.md"), new Date("2024-04-12T10:30:00Z"), new Date("2024-04-12T10:30:00Z"));
     const dirty = join(home, ".codex", "worktrees", "long-name-with-uncommitted-work");
     const locked = join(home, ".codex", "worktrees", "locked-worktree");
     await run("git", ["-C", repo, "worktree", "add", "-b", "feature/a-long-branch-name-that-must-not-move-status", dirty]);
@@ -104,6 +105,8 @@ describe("Worktrees desktop workflow", () => {
     await page.getByRole("button", { name: t("Worktrees"), exact: true }).click();
     const workspace = page.locator(".worktree-workspace");
     await workspace.getByText(linked).waitFor();
+    expect(await workspace.locator(".ui-resource-row").filter({ has: page.getByText(linked, { exact: true }) })
+      .locator(".worktree-dialog__metrics").textContent()).toContain("2024");
     const beforeReopen = await page.evaluate(() => window.agentEnv.cachedWorktreeInventory());
     expect(beforeReopen.fresh).toBe(true);
     await page.getByRole("button", { name: t("Agents"), exact: true }).click();
@@ -137,7 +140,7 @@ describe("Worktrees desktop workflow", () => {
     for (const viewport of [{ width: 920, height: 620 }, { width: 1180, height: 728 }, { width: 1440, height: 900 }]) {
       await page.setViewportSize(viewport);
       await expectCatalogToolbar(workspace.locator(".ui-catalog-toolbar"), "wide");
-      const geometry = await workspace.evaluate((element) => {
+      const geometry = await workspace.evaluate((element, dateLabel) => {
         const frame = element.getBoundingClientRect();
         const body = element.querySelector(".worktree-dialog__body")!;
         const rows = [...element.querySelectorAll<HTMLElement>(".worktree-dialog__entries > .ui-resource-row")];
@@ -146,6 +149,10 @@ describe("Worktrees desktop workflow", () => {
           withinWindow: frame.left >= 0 && frame.right <= window.innerWidth &&
             frame.top >= 0 && frame.bottom <= window.innerHeight,
           bodyFits: body.clientWidth + 1 >= body.scrollWidth,
+          datesVisible: rows.filter((row) => row.querySelector(".ui-resource-row__metadata")).every((row) => [...row.querySelectorAll(".ui-catalog-sort-metric")]
+            .some((metric) => metric.getAttribute("aria-label")?.startsWith(`${dateLabel}:`))),
+          selectionClearance: [...body.querySelectorAll('input[type="checkbox"]')].every((input) =>
+            input.getBoundingClientRect().right <= body.getBoundingClientRect().right - 16),
           aligned: lanes.every((xs) => Math.max(...xs) - Math.min(...xs) <= 1),
           stateFits: rows.every((row) => {
             const state = row.querySelector<HTMLElement>(".ui-interactive-status")!;
@@ -161,9 +168,11 @@ describe("Worktrees desktop workflow", () => {
               centered: Math.abs(title.top + title.height / 2 - actions.top - actions.height / 2) <= 1 };
           })
         };
-      });
+      }, t("Last modified"));
       expect(geometry.withinWindow).toBe(true);
       expect(geometry.bodyFits).toBe(true);
+      expect(geometry.datesVisible).toBe(true);
+      expect(geometry.selectionClearance).toBe(true);
       expect(geometry.aligned).toBe(true);
       expect(geometry.stateFits).toBe(true);
       expect(geometry.groupActions).toEqual(geometry.groupActions.map(() => ({ fits: true, centered: true })));
@@ -200,13 +209,33 @@ describe("Worktrees desktop workflow", () => {
       expect(await sortMenu.count()).toBe(0);
       expect(await sortTrigger.evaluate((element) => element === document.activeElement)).toBe(true);
       await workspace.getByRole("button", { name: new RegExp(`^${t("Filters")}`) }).click();
-      await page.getByRole("combobox", { name: t("Worktree filter") }).selectOption("kept");
+      const filterSelect = page.getByRole("combobox", { name: t("Worktree filter") });
+      await filterSelect.selectOption("candidate");
+      expect(await workspace.getByRole("checkbox", { name: t("Select Worktree for review") }).count()).toBe(9);
+      expect(await workspace.getByText(dirty, { exact: true }).count()).toBe(0);
+      expect(await workspace.getByText(unique, { exact: true }).count()).toBe(0);
+      if (captureDir) await page.screenshot({ path: join(captureDir, `worktree-eligible-${locale}-${viewport.width}.png`) });
+      await filterSelect.selectOption("review");
+      expect(await workspace.getByRole("checkbox", { name: t("Select Worktree for review") }).count()).toBe(0);
+      expect(await workspace.getByText(dirty, { exact: true }).count()).toBe(1);
+      expect(await workspace.getByText(unique, { exact: true }).count()).toBe(1);
+      await filterSelect.selectOption("kept");
       if (captureDir) await page.screenshot({ path: join(captureDir, `worktree-filters-${locale}-${viewport.width}.png`) });
       await page.getByRole("button", { name: t("Clear filters"), exact: true }).click();
       await page.keyboard.press("Escape");
     }
     await page.setViewportSize({ width: 920, height: 620 });
     expect(await workspace.locator(".worktree-workspace__body").evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
+    const lastChoice = workspace.getByRole("checkbox", { name: t("Select Worktree for review") }).last();
+    await lastChoice.scrollIntoViewIfNeeded();
+    await page.mouse.wheel(0, 100);
+    expect(await lastChoice.evaluate((input) => {
+      const bounds = input.getBoundingClientRect();
+      return document.elementFromPoint(bounds.right - 2, bounds.top + bounds.height / 2) === input;
+    })).toBe(true);
+    await lastChoice.check();
+    expect(await lastChoice.isChecked()).toBe(true);
+    await lastChoice.uncheck();
     await workspace.getByRole("checkbox", { name: t("Select Worktree for review") }).first().check();
     const selectedPath = await workspace.locator(".ui-resource-row").filter({
       has: page.getByRole("checkbox", { name: t("Select Worktree for review"), checked: true })
@@ -217,15 +246,17 @@ describe("Worktrees desktop workflow", () => {
     const sortedPaths = await workspace.locator(".worktree-dialog__entries .ui-resource-row__identity > span").allTextContents();
     expect(sortedPaths[0]).toBe(repo);
     expect(sortedPaths[1]).toBe(dirty);
-    const metrics = workspace.locator(".worktree-dialog__entries .ui-catalog-sort-metric");
-    expect(await metrics.count()).toBe(sortedPaths.length);
+    const metrics = workspace.locator(`.worktree-dialog__entries .ui-catalog-sort-metric[aria-label^="${t("Size")}:"]`);
+    expect(await metrics.count()).toBe(sortedPaths.length - 1);
     expect(await metrics.allTextContents()).toEqual(expect.arrayContaining([expect.stringMatching(/\d.*B/)]));
     for (const width of [920, 1180, 1440]) {
       await page.setViewportSize({ width, height: width === 920 ? 620 : 900 });
       expect(await metrics.evaluateAll((elements) => elements.every((element) => {
         const row = element.closest(".ui-resource-row")!.getBoundingClientRect();
         const metric = element.getBoundingClientRect();
-        return element.scrollWidth <= element.clientWidth + 1 && Math.abs(row.y + row.height / 2 - metric.y - metric.height / 2) <= 1;
+        const metadata = element.closest(".ui-resource-row__metadata")!.getBoundingClientRect();
+        return element.scrollWidth <= element.clientWidth + 1 && metric.top >= row.top && metric.bottom <= row.bottom &&
+          Math.abs(row.y + row.height / 2 - metadata.y - metadata.height / 2) <= 1;
       }))).toBe(true);
       expect(await workspace.locator(".worktree-dialog__group .ui-resource-disclosure__actions .ui-catalog-sort-metric").count()).toBeGreaterThan(0);
       if (process.env.AGENTENV_CAPTURE_WORKTREES_DIR) {
@@ -248,7 +279,7 @@ describe("Worktrees desktop workflow", () => {
     await disclosure.click();
     await group.getByRole("checkbox", { name: t("Select all eligible Worktrees"), exact: true }).click();
     expect(await group.getByRole("checkbox", { name: t("Select Worktree for review"), checked: true }).count()).toBe(9);
-    const globalSelection = workspace.getByRole("checkbox", { name: t("Select all cleanup candidates in this view"), exact: true });
+    const globalSelection = workspace.getByRole("checkbox", { name: t("Select all eligible Worktrees in this view"), exact: true });
     expect(await globalSelection.isChecked()).toBe(true);
     await globalSelection.uncheck();
     expect(await group.getByRole("checkbox", { name: t("Select Worktree for review"), checked: true }).count()).toBe(0);
@@ -256,7 +287,7 @@ describe("Worktrees desktop workflow", () => {
     for (const width of [920, 1180, 1440]) {
       await page.setViewportSize({ width, height: width === 920 ? 620 : 900 });
       const selectionRow = workspace.locator(".ui-resource-row").filter({
-        has: page.getByRole("checkbox", { name: t("Select all cleanup candidates in this view"), exact: true })
+        has: page.getByRole("checkbox", { name: t("Select all eligible Worktrees in this view"), exact: true })
       });
       expect(await selectionRow.evaluate((row) => [...row.querySelectorAll<HTMLElement>("button, input, .ui-resource-row__metadata")]
         .every((element) => {

@@ -18,48 +18,48 @@
   "files": [
     {
       "file": "worktree-analysis-en-1180x728.png",
-      "sha256": "908ffc1480d0b0cc141bb83ac5b203ad8ce96f8fa70d38291d90256bb71172d9",
-      "reviewReason": "Reviewed 2026-10-11: current isolated Electron capture; retention advice, confirmation checkbox and footer remain visible at 920/1180/1440 in all three locales. No threshold changes."
+      "sha256": "92c4dcac373856a9daf7343ea3713dec59e5ee2456c338ebcdaf6838997c1987",
+      "reviewReason": "Reviewed 2026-10-31: current isolated Electron; intentional background list date/size lanes, batch cleanup wording and selection clearance. Retention advice, consent and footer inspected at all three sizes/locales; no threshold changes."
     },
     {
       "file": "worktree-analysis-en-1440x900.png",
-      "sha256": "ac0abe170c8e08c402a0b89e3b79e10bf44df71c3da1fa00ecb12bccec68b741",
-      "reviewReason": "Reviewed 2026-10-11: current isolated Electron capture; retention advice, confirmation checkbox and footer remain visible at 920/1180/1440 in all three locales. No threshold changes."
+      "sha256": "f103b6764600b2f9ac744998356262cdcd9719568962f8d8ce1cbf0e6177d07f",
+      "reviewReason": "Reviewed 2026-10-31: current isolated Electron; intentional background list date/size lanes, batch cleanup wording and selection clearance. Retention advice, consent and footer inspected at all three sizes/locales; no threshold changes."
     },
     {
       "file": "worktree-analysis-en-920x620.png",
-      "sha256": "a349d2b15ce458b58073861ad9a7eaacdb5308057faf32089208e10a34835d1d",
-      "reviewReason": "Reviewed 2026-10-11: current isolated Electron capture; retention advice, confirmation checkbox and footer remain visible at 920/1180/1440 in all three locales. No threshold changes."
+      "sha256": "cfaab8f2d67c5c12919611d976136e49e50577de4f433e0dd34f3db26debdc90",
+      "reviewReason": "Reviewed 2026-10-31: current isolated Electron; intentional background list date/size lanes, batch cleanup wording and selection clearance. Retention advice, consent and footer inspected at all three sizes/locales; no threshold changes."
     },
     {
       "file": "worktree-analysis-zh_CN-1180x728.png",
-      "sha256": "0e0bbc501adc30fff2cecda5f926819318cac53949085cd1ff69a178f8291c3c",
-      "reviewReason": "Reviewed 2026-10-11: current isolated Electron capture; retention advice, confirmation checkbox and footer remain visible at 920/1180/1440 in all three locales. No threshold changes."
+      "sha256": "3ae66714a6f991fa1911ae19a5e029876b8e8a573058620688e18f94e4f7f3c8",
+      "reviewReason": "Reviewed 2026-10-31: current isolated Electron; intentional background list date/size lanes, batch cleanup wording and selection clearance. Retention advice, consent and footer inspected at all three sizes/locales; no threshold changes."
     },
     {
       "file": "worktree-analysis-zh_CN-1440x900.png",
-      "sha256": "3ef0d665cbf229d4179bdd31e133eff93abe6233f6d0e1e87b038dd30c5f699e",
-      "reviewReason": "Reviewed 2026-10-11: current isolated Electron capture; retention advice, confirmation checkbox and footer remain visible at 920/1180/1440 in all three locales. No threshold changes."
+      "sha256": "94c04534bf5b39e3fe29de9f8f63fe5d6cc5c3aa7bfaf0fecde8811c6c029d86",
+      "reviewReason": "Reviewed 2026-10-31: current isolated Electron; intentional background list date/size lanes, batch cleanup wording and selection clearance. Retention advice, consent and footer inspected at all three sizes/locales; no threshold changes."
     },
     {
       "file": "worktree-analysis-zh_CN-920x620.png",
-      "sha256": "c895ce34c9bf4d5edaa50413156759f2bfeaa0c130bdbdb33a73189b2d95a3d5",
-      "reviewReason": "Reviewed 2026-10-11: current isolated Electron capture; retention advice, confirmation checkbox and footer remain visible at 920/1180/1440 in all three locales. No threshold changes."
+      "sha256": "e207ed07416951a7a13330bb0992e6c64607554fd62437ec3c6b93fbae81c961",
+      "reviewReason": "Reviewed 2026-10-31: current isolated Electron; intentional background list date/size lanes, batch cleanup wording and selection clearance. Retention advice, consent and footer inspected at all three sizes/locales; no threshold changes."
     },
     {
       "file": "worktree-analysis-zh_TW-1180x728.png",
-      "sha256": "3498ff2ff88637c8a2edfd9d90ee1f5437469505eb61b1e485f0a5825d290133",
-      "reviewReason": "Reviewed 2026-10-11: current isolated Electron capture; retention advice, confirmation checkbox and footer remain visible at 920/1180/1440 in all three locales. No threshold changes."
+      "sha256": "f68f18513f7a67481966bd2be8c7abc6b9cb39817c960c431b01d289598cc8c7",
+      "reviewReason": "Reviewed 2026-10-31: current isolated Electron; intentional background list date/size lanes, batch cleanup wording and selection clearance. Retention advice, consent and footer inspected at all three sizes/locales; no threshold changes."
     },
     {
       "file": "worktree-analysis-zh_TW-1440x900.png",
-      "sha256": "97fe432325734bb4e60b494dfb1b34f998ae6134e5154695d5c61bc62cbccc5b",
-      "reviewReason": "Reviewed 2026-10-11: current isolated Electron capture; retention advice, confirmation checkbox and footer remain visible at 920/1180/1440 in all three locales. No threshold changes."
+      "sha256": "684d174ca8885571d92e0009f8b7674afd504751c7f2ea6660bca656a9989074",
+      "reviewReason": "Reviewed 2026-10-31: current isolated Electron; intentional background list date/size lanes, batch cleanup wording and selection clearance. Retention advice, consent and footer inspected at all three sizes/locales; no threshold changes."
     },
     {
       "file": "worktree-analysis-zh_TW-920x620.png",
-      "sha256": "c4875c59e5011a517c4bdcd04d717e7b4a11f0881fbb5d3768dc455b410f20df",
-      "reviewReason": "Reviewed 2026-10-11: current isolated Electron capture; retention advice, confirmation checkbox and footer remain visible at 920/1180/1440 in all three locales. No threshold changes."
+      "sha256": "79f2bac24091c8461843f9f57ef659e85e2a9c2d6b85a2937ea43cee8c7dac64",
+      "reviewReason": "Reviewed 2026-10-31: current isolated Electron; intentional background list date/size lanes, batch cleanup wording and selection clearance. Retention advice, consent and footer inspected at all three sizes/locales; no threshold changes."
     },
     {
       "file": "skill-invocation-920.png",
@@ -648,6 +648,14 @@
     }
   ],
   "incrementalReviews": [
+    {
+      "reviewedAt": "2026-10-31",
+      "sourceFingerprint": "fae5dc7e3ec92df957776c0e77edbaa56e29357921942320c369e586bf5c8f8d",
+      "artifactFingerprint": "3fc8ad683c3193e48f49d376512eb62028da56304ce6524e42afbf8fdff9beb3",
+      "scope": "Nine Worktree retention captures only; background lists now show file dates/sizes and scrollbar-safe selection controls. Other 117 baselines retained.",
+      "method": "Individually inspected all nine native captures and old/current Traditional Chinese 1440 pair; list, filter and confirmation siblings inspected at minimum/large sizes. Real isolated Git workflow tests; independent recapture uses unchanged 1.2 percent threshold.",
+      "thresholdsChanged": false
+    },
     {
       "reviewedAt": "2026-10-25",
       "sourceFingerprint": "2400ce89a2ef89ef4565dba02566779ad7c505808d1cae8b5e11442cde9dee6d",

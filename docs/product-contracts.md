@@ -309,8 +309,19 @@ inventories wait for those workers and do not publish partial results. Submodule
 protection comes from Git index gitlinks, including missing declarations/checkouts;
 inventory does not launch recursive git-submodule commands just to identify them.
 The toolbar owns scanning feedback without moving an existing list. Scope, review,
-confirmation and recovery use shared modal shells; branch, state and action lanes
+confirmation and recovery use shared modal shells; metadata, state and action lanes
 are aligned across all inventory rows. Scan-location editing never deletes folders.
+The selection strip says Batch cleanup, not an internal candidate classification.
+Filters distinguish trees eligible for batch cleanup from those needing individual
+review and from kept trees; they never change safety eligibility or perform Git work.
+The default list and cleanup confirmation expose measured file modification dates
+alongside sizes without requiring date sorting. Calendar dates include the year and
+expose their full timestamp on inspection. File times exclude root .git metadata,
+include ignored files, and are neither scan time nor last-commit time. Unknown dates
+remain unavailable, never fall back to the scan timestamp, and never authorize removal.
+Full branch and path remain inspectable in the existing review; branch is also available
+on the row identity. The page scroll owner reserves a trailing safe area in addition to
+scrollbar-gutter so overlay scrollbars cannot cover row or repository selection controls.
 Worktree sorting is a device-local UI preference, defaults to name, and uses the shared
 icon-only sort menu also used by Conversations. It never triggers scanning or changes
 cleanup eligibility, keep decisions or selected paths. Repositories stay grouped and

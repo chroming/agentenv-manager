@@ -56,7 +56,7 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
   const [busy, setBusy] = useState("");
   const [error, setError] = useState("");
   const [maximized, setMaximized] = useState(false);
-  const [filter, setFilter] = useState<"all" | "review" | "kept">("all");
+  const [filter, setFilter] = useState<"all" | "candidate" | "review" | "kept">("all");
   const [query, setQuery] = useState("");
   const searchDisclosure = useSearchDisclosure(query);
   const [ignoredExpanded, setIgnoredExpanded] = useState(false);
@@ -119,7 +119,8 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
     const needle = query.trim().toLocaleLowerCase();
     for (const entry of inventory?.entries ?? []) {
       if (needle && ![entry.path, entry.repositoryPath, entry.branch ?? ""].some((value) => value.toLocaleLowerCase().includes(needle))) continue;
-      if (filter === "review" && (entry.main || entry.keptReason || !["candidate", "review"].includes(entry.state))) continue;
+      if (filter === "candidate" && !isBatchCleanupCandidate(entry)) continue;
+      if (filter === "review" && (entry.main || entry.keptReason || entry.repositoryKeptReason || entry.state !== "review")) continue;
       if (filter === "kept" && entry.state !== "kept") continue;
       const rows = groups.get(entry.commonDir) ?? [];
       rows.push(entry);
@@ -302,6 +303,8 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
   };
   if (!open) return null;
   const sizeLabel = (bytes: number | undefined) => bytes === undefined ? t("Unavailable") : formatBytes(bytes);
+  const modifiedMetric = (entry: WorktreeEntry) => <CatalogSortMetric dateOnly kind="date" label={t("Last modified")} value={entry.modifiedAt}
+    detail={t("Latest file modification time, excluding .git. Includes ignored files; not the last commit time.")} />;
   const successful = results.filter((result) => result.error === undefined && !result.skipped);
 
   const title = view === "locations" ? t("Scan locations") : view === "detail" && detail
@@ -330,10 +333,11 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
               { value: "size-desc", label: t("Largest size") },
               { value: "status", label: t("Cleanup status") }
             ]} onChange={(value) => { setSort(value); onUpdateUiState?.({ worktreeSort: value }); }} />
-          <CatalogFilters count={Number(filter !== "all")} summary={filter === "review" ? t("Review") : t("Excluded")}>
+          <CatalogFilters count={Number(filter !== "all")} summary={filter === "candidate" ? t("Eligible for batch cleanup") : filter === "review" ? t("Needs review") : t("Excluded")}>
             <SelectField label={t("Worktree filter")} value={filter} onChange={(event) => { setFilter(event.currentTarget.value as typeof filter); setSelected([]); }}>
               <option value="all">{t("All")}</option>
-              <option value="review">{t("Review")}</option>
+              <option value="candidate">{t("Eligible for batch cleanup")}</option>
+              <option value="review">{t("Needs review")}</option>
               <option value="kept">{t("Excluded")}</option>
             </SelectField>
             <FilterReset disabled={filter === "all"} onReset={() => { setFilter("all"); setSelected([]); }} />
@@ -351,7 +355,7 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
   const list = <>
           {view === "list" ? failure : null}
           {visibleEntries.some((entry) => !entry.main) ? <ResourceRow density="compact" appearance="plain" icon={null}
-            title={<ControlGroup>{selectionControl(eligibleEntries, t("Select all cleanup candidates in this view"))}<span>{t("Cleanup candidates")}</span></ControlGroup>}
+            title={<ControlGroup>{selectionControl(eligibleEntries, t("Select all eligible Worktrees in this view"))}<span>{t("Batch cleanup")}</span></ControlGroup>}
             metadata={<span title={t("Selected size")}>{busy === "preview" ? preparationProgress : `${t("{{count}} selected", { count: selectedEntries.length })} · ${sizeLabel(totalBytes(selectedEntries.map((entry) => entry.sizeBytes)))}`}</span>}
             state={needsReviewCount ? <span title={t("These Worktrees are not included in bulk selection.")}>{t("{{count}} need review", { count: needsReviewCount })}</span> : undefined}
             actions={<Button size="compact" icon={<ClipboardCheck size={15} />} aria-label={`${t("Review cleanup")} (${selectedEntries.length})`}
@@ -359,7 +363,7 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
               onClick={() => void prepare(selectedEntries, false, true)}>{t("Review cleanup")}</Button>} /> : null}
           {busy === "scan" && !inventory ? <EmptyState icon={<LoaderCircle className="is-spinning" size={25} />} title={t("Scanning Worktrees...")} /> : null}
           {entriesByRepo.length === 0 && busy !== "scan" ? <EmptyState icon={<FolderGit2 size={25} />}
-            title={filter === "all" ? t("No Worktrees found") : filter === "review" ? t("No Worktrees to review") : t("No excluded Worktrees")}
+            title={filter === "all" ? t("No Worktrees found") : filter === "candidate" ? t("No Worktrees eligible for batch cleanup") : filter === "review" ? t("No Worktrees to review") : t("No excluded Worktrees")}
             description={filter === "all" ? t("Add a scan location to look for local Git working directories.") : undefined} /> : null}
           {[false, true].map((ignored) => {
             const groups = entriesByRepo.filter(([, entries]) => entries.some((entry) => Boolean(entry.repositoryKeptReason)) === ignored);
@@ -382,12 +386,11 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
             <AlignedResourceList actionTrack="compact" className="worktree-dialog__entries">
             {entries.map((entry) => <ResourceRow
               key={entryKey(entry)} density="compact" appearance="plain" icon={entry.locked ? <LockKeyhole size={16} /> : <FolderGit2 size={16} />}
-              title={<TextAction title={entry.path} onClick={() => review(entry)}>{nameFromPath(entry.path)}</TextAction>}
+              title={<TextAction title={[entry.path, entry.branch ? `${t("Branch")}: ${entry.branch}` : entry.head].filter(Boolean).join("\n")} onClick={() => review(entry)}>{nameFromPath(entry.path)}</TextAction>}
               description={<span className="selectable" title={entry.path}>{entry.path}</span>}
-              metadata={<span className="worktree-dialog__metrics">
-                <span title={entry.branch ?? entry.head}>{entry.branch ?? (entry.detached ? t("Detached HEAD") : entry.head?.slice(0, 8))}</span>
+              metadata={entry.main ? undefined : <span className="worktree-dialog__metrics">
+                {modifiedMetric(entry)}
                 <CatalogSortMetric kind="size" label={t("Size")} value={entry.sizeBytes} />
-                {sort === "modified-desc" || sort === "modified-asc" ? <CatalogSortMetric compact kind="date" label={t("Last modified")} value={entry.modifiedAt} /> : null}
               </span>}
               state={<InteractiveStatus size="metadata" tone={entry.state === "review" ? "warning" : "neutral"} title={reasonLabels(entry).join("\n")} reviewLabel={t("Review {{name}}", { name: nameFromPath(entry.path) })} onReview={() => review(entry)}
                 label={entry.main ? t("Main") : entry.state === "candidate" ? t("Clean") : entry.state === "kept" ? t("Kept") : entry.state === "review" ? t("Needs review") : t("Unavailable")} />}
@@ -430,7 +433,7 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
             { label: t("Branch"), value: detail.branch ?? (detail.detached ? t("Detached HEAD") : t("Unavailable")) },
             { label: "HEAD", value: detail.head ?? t("Unavailable") },
             { label: t("Local files"), value: detail.sizeBytes === undefined ? t("Unavailable") : formatBytes(detail.sizeBytes) },
-            ...(detail.modifiedAt ? [{ label: t("Last modified"), value: formatDate(detail.modifiedAt) }] : []),
+            { label: t("Last modified"), value: detail.modifiedAt && Number.isFinite(Date.parse(detail.modifiedAt)) ? formatDate(detail.modifiedAt) : t("Unavailable") },
             ...(detail.integration ? [{ label: t("Integration"), value: detail.integration.merged && detail.integration.ref !== `refs/heads/${detail.branch}` ? t("Contained in target") : t("Not confirmed") }] : [])
           ]} />
           {detail.integration ? <SelectField label={t("Integration target")} disabled={Boolean(busy)}
@@ -466,7 +469,7 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
             <br />{t("Recovery copies of local-only files remain in AgentEnv data and may still use disk space.")}
           </Notice> : null}
           <AlignedResourceList actionTrack="compact" className="worktree-dialog__entries">
-            {previews.map((preview) => <ResourceRow key={entryKey(preview.entry)} density="compact" appearance="plain" icon={<FolderGit2 size={16} />} title={nameFromPath(preview.entry.path)} description={<span className="selectable">{preview.entry.path}</span>} metadata={<span title={preview.entry.branch}>{preview.entry.branch ?? preview.entry.head?.slice(0, 8)}</span>} state={<CatalogSortMetric kind="size" label={t("Size")} value={preview.entry.sizeBytes} />} />)}
+            {previews.map((preview) => <ResourceRow key={entryKey(preview.entry)} density="compact" appearance="plain" icon={<FolderGit2 size={16} />} title={<span title={preview.entry.branch ?? preview.entry.head}>{nameFromPath(preview.entry.path)}</span>} description={<span className="selectable">{preview.entry.path}</span>} metadata={modifiedMetric(preview.entry)} state={<CatalogSortMetric kind="size" label={t("Size")} value={preview.entry.sizeBytes} />} />)}
           </AlignedResourceList>
         </> : null}
         {view === "results" ? <>

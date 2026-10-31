@@ -1,13 +1,33 @@
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { chmod, lstat, mkdir, mkdtemp, readdir, readlink, rm, symlink, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdir, mkdtemp, readdir, readlink, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative, sep } from "node:path";
 import { afterEach, expect, it } from "vitest";
-import { fingerprintWorktreeTree, hashWorktreeTree } from "../../src/main/worktrees/worktreeSnapshot";
+import { fingerprintWorktreeTree, hashWorktreeTree, measureWorktreeTree } from "../../src/main/worktrees/worktreeSnapshot";
 
 const roots: string[] = [];
 afterEach(async () => { for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }); });
+
+it("reports the newest local file mtime, including ignored files but excluding Git metadata and scan time", async () => {
+  const root = await mkdtemp(join(tmpdir(), "aem-worktree-file-time-"));
+  roots.push(root);
+  await mkdir(join(root, "cache"));
+  const old = new Date("2024-03-10T10:00:00Z");
+  const recent = new Date("2025-06-20T12:00:00Z");
+  for (const [path, content, date] of [
+    ["source.txt", "tracked", old], [".gitignore", "cache/", old],
+    ["cache/result.txt", "ignored", recent], [".git", "gitdir: fixture", new Date()]
+  ] as const) {
+    await writeFile(join(root, path), content);
+    await utimes(join(root, path), date, date);
+  }
+  expect((await measureWorktreeTree(root))?.modifiedAt).toBe(recent.toISOString());
+  expect((await fingerprintWorktreeTree(root)).modifiedAt).toBe(recent.toISOString());
+  const empty = await mkdtemp(join(tmpdir(), "aem-worktree-no-file-time-"));
+  roots.push(empty);
+  expect(await measureWorktreeTree(empty)).toEqual({ sizeBytes: 0, modifiedAt: undefined });
+});
 
 // Original streaming format is the persisted recovery fingerprint contract.
 const streamingHash = async (root: string, omitGitFile = false) => {

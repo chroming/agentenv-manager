@@ -16,6 +16,7 @@
   min-width: 0;
   overflow: auto;
   padding: var(--space-3) 0 0;
+  padding-inline-end: var(--space-4);
   scrollbar-gutter: stable;
 }
 
@@ -25,7 +26,7 @@
 
 
 .worktree-dialog__entries {
-  --resource-row-metadata-track: minmax(64px, 140px);
+  --resource-row-metadata-track: minmax(110px, 140px);
   --resource-row-state-track: 140px;
   --resource-row-actions-compact: 32px;
 }
@@ -67,18 +68,8 @@
   line-height: var(--line-height-body);
 }
 .worktree-dialog__metrics {
-  align-items: center;
-  display: flex;
-  gap: 8px;
+  display: grid;
+  gap: 2px;
+  justify-items: start;
   min-width: 0;
-}
-
-.worktree-dialog__metrics > span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.worktree-dialog__metrics > .ui-catalog-sort-metric {
-  flex: 0 0 auto;
 }

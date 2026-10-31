@@ -7,6 +7,17 @@ import { I18nProvider, translate } from "../../src/renderer/i18n";
 afterEach(cleanup);
 
 describe("Visible catalog sort metrics", () => {
+  it.each(["en", "zh_CN", "zh_TW"] as const)("keeps the year visible in calendar dates without changing timestamp defaults in %s", (locale) => {
+    const value = "2025-10-04T10:20:30Z";
+    render(<I18nProvider preference={locale}>
+      <CatalogSortMetric dateOnly kind="date" label="Calendar" value={value} />
+      <CatalogSortMetric kind="date" label="Timestamp" value={value} />
+    </I18nProvider>);
+    expect(screen.getByLabelText(/^Calendar:/).textContent).toContain("2025");
+    expect(screen.getByLabelText(/^Timestamp:/).textContent).not.toContain("2025");
+    expect(screen.getByLabelText(/^Calendar:/).getAttribute("aria-label")?.replace("Calendar:", ""))
+      .toBe(screen.getByLabelText(/^Timestamp:/).getAttribute("aria-label")?.replace("Timestamp:", ""));
+  });
   it.each(["en", "zh_CN", "zh_TW"] as const)("renders a compact date and an exact accessible value in %s", (locale) => {
     const { container } = render(<I18nProvider preference={locale}><CatalogSortMetric kind="date" label="Modified" value="2026-10-04T10:20:30Z" /></I18nProvider>);
     const metric = container.querySelector(".ui-catalog-sort-metric")!;
