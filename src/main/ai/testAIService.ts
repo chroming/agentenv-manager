@@ -13,7 +13,7 @@ export const testAIService = async (
     const body = decodeAIResponse(response);
     if (body.responseIssues.length) throw new Error("Incomplete connection test");
     z.object({ ok: z.literal(true) }).parse(body.data);
-  } catch {
-    throw new Error("The service responded, but did not return the required JSON output. Check the model's JSON support.");
+  } catch (error) {
+    throw new Error("The service responded, but did not return the required JSON output. Check the model's JSON support.", { cause: error });
   }
 };

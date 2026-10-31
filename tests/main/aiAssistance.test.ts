@@ -82,6 +82,15 @@ describe("AI assistance privacy gates", () => {
   });
 });
 describe("immutable AI analyses", () => {
+  it("provides a valid JSON example instead of a pseudo-schema or pipe-separated category", async () => {
+    const f = await fixture();
+    await f.service.generate(f.args);
+    const prompt = f.request.mock.calls[0][0].system;
+    const example = JSON.parse(prompt.match(/Example JSON:\n([^\n]+)/)?.[1] ?? "");
+    expect(example).toMatchObject({ overview: expect.any(String), findings: [expect.objectContaining({ category: "observation" })], limitations: [] });
+    expect(prompt).toContain("no Markdown, preamble or reasoning");
+    expect(f.request).toHaveBeenCalledTimes(1);
+  });
   it("retains useful analysis with unverifiable evidence instead of rejecting all findings", async () => {
     const f = await fixture();
     f.request.mockResolvedValue({ choices: [{ finish_reason: "stop", message: { content: JSON.stringify({
@@ -231,9 +240,11 @@ describe("immutable AI analyses", () => {
     const f = await fixture(); await f.config.saveConfig({ endpoint: "http://localhost/new", model: "fixture" });
     await expect(f.service.generate(f.args)).rejects.toThrow("service changed"); expect(f.request).not.toHaveBeenCalled();
   });
-  it.each(["length", "invalid-fields"])("preserves old results after %s regeneration failure", async (failure) => {
+  it.each(["length", "invalid-fields", "empty", "reasoning-only", "blank"])("preserves old results after %s regeneration failure", async (failure) => {
     const f = await fixture(); const old = await f.service.generate(f.args);
-    f.request.mockResolvedValue({ choices: [{ finish_reason: failure === "length" ? "length" : "stop", message: { content: failure === "length" ? '{"overview":"unfinished"' : JSON.stringify({ overview: "Wrong", findings: "not-an-array" }) } }] });
+    const content = failure === "length" ? '{"overview":"unfinished"' : failure === "empty" || failure === "reasoning-only" ? null : failure === "blank" ? "   " : JSON.stringify({ overview: "Wrong", findings: "not-an-array" });
+    f.request.mockResolvedValue({ choices: [{ finish_reason: failure === "length" ? "length" : "stop", message: { content,
+      ...(failure === "reasoning-only" ? { reasoning_content: "private reasoning" } : {}) } }] });
     await expect(f.service.generate({ ...f.args, regenerate: true })).rejects.toThrow("Previous results are kept");
     expect((await f.service.prepare(subject, "en")).cached).toEqual(old);
   });

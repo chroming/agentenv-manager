@@ -34,6 +34,14 @@ const setup = async (fetchImpl = vi.fn<typeof fetch>().mockImplementation(async 
 };
 
 describe("manual Skill update summaries", () => {
+  it("uses valid example categories rather than suggesting a pipe-separated category value", async () => {
+    const f = await setup();
+    await f.service.generate(input());
+    const prompt = JSON.parse(String(f.fetchImpl.mock.calls[0][1]?.body)).messages[0].content;
+    expect(prompt).not.toContain('"category":"important|usage|security|other"');
+    expect(prompt).toContain('"category":"important"');
+    expect(f.fetchImpl).toHaveBeenCalledTimes(1);
+  });
   it("maps short IDs to exact files and saves partial output without further requests", async () => {
     const output = { ...result, items: [{ ...result.items[0], paths: ["F1"] }, { ...result.items[0], category: "unexpected", paths: ["F1"] }, { malformed: true }] };
     const f = await setup(vi.fn<typeof fetch>().mockImplementation(async () => response(output as typeof result)));
@@ -199,7 +207,9 @@ describe("manual Skill update summaries", () => {
 
   it("distinguishes empty answers from invalid JSON without exposing reasoning or response content", async () => {
     const { service, store } = await setup(vi.fn<typeof fetch>().mockResolvedValue(new Response(JSON.stringify({ choices: [{ finish_reason: "stop", message: { content: "", reasoning_content: "private reasoning" } }] }))));
-    await expect(service.generate(input())).rejects.toThrow("empty response");
+    const failure = service.generate(input());
+    await expect(failure).rejects.toMatchObject({ code: "AI_REASONING_ONLY" });
+    await expect(failure).rejects.not.toThrow("private reasoning");
     expect(await store.history("review")).toEqual([]);
   });
 

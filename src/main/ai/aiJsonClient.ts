@@ -1,6 +1,7 @@
 import type { AIRequestPhase } from "../../shared/aiReliability";
 import { aiRequestProfile, type AIOutputSchema } from "./aiRequestProfile";
 import { AIRequestError, httpAIError, responseRequestId } from "./aiRequestError";
+import { rememberAICompletion } from "./aiCompletionDiagnostics";
 
 export const AI_INPUT_BYTES = 96_000;
 const completionEndpoint = (endpoint: string) => {
@@ -57,7 +58,12 @@ export const createAIJsonClient = (fetchImpl: typeof fetch = fetch) => {
       }
       input.signal.throwIfAborted();
       report("parsing");
-      try { return JSON.parse(received.toString("utf8")) as unknown; }
+      try {
+        const parsed: unknown = JSON.parse(received.toString("utf8"));
+        rememberAICompletion(parsed, { requestId: responseRequestId(response), status: response.status,
+          maxTokens: input.maxTokens ?? 2500, format: profile.responseFormat.type as "json_object" | "json_schema" });
+        return parsed;
+      }
       catch { throw new AIRequestError("AI service returned invalid JSON. Retry manually.", "AI_RESPONSE_JSON", responseRequestId(response)); }
     } finally { busy = false; }
   };
