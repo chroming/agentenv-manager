@@ -51,6 +51,72 @@ afterEach(() => {
 });
 
 describe("WorktreeDialog", () => {
+  it("previews dirty removal directly from its row and changes nothing until final confirmation", async () => {
+    const api = installApi();
+    const preview = { previewId: "dirty-direct", entry: dirty, fingerprint: "b".repeat(64),
+      checkedAt: inventory.scannedAt, backupRequired: true, forceRequired: true, savedWorkspace: false };
+    api.previewWorktreeCleanup.mockResolvedValue(preview);
+    render(<WorktreeWorkspace />);
+    const row = (await screen.findByText(dirty.path)).closest(".ui-resource-row")! as HTMLElement;
+    fireEvent.click(within(row).getByRole("button", { name: "Remove Worktree..." }));
+    const confirm = await screen.findByRole("dialog", { name: "Remove this Worktree?" });
+    expect(api.previewWorktreeCleanup).toHaveBeenCalledWith(dirty.commonDir, dirty.path, true);
+    expect(within(confirm).getByText(/contain local files/)).toBeInTheDocument();
+    expect(within(confirm).queryByRole("checkbox")).not.toBeInTheDocument();
+    expect(api.removeWorktree).not.toHaveBeenCalled();
+    fireEvent.click(within(confirm).getByRole("button", { name: "Cancel" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(api.removeWorktree).not.toHaveBeenCalled();
+    fireEvent.click(within(row).getByRole("button", { name: "Remove Worktree..." }));
+    fireEvent.click(await screen.findByRole("button", { name: "Remove Worktree" }));
+    await waitFor(() => expect(api.removeWorktree).toHaveBeenCalledWith(preview));
+  });
+
+  it("keeps direct-preview progress on its initiating row rather than the batch command", async () => {
+    const api = installApi();
+    let finish!: (value: Awaited<ReturnType<AgentEnvApi["previewWorktreeCleanup"]>>) => void;
+    api.previewWorktreeCleanup.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    render(<WorktreeWorkspace />);
+    const row = (await screen.findByText(dirty.path)).closest(".ui-resource-row")! as HTMLElement;
+    const action = within(row).getByRole("button", { name: "Remove Worktree..." });
+    fireEvent.click(action);
+    expect(action).toHaveAttribute("aria-busy", "true");
+    expect(screen.getByRole("button", { name: "Review cleanup (0)" })).toHaveAttribute("aria-busy", "false");
+    expect(api.removeWorktree).not.toHaveBeenCalled();
+    await act(async () => finish({ previewId: "ready", entry: dirty, fingerprint: "b".repeat(64), checkedAt: inventory.scannedAt,
+      backupRequired: true, forceRequired: true, savedWorkspace: false }));
+    expect(screen.getByRole("dialog", { name: "Remove this Worktree?" })).toBeInTheDocument();
+  });
+
+  it.each([
+    { main: true }, { locked: "Keep" }, { exists: false }, { submodules: true },
+    { keptReason: "Keep", state: "kept" as const }, { repositoryKeptReason: "Keep" },
+    { manualReviewAvailable: false }, { prunable: "Missing metadata" }, { head: undefined }, { state: "unavailable" as const }
+  ])("does not offer direct removal for a protected or unreadable tree: %j", async (flags) => {
+    const api = installApi();
+    api.inventoryWorktrees.mockResolvedValue({ ...inventory, entries: [{ ...dirty, ...flags }] });
+    render(<WorktreeWorkspace />);
+    if ("main" in flags) await screen.findByText("No Worktrees found");
+    else {
+      if ("repositoryKeptReason" in flags) fireEvent.click(await screen.findByRole("button", { name: "Ignored repositories" }));
+      await screen.findByText(dirty.path);
+    }
+    expect(screen.queryByRole("button", { name: "Remove Worktree..." })).not.toBeInTheDocument();
+    expect(api.previewWorktreeCleanup).not.toHaveBeenCalled();
+    expect(api.removeWorktree).not.toHaveBeenCalled();
+  });
+  it("keeps the original row when a direct preview fails its fresh safety check", async () => {
+    const api = installApi();
+    api.previewWorktreeCleanup.mockRejectedValueOnce(new Error("Git operation in progress. Finish it before reviewing cleanup."));
+    render(<WorktreeWorkspace />);
+    const row = (await screen.findByText(dirty.path)).closest(".ui-resource-row")! as HTMLElement;
+    fireEvent.click(within(row).getByRole("button", { name: "Remove Worktree..." }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Git operation in progress");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByText(dirty.path)).toBeInTheDocument();
+    expect(within(row).getByRole("button", { name: "Remove Worktree..." })).toBeEnabled();
+    expect(api.removeWorktree).not.toHaveBeenCalled();
+  });
   it("shows file modification times in the default list without mistaking scan time for file age", async () => {
     const api = installApi();
     api.inventoryWorktrees.mockResolvedValue({ ...inventory, entries: [
@@ -265,7 +331,7 @@ describe("WorktreeDialog", () => {
     const api = installApi();
     render(<WorktreeWorkspace />);
     fireEvent.click(await screen.findByRole("button", { name: /^clean$/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Review cleanup" }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Remove Worktree..." }));
     const confirm = await screen.findByRole("dialog", { name: "Remove this Worktree?" });
     expect(within(confirm).getByText("Selected size")).toBeInTheDocument();
     expect(within(confirm).getByLabelText("Size: 1.0 KB")).toBeInTheDocument();
@@ -358,7 +424,7 @@ describe("WorktreeDialog", () => {
     api.removeWorktree.mockRejectedValue(new Error("Repository needs review"));
     render(<WorktreeWorkspace />);
     fireEvent.click(await screen.findByRole("button", { name: /^clean$/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Review cleanup" }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Remove Worktree..." }));
     fireEvent.click(await screen.findByRole("button", { name: "Remove Worktree" }));
     const results = await screen.findByRole("dialog", { name: "Cleanup results" });
     await within(results).findByText("Failed");
@@ -403,8 +469,7 @@ describe("WorktreeDialog", () => {
     api.removeWorktree.mockResolvedValue({ status: "removed", sourceSizeBytes: 1024, reclaimedSizeBytes: 0 });
     render(<WorktreeWorkspace />);
     fireEvent.click(await screen.findByRole("button", { name: /^dirty$/ }));
-    fireEvent.click(within(screen.getByRole("dialog", { name: "dirty" })).getByRole("checkbox"));
-    fireEvent.click(screen.getByRole("button", { name: "Review cleanup" }));
+    fireEvent.click(within(screen.getByRole("dialog", { name: "dirty" })).getByRole("button", { name: "Remove Worktree..." }));
     const confirm = await screen.findByRole("dialog", { name: "Remove this Worktree?" });
     expect(confirm.querySelector(".ui-detail-list")).toHaveTextContent("Selected size1.0 KBEstimated space freed0 B");
     fireEvent.click(within(confirm).getByRole("button", { name: "Remove Worktree" }));
@@ -614,7 +679,7 @@ describe("WorktreeDialog", () => {
     fireEvent.click(screen.getByRole("button", { name: "Scan locations" }));
     expect(within(screen.getByRole("dialog")).getByText("/projects/restricted: Permission denied")).toBeInTheDocument();
   });
-  it("keeps batch cleanup limited to clean trees and requires explicit review for dirty trees", async () => {
+  it("keeps batch cleanup limited to clean trees but opens dirty confirmation without a prerequisite checkbox", async () => {
     const api = installApi();
     render(<WorktreeDialog open onClose={vi.fn()} />);
     await screen.findByText("/projects/_worktrees/dirty");
@@ -622,12 +687,11 @@ describe("WorktreeDialog", () => {
     const dirtyRow = screen.getByText("/projects/_worktrees/dirty").closest(".ui-resource-row");
     expect(dirtyRow).not.toBeNull();
     fireEvent.click(dirtyRow!.querySelector("button")!);
-    expect(screen.getByRole("button", { name: "Review cleanup" })).toBeDisabled();
-    fireEvent.click(screen.getByRole("checkbox", {
-      name: "I reviewed this worktree and want to remove its local contents after a verified recovery copy is saved."
-    }));
-    expect(screen.getByRole("button", { name: "Review cleanup" })).toBeEnabled();
+    const detail = screen.getByRole("dialog", { name: "dirty" });
+    expect(within(detail).queryByRole("checkbox")).not.toBeInTheDocument();
+    expect(within(detail).getByRole("button", { name: "Remove Worktree..." })).toBeEnabled();
     expect(api.previewWorktreeCleanup).not.toHaveBeenCalled();
+    expect(api.removeWorktree).not.toHaveBeenCalled();
   });
 
   it("exposes recovery even when no worktrees are found", async () => {
@@ -672,7 +736,7 @@ describe("WorktreeDialog", () => {
     api.removeWorktree.mockRejectedValueOnce(new Error(message));
     render(<WorktreeWorkspace />);
     fireEvent.click(await screen.findByRole("button", { name: /^clean$/ }));
-    fireEvent.click(screen.getByRole("button", { name: "Review cleanup" }));
+    fireEvent.click(within(screen.getByRole("dialog")).getByRole("button", { name: "Remove Worktree..." }));
     fireEvent.click(await screen.findByRole("button", { name: "Remove Worktree" }));
     const modal = await screen.findByRole("dialog", { name: "Cleanup results" });
     expect(await within(modal).findByText("Failed")).toBeInTheDocument();

@@ -23,6 +23,9 @@ import { AIAnalysisReview } from "./AIAnalysisReview";
 import { useSearchDisclosure } from "../hooks/useSearchDisclosure";
 
 const entryKey = (entry: WorktreeEntry) => `${entry.commonDir}\0${entry.path}`;
+const canReviewRemoval = (entry: WorktreeEntry) => entry.manualReviewAvailable && entry.exists && Boolean(entry.head) &&
+  !entry.main && !entry.locked && !entry.prunable && !entry.submodules && !entry.keptReason && !entry.repositoryKeptReason &&
+  (entry.state === "candidate" || entry.state === "review");
 const nameFromPath = worktreeName;
 const totalBytes = (values: Array<number | undefined>) =>
   values.some((value) => value === undefined) ? undefined : values.reduce<number>((sum, value) => sum + value!, 0);
@@ -44,12 +47,12 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
   const stopCleanup = useRef(false);
   const [stopping, setStopping] = useState(false);
   const [preparationProgress, setPreparationProgress] = useState("");
+  const [preparingPath, setPreparingPath] = useState("");
   const [inventory, setInventory] = useState<WorktreeInventory>();
   const [recovery, setRecovery] = useState<WorktreeRecoveryRecord[]>([]);
   const [recoveryIssues, setRecoveryIssues] = useState<string[]>([]);
   const [view, setView] = useState<"list" | "locations" | "detail" | "confirm" | "results" | "recovery">("list");
   const [detail, setDetail] = useState<WorktreeEntry>();
-  const [manualConfirm, setManualConfirm] = useState(false);
   const [previews, setPreviews] = useState<WorktreeCleanupPreview[]>([]);
   const [selected, setSelected] = useState<string[]>([]);
   const [results, setResults] = useState<CleanupResult[]>([]);
@@ -201,6 +204,7 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
   const prepare = async (entries: WorktreeEntry[], allowDirty = false, batch = false) => {
     if (!entries.length) return;
     setBusy("preview");
+    setPreparingPath(batch ? "" : entries[0].path);
     setError("");
     const ready: WorktreeCleanupPreview[] = [];
     const failures: string[] = [];
@@ -216,6 +220,7 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
     }
     setPreviews(ready);
     setPreparationProgress("");
+    setPreparingPath("");
     setBusy("");
     if (failures.length) setError(failures.join("\n"));
     if (ready.length) setView("confirm");
@@ -227,7 +232,6 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
       await window.agentEnv.setWorktreeIntegrationRef(entry.commonDir, ref || undefined);
       const latest = await refresh(false, true);
       if (latest) setDetail(latest.entries.find((value) => entryKey(value) === entryKey(entry)));
-      setManualConfirm(false);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : String(cause));
     } finally { setBusy(""); }
@@ -320,7 +324,7 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
     }
   };
   const review = (entry: WorktreeEntry) => {
-    setDetail(entry); setManualConfirm(false); setError(""); setView("detail");
+    setDetail(entry); setError(""); setView("detail");
   };
   const toolbar = <CatalogToolbar aria-label={t("Worktrees")}
         search={<SearchField label={t("Search Worktrees")} placeholder={t("Search")} value={query} onChange={(event) => { setQuery(event.target.value); setSelected([]); }} />}
@@ -356,10 +360,10 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
           {view === "list" ? failure : null}
           {visibleEntries.some((entry) => !entry.main) ? <ResourceRow density="compact" appearance="plain" icon={null}
             title={<ControlGroup>{selectionControl(eligibleEntries, t("Select all eligible Worktrees in this view"))}<span>{t("Batch cleanup")}</span></ControlGroup>}
-            metadata={<span title={t("Selected size")}>{busy === "preview" ? preparationProgress : `${t("{{count}} selected", { count: selectedEntries.length })} · ${sizeLabel(totalBytes(selectedEntries.map((entry) => entry.sizeBytes)))}`}</span>}
+            metadata={<span title={t("Selected size")}>{busy === "preview" && !preparingPath ? preparationProgress : `${t("{{count}} selected", { count: selectedEntries.length })} · ${sizeLabel(totalBytes(selectedEntries.map((entry) => entry.sizeBytes)))}`}</span>}
             state={needsReviewCount ? <span title={t("These Worktrees are not included in bulk selection.")}>{t("{{count}} need review", { count: needsReviewCount })}</span> : undefined}
             actions={<Button size="compact" icon={<ClipboardCheck size={15} />} aria-label={`${t("Review cleanup")} (${selectedEntries.length})`}
-              busy={busy === "preview"} disabled={Boolean(busy) || !selectedEntries.length}
+              busy={busy === "preview" && !preparingPath} disabled={Boolean(busy) || !selectedEntries.length}
               onClick={() => void prepare(selectedEntries, false, true)}>{t("Review cleanup")}</Button>} /> : null}
           {busy === "scan" && !inventory ? <EmptyState icon={<LoaderCircle className="is-spinning" size={25} />} title={t("Scanning Worktrees...")} /> : null}
           {entriesByRepo.length === 0 && busy !== "scan" ? <EmptyState icon={<FolderGit2 size={25} />}
@@ -381,7 +385,7 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
               })} actions={<ControlGroup>
               <CatalogSortMetric kind="size" label={t("Total size")} value={worktreeGroupMetric(entries, "size-desc")} />
               <IconButton data-repository-keep label={t(kept ? "Stop ignoring repository" : "Ignore repository")} variant="ghost" busy={busy === commonDir} disabled={Boolean(busy)} onClick={() => void setRepositoryKeep(commonDir, kept)}>{kept ? <Eye size={15} /> : <EyeOff size={15} />}</IconButton>
-              {!kept ? selectionControl(eligible, t("Select all eligible Worktrees")) : null}
+              {!kept ? <span className="worktree-dialog__row-action">{selectionControl(eligible, t("Select all eligible Worktrees"))}</span> : null}
             </ControlGroup>}>
             <AlignedResourceList actionTrack="compact" className="worktree-dialog__entries">
             {entries.map((entry) => <ResourceRow
@@ -394,14 +398,16 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
               </span>}
               state={<InteractiveStatus size="metadata" tone={entry.state === "review" ? "warning" : "neutral"} title={reasonLabels(entry).join("\n")} reviewLabel={t("Review {{name}}", { name: nameFromPath(entry.path) })} onReview={() => review(entry)}
                 label={entry.main ? t("Main") : entry.state === "candidate" ? t("Clean") : entry.state === "kept" ? t("Kept") : entry.state === "review" ? t("Needs review") : t("Unavailable")} />}
-              actions={<ControlGroup>
+              actions={<span className="worktree-dialog__row-action">
                 {isBatchCleanupCandidate(entry) ? <ChoiceInput
                   type="checkbox" alignment="flush" aria-label={t("Select Worktree for review")}
                   disabled={Boolean(busy)}
                   checked={selected.includes(entryKey(entry))}
                   onChange={(event) => setSelected((current) => event.target.checked ? [...current, entryKey(entry)] : current.filter((key) => key !== entryKey(entry)))}
-                /> : null}
-              </ControlGroup>}
+                /> : canReviewRemoval(entry) ? <IconButton label={t("Remove Worktree...")} title={t("Review removal of {{name}}", { name: nameFromPath(entry.path) })}
+                  variant="ghost" busy={busy === "preview" && preparingPath === entry.path} disabled={Boolean(busy)}
+                  onClick={() => void prepare([entry], true)}><Trash2 size={15} /></IconButton> : null}
+              </span>}
             />)}
             </AlignedResourceList>
           </ResourceDisclosureSection></Fragment>; });
@@ -449,10 +455,6 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
           {detail.changes.length ? <section><SectionLabel as="h4" count={detail.changes.length}>{t("Changed and untracked paths")}</SectionLabel><PathListPreview paths={detail.changes} /></section> : null}
           {detail.ignored.length ? <section><SectionLabel as="h4" count={detail.ignored.length}>{t("Ignored paths")}</SectionLabel><PathListPreview paths={detail.ignored} /></section> : null}
           {!detail.main && detail.exists ? <AIAnalysisReview actionsTarget={aiActionsTarget} subject={{ kind: "worktree", commonDir: detail.commonDir, path: detail.path }} /> : null}
-          {detail.manualReviewAvailable && !detail.cleanupReviewAvailable && !detail.keptReason ? <label className="worktree-dialog__confirmation">
-            <ChoiceInput type="checkbox" checked={manualConfirm} onChange={(event) => setManualConfirm(event.target.checked)} />
-            <span>{t("I reviewed this worktree and want to remove its local contents after a verified recovery copy is saved.")}</span>
-          </label> : null}
         </> : null}
         {view === "confirm" ? <>
           <DetailList items={[
@@ -521,7 +523,7 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
           {detail.repositoryKeptReason ? <ControlGroup><InteractiveStatus size="metadata" label={t("Repository ignored")} />
             <TextAction disabled={Boolean(busy)} onClick={() => { setQuery(""); setFilter("all"); setIgnoredExpanded(true); setRepositoryFocus(detail.commonDir); dismissReview(); }}>{t("View repository")}</TextAction></ControlGroup>
             : !detail.main ? <Button busy={busy === "keep"} disabled={Boolean(busy)} onClick={() => void setKeep(detail)}>{detail.keptReason ? t("Stop keeping Worktree") : t("Keep Worktree")}</Button> : null}
-          {detail.manualReviewAvailable && !detail.keptReason ? <Button icon={<Trash2 size={15} />} disabled={Boolean(busy) || (!detail.cleanupReviewAvailable && !manualConfirm)} busy={busy === "preview"} onClick={() => void prepare([detail], !detail.cleanupReviewAvailable)}>{t("Review cleanup")}</Button> : null}
+          {canReviewRemoval(detail) ? <Button icon={<Trash2 size={15} />} disabled={Boolean(busy)} busy={busy === "preview"} onClick={() => void prepare([detail], true)}>{t("Remove Worktree...")}</Button> : null}
         </> : <Button variant={view === "results" && !busy && results.length > 0 && results.every((result) => result.error === undefined && !result.skipped && !result.verificationWarnings?.length) ? "primary" : "secondary"} disabled={Boolean(busy) && busy !== "scan"} onClick={dismiss}>{t("Close")}</Button>}
       </DialogFooter>;
   const modal = (

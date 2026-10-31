@@ -367,6 +367,15 @@ retain their exact commit through a recovery ref without duplicating their files
 or ignored-content trees require a verified full recovery copy and individual review
 and explicit consent before Git's force option can be used; they never enter batch
 selection. Main, locked, missing, and submodule worktrees are not cleanup candidates.
+Individual review is not a mandatory navigation step. A reviewable non-batch tree
+has a compact Remove Worktree... row action that prepares the same fresh preview
+as the detail footer, then requires one final destructive confirmation. The detail
+does not require a separate acknowledgment checkbox before opening confirmation.
+Preview is read-only: cancellation writes nothing. Dirty/ignored content still
+requires a full verified recovery copy and staged-index protection before removal;
+the final confirmation explains that consequence. Main, locked, missing, ignored,
+kept, submodule and otherwise unsafe trees do not acquire this shortcut. Preparing
+one row shows progress on that initiating action, not on the batch command.
 Detached commits without another ref receive a recovery ref before removal.
 An operation cannot claim success until the directory and Git registration are both
 verified absent. Recovery must not overwrite a path created after cleanup.

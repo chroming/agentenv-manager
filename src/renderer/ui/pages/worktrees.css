@@ -61,15 +61,16 @@
   gap: var(--space-2);
 }
 
-.worktree-dialog__confirmation {
-  align-items: flex-start;
-  display: flex;
-  gap: var(--space-2);
-  line-height: var(--line-height-body);
-}
 .worktree-dialog__metrics {
   display: grid;
   gap: 2px;
   justify-items: start;
   min-width: 0;
+}
+
+.worktree-dialog__row-action {
+  align-items: center;
+  display: flex;
+  inline-size: var(--control-height-default);
+  justify-content: center;
 }
