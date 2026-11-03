@@ -72,8 +72,9 @@ export const fingerprintWorktreeTree = async (root: string, options: { omitGitFi
 export const hashWorktreeTree = async (root: string, options: { omitGitFile?: boolean } = {}): Promise<string> =>
   (await fingerprintWorktreeTree(root, options)).hash;
 
-export const copyWorktreeVerified = async (source: string, destination: string): Promise<string> => {
-  const before = await hashWorktreeTree(source);
+export const copyWorktreeVerified = async (source: string, destination: string, expectedHash?: string): Promise<string> => {
+  // Cleanup already read this exact fingerprint; both trees must still match it after copying.
+  const before = expectedHash ?? await hashWorktreeTree(source);
   await cp(source, destination, {
     recursive: true, dereference: false, verbatimSymlinks: true, preserveTimestamps: true
   });

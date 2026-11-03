@@ -4,7 +4,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { WorktreeDialog, WorktreeWorkspace } from "../../src/renderer/components/WorktreeDialog";
 import type { AgentEnvApi } from "../../src/shared/types";
-import type { WorktreeEntry, WorktreeInventory, WorktreeScanResult } from "../../src/shared/worktrees";
+import type { WorktreeCleanupRequest, WorktreeEntry, WorktreeInventory, WorktreeScanResult, WorktreeOperationProgress } from "../../src/shared/worktrees";
 
 const clean: WorktreeEntry = {
   path: "/projects/_worktrees/clean", repositoryPath: "/projects/app",
@@ -36,11 +36,16 @@ const installApi = () => {
       checkedAt: inventory.scannedAt, backupRequired: false, forceRequired: false,
       savedWorkspace: false
     }),
+    previewWorktreeCleanupBatch: vi.fn(),
     listWorktreeRecovery: vi.fn().mockResolvedValue({ records: [], issues: [] }),
     removeWorktree: vi.fn().mockResolvedValue({ status: "removed", sourceSizeBytes: 1024, reclaimedSizeBytes: 1024 }),
     readDiagnosticIssue: vi.fn().mockResolvedValue(undefined),
     copyText: vi.fn().mockResolvedValue(undefined)
   };
+  api.previewWorktreeCleanupBatch.mockImplementation(async (items: WorktreeCleanupRequest[]) => Promise.all(items.map(async (item) => {
+    try { return { path: item.path, preview: await api.previewWorktreeCleanup(item.commonDir, item.path, item.allowDirty) }; }
+    catch (cause) { return { path: item.path, error: String(cause) }; }
+  })));
   Object.defineProperty(window, "agentEnv", { configurable: true, value: api as unknown as AgentEnvApi });
   return api;
 };
@@ -51,6 +56,51 @@ afterEach(() => {
 });
 
 describe("WorktreeDialog", () => {
+  it("shows actual cleanup phases only for the initiating request", async () => {
+    const api = installApi();
+    let report!: (value: WorktreeOperationProgress) => void;
+    Object.assign(api, { onWorktreeProgress: vi.fn((listener) => { report = listener; return () => undefined; }) });
+    let finish!: (value: { status: string; sourceSizeBytes: number; reclaimedSizeBytes: number }) => void;
+    api.removeWorktree.mockImplementation((_preview, requestId) => {
+      report({ requestId, phase: "backing-up", path: clean.path, completed: 0, total: 1 });
+      return new Promise((resolve) => { finish = resolve; });
+    });
+    render(<WorktreeWorkspace />);
+    const row = within((await screen.findByText(clean.path)).closest(".ui-resource-row")! as HTMLElement);
+    fireEvent.click(row.getByRole("button", { name: "Remove Worktree..." }));
+    fireEvent.click(await screen.findByRole("button", { name: "Remove Worktree" }));
+    expect(await screen.findByText("Backing up local files...")).toBeInTheDocument();
+    act(() => report({ requestId: "another-window", phase: "verifying", path: "/other", completed: 0, total: 1 }));
+    expect(screen.queryByText("Verifying removal...")).not.toBeInTheDocument();
+    await act(async () => finish({ status: "removed", sourceSizeBytes: 1024, reclaimedSizeBytes: 1024 }));
+    expect(screen.queryByText("Backing up local files...")).not.toBeInTheDocument();
+  });
+  it("uses the main checkout only as repository context, not as a selectable or counted row", async () => {
+    const api = installApi();
+    api.inventoryWorktrees.mockResolvedValue({ ...inventory, entries: [
+      { ...clean, path: clean.repositoryPath, main: true, sizeBytes: 999999 }, clean, dirty
+    ] });
+    render(<WorktreeWorkspace />);
+    await screen.findByText(clean.path);
+    expect(screen.queryByText("Main", { exact: true })).not.toBeInTheDocument();
+    expect(screen.queryByText(clean.repositoryPath, { exact: true })).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "app" })).toBeInTheDocument();
+    expect(screen.getByTitle(clean.repositoryPath)).toHaveTextContent("2");
+  });
+
+  it("explicitly selects a repository's reviewable trees without running analysis or preview", async () => {
+    const api = installApi();
+    const locked = { ...dirty, path: "/locked", locked: "Keep", state: "kept" as const };
+    api.inventoryWorktrees.mockResolvedValue({ ...inventory, entries: [clean, dirty, locked] });
+    render(<WorktreeWorkspace />);
+    await screen.findByText(dirty.path);
+    fireEvent.click(screen.getByRole("button", { name: "Repository actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Select all removable Worktrees" }));
+    expect(screen.getByRole("button", { name: "Review cleanup (2)" })).toBeEnabled();
+    expect(within(screen.getByText(dirty.path).closest(".ui-resource-row")! as HTMLElement).getByRole("checkbox")).toBeChecked();
+    expect(api.previewWorktreeCleanup).not.toHaveBeenCalled();
+    expect(api.removeWorktree).not.toHaveBeenCalled();
+  });
   it("combines manually selected dirty trees into one confirmation while automatic selection only adds clean trees", async () => {
     const api = installApi();
     const otherDirty = { ...dirty, path: "/projects/_worktrees/dirty-two", ignored: ["cache/"] };
@@ -125,7 +175,7 @@ describe("WorktreeDialog", () => {
     expect(api.removeWorktree).not.toHaveBeenCalled();
     fireEvent.click(within(row).getByRole("button", { name: "Remove Worktree..." }));
     fireEvent.click(await screen.findByRole("button", { name: "Remove Worktree" }));
-    await waitFor(() => expect(api.removeWorktree).toHaveBeenCalledWith(preview));
+    await waitFor(() => expect(api.removeWorktree).toHaveBeenCalledWith(preview, expect.any(String)));
   });
 
   it("keeps direct-preview progress on its initiating row rather than the batch command", async () => {
@@ -295,7 +345,9 @@ describe("WorktreeDialog", () => {
     await screen.findByText("Ignored repositories");
     expect(screen.queryByRole("button", { name: "Stop ignoring repository" })).toBeNull();
     fireEvent.change(screen.getByRole("searchbox", { name: "Search Worktrees" }), { target: { value: "/a/tree" } });
-    expect(screen.getByRole("button", { name: "Stop ignoring repository" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "Repository actions" }));
+    expect(screen.getByRole("menuitem", { name: "Stop ignoring repository" })).toBeEnabled();
+    fireEvent.keyDown(document, { key: "Escape" });
     fireEvent.change(screen.getByRole("searchbox", { name: "Search Worktrees" }), { target: { value: "" } });
     expect(screen.queryByRole("button", { name: "Stop ignoring repository" })).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Ignored repositories" }));
@@ -303,10 +355,11 @@ describe("WorktreeDialog", () => {
     expect(groups.map((group) => group.getAttribute("data-resource-disclosure-id"))).toEqual([clean.commonDir, ignored.commonDir]);
     expect(within(groups[0] as HTMLElement).getByRole("checkbox", { name: "Select all clean Worktrees" }).textContent).toBe("");
     expect(within(groups[1] as HTMLElement).queryByRole("checkbox", { name: "Select all clean Worktrees" })).toBeNull();
-    expect(within(groups[1] as HTMLElement).getByRole("button", { name: "Stop ignoring repository" })).toBeEnabled();
+    expect(within(groups[1] as HTMLElement).getByRole("button", { name: "Repository actions" })).toBeEnabled();
     const rows = groups[0].querySelectorAll(".ui-resource-row");
     expect(rows[rows.length - 1]).toHaveTextContent("aaa-kept");
-    fireEvent.click(screen.getByRole("button", { name: "Stop ignoring repository" }));
+    fireEvent.click(within(groups[1] as HTMLElement).getByRole("button", { name: "Repository actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Stop ignoring repository" }));
     await waitFor(() => expect(api.setWorktreeRepositoryKeep).toHaveBeenCalledWith(ignored.commonDir, undefined));
   });
   it("collapses repositories and keeps the whole repository rather than visible rows", async () => {
@@ -317,7 +370,8 @@ describe("WorktreeDialog", () => {
     fireEvent.click(trigger);
     expect(screen.queryByText(clean.path)).not.toBeInTheDocument();
     expect(update).toHaveBeenCalledWith({ worktreeCollapsedRepositories: [clean.commonDir] });
-    fireEvent.click(screen.getByRole("button", { name: "Ignore repository" }));
+    fireEvent.click(screen.getByRole("button", { name: "Repository actions" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Ignore repository" }));
     await waitFor(() => expect(api.setWorktreeRepositoryKeep).toHaveBeenCalledWith(clean.commonDir, "Kept by user"));
     fireEvent.click(trigger);
     expect(await screen.findByText(clean.path)).toBeInTheDocument();

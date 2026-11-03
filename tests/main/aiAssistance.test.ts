@@ -82,6 +82,21 @@ describe("AI assistance privacy gates", () => {
   });
 });
 describe("immutable AI analyses", () => {
+  it("reads saved Worktree advice without Git evidence or a model request, and collects evidence once on explicit analysis", async () => {
+    const f = await fixture();
+    const worktree = { kind: "worktree" as const, commonDir: "/repo/.git", path: "/tree" };
+    f.readInput.mockClear();
+    expect((await f.service.prepare(worktree, "en", "saved")).cached).toBeUndefined();
+    expect(f.readInput).not.toHaveBeenCalled();
+    const result = await f.service.generate({ ...f.args, subject: worktree, expectedKey: undefined });
+    expect(f.readInput).toHaveBeenCalledTimes(1);
+    expect(f.request).toHaveBeenCalledTimes(1);
+    const restarted = createAnalysisService({ root: f.dir, configStore: f.config, readInput: f.readInput, request: f.request });
+    expect((await restarted.prepare(worktree, "en", "saved")).cached).toEqual(result);
+    expect(f.readInput).toHaveBeenCalledTimes(1);
+    expect(f.request).toHaveBeenCalledTimes(1);
+    expect((await restarted.prepare({ ...worktree, path: "/other" }, "en", "saved")).cached).toBeUndefined();
+  });
   it("provides a valid JSON example instead of a pseudo-schema or pipe-separated category", async () => {
     const f = await fixture();
     await f.service.generate(f.args);

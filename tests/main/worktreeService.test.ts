@@ -43,6 +43,42 @@ const fixture = async () => {
 };
 
 describe("worktree inventory and cleanup", () => {
+  it("prepares a repository batch with one registration read and independent per-tree safety checks", async () => {
+    const { root, repo, linked, service, runner } = await fixture();
+    const second = join(root, "second");
+    await run("git", ["-C", repo, "worktree", "add", "-b", "second", second]);
+    await writeFile(join(second, "note"), "keep local content\n");
+    const entry = (await service.inventory()).entries.find((item) => item.path === linked)!;
+    const reads = vi.spyOn(runner, "run");
+    const serialStarted = performance.now();
+    await service.preview(entry.commonDir, linked, false);
+    await service.preview(entry.commonDir, second, true);
+    const serialMs = performance.now() - serialStarted;
+    expect(reads.mock.calls.filter(([args]) => args.includes("worktree") && args.includes("list"))).toHaveLength(2);
+    reads.mockClear();
+    const progress = vi.fn();
+    const started = performance.now();
+    const prepared = await service.previewBatch([
+      { commonDir: entry.commonDir, path: linked, allowDirty: false },
+      { commonDir: entry.commonDir, path: second, allowDirty: true },
+      { commonDir: entry.commonDir, path: repo, allowDirty: true }
+    ], progress);
+    console.info(`Worktree preview fixture: serial=${Math.round(serialMs)}ms for two trees, batch=${Math.round(performance.now() - started)}ms for two trees + protected main; registration reads 2 -> ${reads.mock.calls.filter(([args]) => args.includes("worktree") && args.includes("list")).length}`);
+    expect(reads.mock.calls.filter(([args]) => args.includes("worktree") && args.includes("list"))).toHaveLength(1);
+    expect(prepared.map((item) => item.path)).toEqual([linked, second, repo]);
+    expect(prepared[0].preview?.backupRequired).toBe(false);
+    expect(prepared[1].preview?.backupRequired).toBe(true);
+    expect(prepared[2].error).toContain("Review this worktree");
+    expect(progress.mock.calls.map(([count]) => count)).toEqual([1, 2, 3]);
+    await writeFile(join(second, "note"), "changed after preview\n");
+    await expect(service.remove(prepared[1].preview!)).rejects.toThrow("changed after review");
+    const fresh = await service.preview(entry.commonDir, second, true);
+    const stages: string[] = [];
+    const removed = await service.remove(fresh, (phase) => stages.push(phase));
+    expect(stages).toEqual(["preparing", "backing-up", "removing", "verifying"]);
+    await service.restore(removed.id);
+    expect(await readFile(join(second, "note"), "utf8")).toBe("changed after preview\n");
+  });
   it("keeps a repository across restart and new worktrees without erasing individual decisions", async () => {
     const { root, repo, linked, service, runner } = await fixture();
     const entry = (await service.inventory()).entries.find((item) => item.path === linked)!;

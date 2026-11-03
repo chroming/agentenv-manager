@@ -302,7 +302,7 @@ export const registerIpcHandlers = ({
     deviceStore: remoteDeviceStore,
     sshTransport
   });
-  registerWorktreeIpc({ diagnosticHandle, handleMutation }, worktreeService);
+  registerWorktreeIpc({ diagnosticHandle, handleMutation }, worktreeService, diagnostics);
   registerAgentIpc({ diagnosticHandle, handleMutation }, {
     activationService, beforeForcedRefresh: waitForAutomationBackgroundDelay,
     remoteActivationService, targetDiscoveryService, targetRegistry

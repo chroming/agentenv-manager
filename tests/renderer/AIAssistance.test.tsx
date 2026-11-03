@@ -61,9 +61,12 @@ describe("AI assistance surfaces", () => {
     const first = { kind: "worktree" as const, commonDir: "/repo/.git", path: "/tree" };
     const view = render(<AIAnalysisReview subject={first} />);
     const analyze = await screen.findByRole("button", { name: "Analyze retention" });
+    expect(api.prepareAIAnalysis).toHaveBeenCalledWith(first, "en", "saved");
     expect(api.generateAIAnalysis).not.toHaveBeenCalled();
     fireEvent.click(analyze);
     await screen.findByText("Adds a test");
+    expect(api.prepareAIAnalysis).toHaveBeenCalledTimes(1);
+    expect(api.generateAIAnalysis).toHaveBeenCalledWith(expect.objectContaining({ subject: first, expectedKey: undefined }));
     api.prepareAIAnalysis.mockRejectedValueOnce(new Error("Unavailable new tree"));
     view.rerender(<AIAnalysisReview subject={{ ...first, path: "/other" }} />);
     expect(screen.queryByText("Adds a test")).not.toBeInTheDocument();

@@ -5,7 +5,7 @@ import {
 } from "lucide-react";
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import type {
-  WorktreeCleanupPreview, WorktreeEntry, WorktreeInventory, WorktreeRecoveryRecord
+  WorktreeCleanupPreview, WorktreeEntry, WorktreeInventory, WorktreeRecoveryRecord, WorktreeOperationProgress
 } from "../../shared/worktrees";
 import { canSelectWorktreeForCleanup, isAutomaticCleanupCandidate } from "../../shared/worktrees";
 import type { UiState, UiStateUpdate, WorktreeSort } from "../../shared/uiState";
@@ -17,11 +17,11 @@ import {
   AlignedResourceList, Button, CatalogSortMetric, ChoiceInput, ControlGroup, DetailList,
   DiagnosticMessage, DialogBody, DialogFooter, DialogHeader, EmptyState, IconButton,
   InteractiveStatus, ModalFrame, Notice, OperationStatusBar, PathListPreview, RefreshAction, ResourceRow, SectionLabel,
-  SearchField, SortMenu, TextAction, CatalogToolbar, CatalogFilters, FilterReset, SelectField, ResourceDisclosureSection
+  SearchField, SortMenu, TextAction, CatalogToolbar, CatalogFilters, FilterReset, SelectField, ResourceDisclosureSection, ToolbarOverflowMenu
 } from "./ui";
 import { AIAnalysisReview } from "./AIAnalysisReview";
 import { useSearchDisclosure } from "../hooks/useSearchDisclosure";
-import { selectWorktreeManually, toggleAutomaticWorktreeSelection, worktreeEntryKey as entryKey, type WorktreeSelection } from "../worktreeSelection";
+import { selectRepositoryWorktrees, selectWorktreeManually, toggleAutomaticWorktreeSelection, worktreeEntryKey as entryKey, type WorktreeSelection } from "../worktreeSelection";
 
 const nameFromPath = worktreeName;
 const totalBytes = (values: Array<number | undefined>) =>
@@ -45,6 +45,14 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
   const [stopping, setStopping] = useState(false);
   const [preparationProgress, setPreparationProgress] = useState("");
   const [preparingPath, setPreparingPath] = useState("");
+  const operationId = useRef("");
+  const [operationProgress, setOperationProgress] = useState<WorktreeOperationProgress>();
+  useEffect(() => window.agentEnv.onWorktreeProgress?.((value) => {
+    if (value.requestId === operationId.current) {
+      setOperationProgress(value);
+      if (value.phase === "preparing" && value.total > 1) setPreparationProgress(`${value.completed}/${value.total}`);
+    }
+  }), []);
   const [inventory, setInventory] = useState<WorktreeInventory>();
   const [recovery, setRecovery] = useState<WorktreeRecoveryRecord[]>([]);
   const [recoveryIssues, setRecoveryIssues] = useState<string[]>([]);
@@ -72,7 +80,7 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
     const group = [...document.querySelectorAll<HTMLElement>("[data-resource-disclosure-id]")]
       .find((element) => element.dataset.resourceDisclosureId === repositoryFocus);
     group?.scrollIntoView?.({ block: "nearest" });
-    group?.querySelector<HTMLButtonElement>("[data-repository-keep]")?.focus();
+    group?.querySelector<HTMLButtonElement>(".ui-toolbar-overflow-menu__trigger")?.focus();
     setRepositoryFocus("");
   }, [view, repositoryFocus]);
 
@@ -118,6 +126,7 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
     const groups = new Map<string, WorktreeEntry[]>();
     const needle = query.trim().toLocaleLowerCase();
     for (const entry of inventory?.entries ?? []) {
+      if (entry.main) continue;
       if (needle && ![entry.path, entry.repositoryPath, entry.branch ?? ""].some((value) => value.toLocaleLowerCase().includes(needle))) continue;
       if (filter === "candidate" && !isAutomaticCleanupCandidate(entry)) continue;
       if (filter === "review" && (entry.main || entry.keptReason || entry.repositoryKeptReason || entry.state !== "review")) continue;
@@ -203,18 +212,28 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
     setError("");
     const ready: WorktreeCleanupPreview[] = [];
     const failures: string[] = [];
-    for (const entry of entries) {
-      setPreparationProgress(`${ready.length + failures.length + 1}/${entries.length}`);
-      try {
-        const origin = mode === "selection" ? selectionIndex.get(entryKey(entry)) : "manual";
-        const preview = await window.agentEnv.previewWorktreeCleanup(entry.commonDir, entry.path, origin === "manual");
-        if (origin !== "manual" && !isAutomaticCleanupCandidate(preview.entry)) throw new Error(t("This Worktree changed after automatic selection. Refresh and select it individually to include it."));
-        if (!canSelectWorktreeForCleanup(preview.entry)) throw new Error(t("This Worktree is now protected. Refresh to review its current state."));
-        ready.push(preview);
-      } catch (cause) {
-        failures.push(`${entry.path}: ${cause instanceof Error ? cause.message : String(cause)}`);
+    operationId.current = crypto.randomUUID();
+    setPreparationProgress(`0/${entries.length}`);
+    try {
+      const items = entries.map((entry) => ({ commonDir: entry.commonDir, path: entry.path,
+        allowDirty: mode !== "selection" || selectionIndex.get(entryKey(entry)) === "manual" }));
+      const prepared = entries.length > 1 ? await window.agentEnv.previewWorktreeCleanupBatch(items, operationId.current)
+        : [{ path: entries[0].path, preview: await window.agentEnv.previewWorktreeCleanup(items[0].commonDir, items[0].path, items[0].allowDirty) }];
+      for (const [index, result] of prepared.entries()) {
+        const entry = entries[index];
+        try {
+          if (!result.preview) throw new Error(result.error);
+          const origin = mode === "selection" ? selectionIndex.get(entryKey(entry)) : "manual";
+          const preview = result.preview;
+          if (origin !== "manual" && !isAutomaticCleanupCandidate(preview.entry)) throw new Error(t("This Worktree changed after automatic selection. Refresh and select it individually to include it."));
+          if (!canSelectWorktreeForCleanup(preview.entry)) throw new Error(t("This Worktree is now protected. Refresh to review its current state."));
+          ready.push(preview);
+        } catch (cause) {
+          failures.push(`${entry.path}: ${cause instanceof Error ? cause.message : String(cause)}`);
+        }
       }
-    }
+    } catch (cause) { failures.push(cause instanceof Error ? cause.message : String(cause)); }
+    operationId.current = "";
     setPreviews(ready);
     setPreparationProgress("");
     setPreparingPath("");
@@ -249,7 +268,9 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
         continue;
       }
       try {
-        const record = await window.agentEnv.removeWorktree(preview);
+        operationId.current = crypto.randomUUID();
+        setOperationProgress(undefined);
+        const record = await window.agentEnv.removeWorktree(preview, operationId.current);
         completed.push({ path: preview.entry.path, sizeBytes: record.sourceSizeBytes, reclaimedSizeBytes: record.reclaimedSizeBytes, verificationWarnings: record.verificationWarnings });
         if (record.verificationWarnings?.length) stoppedRepositories.add(preview.entry.commonDir);
       } catch (cause) {
@@ -258,6 +279,7 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
       }
       setResults([...completed]);
     }
+    operationId.current = "";
     setSelected([]);
     setView("results");
     // Exact verified removals can leave the list immediately; unrelated repositories need not be rescanned.
@@ -381,7 +403,14 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
                 setCollapsed(next); onUpdateUiState?.({ worktreeCollapsedRepositories: next });
               })} actions={<ControlGroup>
               <CatalogSortMetric kind="size" label={t("Total size")} value={worktreeGroupMetric(entries, "size-desc")} />
-              <IconButton data-repository-keep label={t(kept ? "Stop ignoring repository" : "Ignore repository")} variant="ghost" busy={busy === commonDir} disabled={Boolean(busy)} onClick={() => void setRepositoryKeep(commonDir, kept)}>{kept ? <Eye size={15} /> : <EyeOff size={15} />}</IconButton>
+              <ToolbarOverflowMenu label={t("Repository actions")} menuLabel={t("Repository actions")} busy={busy === commonDir} disabled={Boolean(busy)} items={[
+                ...(!kept ? [
+                  { id: "clean", label: t("Select all clean Worktrees"), icon: <Check size={15} />, disabled: !eligible.length, onSelect: () => setSelected((current) => eligible.every((entry) => current.some((value) => value.key === entryKey(entry))) ? current : toggleAutomaticWorktreeSelection(current, eligible)) },
+                  { id: "all", label: t("Select all removable Worktrees"), icon: <ClipboardCheck size={15} />, disabled: !entries.some(canSelectWorktreeForCleanup), onSelect: () => setSelected((current) => selectRepositoryWorktrees(current, entries, true)) },
+                  { id: "clear", label: t("Clear Worktree selection"), icon: <X size={15} />, disabled: !entries.some((entry) => selectionIndex.has(entryKey(entry))), onSelect: () => setSelected((current) => selectRepositoryWorktrees(current, entries, false)) }
+                ] : []),
+                { id: "keep", label: t(kept ? "Stop ignoring repository" : "Ignore repository"), icon: kept ? <Eye size={15} /> : <EyeOff size={15} />, onSelect: () => void setRepositoryKeep(commonDir, kept) }
+              ]} />
               {!kept ? <span className="worktree-dialog__row-action">{selectionControl(eligible, t("Select all clean Worktrees"))}</span> : null}
             </ControlGroup>}>
             <AlignedResourceList actionTrack="compact" className="worktree-dialog__entries worktree-dialog__selectable-entries">
@@ -480,7 +509,9 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
             { label: t("Removed size"), value: sizeLabel(totalBytes(successful.map((result) => result.sizeBytes))) },
             { label: t("Estimated space freed"), value: sizeLabel(totalBytes(successful.map((result) => result.reclaimedSizeBytes))) }
           ]} />
-          {busy === "remove" ? <OperationStatusBar icon={<LoaderCircle className="is-spinning" size={15} />} label={t("Removing Worktrees...")} detail={`${results.length}/${previews.length}`} /> : null}
+          {busy === "remove" ? <OperationStatusBar icon={<LoaderCircle className="is-spinning" size={15} />}
+            label={operationProgress?.phase === "backing-up" ? t("Backing up local files...") : operationProgress?.phase === "verifying" ? t("Verifying removal...") : operationProgress?.phase === "removing" ? t("Removing Worktrees...") : t("Checking selected Worktree...")}
+            detail={`${results.length}/${previews.length} · ${nameFromPath(operationProgress?.path ?? previews[results.length]?.entry.path ?? "")}`} /> : null}
           <AlignedResourceList actionTrack="compact" className="worktree-dialog__entries worktree-dialog__results">
             {results.map((result) => <ResourceRow key={result.path} density="compact" appearance="plain" icon={result.error !== undefined || result.skipped || result.verificationWarnings?.length ? <AlertTriangle size={16} /> : <Check size={16} />}
               title={nameFromPath(result.path)} description={<span className="selectable">{result.path}</span>}

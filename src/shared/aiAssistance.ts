@@ -25,8 +25,9 @@ export interface AIAnalysisPreview {
   cached?: AIAnalysisRecord;
   cacheDamaged?: boolean;
   coverage?: AIAnalysisCoverage;
+  snapshotStatus?: "saved";
 }
 export interface AIAnalysisGenerateInput {
-  subject: AIAnalysisSubject; locale: string; expectedKey: string; requestId: string;
+  subject: AIAnalysisSubject; locale: string; expectedKey?: string; requestId: string;
   confirmed: true; expectedEndpoint: string; expectedModel: string; regenerate?: boolean; retrySave?: boolean;
 }

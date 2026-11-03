@@ -94,7 +94,7 @@ Recent scan results appear immediately when you return to the page or restart th
 
 Select all eligible clean worktrees in the current view or repository. You can also check worktrees with uncommitted files individually and confirm them together. The preview shows paths, sizes, required recovery copies, and estimated freed space. Local changes are backed up and verified before Git removes the directories; branches and remote history stay intact. You can stop after the current item finishes. Main, locked, and other protected directories cannot be removed. Retained backups do not count as freed space and can be restored from Worktrees.
 
-If you are unsure what to keep, request an AI analysis from the review dialog. AgentEnv rereads Git state before analysis. Suggestions do not replace cleanup confirmation or relax deletion safeguards.
+The repository menu can also select all removable worktrees, including those with uncommitted files. When unsure what to keep, request an AI analysis from the review dialog. Scanning, size accounting and cleanup never call AI. Suggestions do not replace confirmation or relax deletion safeguards.
 
 ## Skill Library
 

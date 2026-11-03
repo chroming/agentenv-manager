@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { canSelectWorktreeForCleanup, isAutomaticCleanupCandidate, type WorktreeEntry } from "../../src/shared/worktrees";
-import { selectWorktreeManually, toggleAutomaticWorktreeSelection, worktreeEntryKey } from "../../src/renderer/worktreeSelection";
+import { selectRepositoryWorktrees, selectWorktreeManually, toggleAutomaticWorktreeSelection, worktreeEntryKey } from "../../src/renderer/worktreeSelection";
 
 const clean: WorktreeEntry = {
   path: "/repo/tree", repositoryPath: "/repo/main", commonDir: "/repo/main/.git", head: "a".repeat(40),
@@ -10,6 +10,17 @@ const clean: WorktreeEntry = {
 const dirty: WorktreeEntry = { ...clean, path: "/repo/dirty", state: "review", changes: [" M file"], cleanupReviewAvailable: false };
 
 describe("Worktree selection intent", () => {
+  it("makes repository-wide choices explicit while preserving other repositories and hard protection", () => {
+    const outside = { ...clean, path: "/other/tree" };
+    const initial = selectWorktreeManually(toggleAutomaticWorktreeSelection([], [clean]), outside, true);
+    const selected = selectRepositoryWorktrees(initial, [clean, dirty, { ...dirty, path: "/locked", locked: "Keep" }], true);
+    expect(selected).toEqual([
+      { key: worktreeEntryKey(outside), origin: "manual" },
+      { key: worktreeEntryKey(clean), origin: "manual" },
+      { key: worktreeEntryKey(dirty), origin: "manual" }
+    ]);
+    expect(selectRepositoryWorktrees(selected, [clean, dirty], false)).toEqual([{ key: worktreeEntryKey(outside), origin: "manual" }]);
+  });
   it("separates manual cleanup permission from automatic selection", () => {
     expect(canSelectWorktreeForCleanup(dirty)).toBe(true);
     expect(isAutomaticCleanupCandidate(dirty)).toBe(false);

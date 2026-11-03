@@ -18,48 +18,48 @@
   "files": [
     {
       "file": "worktree-analysis-en-1180x728.png",
-      "sha256": "c96dc9738e481583f685713d42e9cc2f5807701096768e8155b7ab2b5addf454",
-      "reviewReason": "Reviewed 2026-10-31: direct removal opens final confirmation; redundant pre-confirmation checkbox removed. Retention advice, fixed footer, aligned row actions and unchanged safety boundaries inspected in all sizes/locales. No threshold changes."
+      "sha256": "f351e3aa7954a61c08aece7f7c9461d2749ab9b28b736b97c79be0f3d1802a40",
+      "reviewReason": "Reviewed 2026-11-03: saved AI snapshot disclosure, main-checkout removal from inventory and shared repository action menu; inspected all three locales and sizes, fixed footer and evidence hierarchy. Manual AI boundary, verified backups and original pixel thresholds retained."
     },
     {
       "file": "worktree-analysis-en-1440x900.png",
-      "sha256": "1f7a23802a045d246b291fd25ac54f4023b85589164be8c558c370ba0ef34ee1",
-      "reviewReason": "Reviewed 2026-10-31: direct removal opens final confirmation; redundant pre-confirmation checkbox removed. Retention advice, fixed footer, aligned row actions and unchanged safety boundaries inspected in all sizes/locales. No threshold changes."
+      "sha256": "2ef74fdbb02dd19be785d46595285f87d188d73cc9d795cb759ff03385b3363e",
+      "reviewReason": "Reviewed 2026-11-03: saved AI snapshot disclosure, main-checkout removal from inventory and shared repository action menu; inspected all three locales and sizes, fixed footer and evidence hierarchy. Manual AI boundary, verified backups and original pixel thresholds retained."
     },
     {
       "file": "worktree-analysis-en-920x620.png",
-      "sha256": "9046508de985320f8a6b5e99e143a82694823d77e2fcf233c83852b57250bc36",
-      "reviewReason": "Reviewed 2026-10-31: direct removal opens final confirmation; redundant pre-confirmation checkbox removed. Retention advice, fixed footer, aligned row actions and unchanged safety boundaries inspected in all sizes/locales. No threshold changes."
+      "sha256": "7856405bfe7f972d7269f74cb0f917ae9a45b4c1812321cb63c2ffa4a70e26e4",
+      "reviewReason": "Reviewed 2026-11-03: saved AI snapshot disclosure, main-checkout removal from inventory and shared repository action menu; inspected all three locales and sizes, fixed footer and evidence hierarchy. Manual AI boundary, verified backups and original pixel thresholds retained."
     },
     {
       "file": "worktree-analysis-zh_CN-1180x728.png",
-      "sha256": "c6d7ff5379544c7241582611e4d8df34c1cf3a1a67813b337f2b03ce89a9dca9",
-      "reviewReason": "Reviewed 2026-10-31: direct removal opens final confirmation; redundant pre-confirmation checkbox removed. Retention advice, fixed footer, aligned row actions and unchanged safety boundaries inspected in all sizes/locales. No threshold changes."
+      "sha256": "2829e55e7bd8b7ec8eaf540373f9e2852230a2fd5de82394748a465090cb0a70",
+      "reviewReason": "Reviewed 2026-11-03: saved AI snapshot disclosure, main-checkout removal from inventory and shared repository action menu; inspected all three locales and sizes, fixed footer and evidence hierarchy. Manual AI boundary, verified backups and original pixel thresholds retained."
     },
     {
       "file": "worktree-analysis-zh_CN-1440x900.png",
-      "sha256": "45f9f8abac76e38e054f95b777addd012a1a0a987ad0f184794667d16925f62f",
-      "reviewReason": "Reviewed 2026-10-31: direct removal opens final confirmation; redundant pre-confirmation checkbox removed. Retention advice, fixed footer, aligned row actions and unchanged safety boundaries inspected in all sizes/locales. No threshold changes."
+      "sha256": "1c55163a482eb4fd72c90ce7d71aeec5dc6d614ac0bb597c653ad4b2e73d1b3c",
+      "reviewReason": "Reviewed 2026-11-03: saved AI snapshot disclosure, main-checkout removal from inventory and shared repository action menu; inspected all three locales and sizes, fixed footer and evidence hierarchy. Manual AI boundary, verified backups and original pixel thresholds retained."
     },
     {
       "file": "worktree-analysis-zh_CN-920x620.png",
-      "sha256": "38444d959f69f35adebc6efd9917b0aa3325b2347d7c39c4fa51d8d66c4ccbf5",
-      "reviewReason": "Reviewed 2026-10-31: direct removal opens final confirmation; redundant pre-confirmation checkbox removed. Retention advice, fixed footer, aligned row actions and unchanged safety boundaries inspected in all sizes/locales. No threshold changes."
+      "sha256": "c74f7fc3729220e4c44b55d65ea86b43ef71fcfcfb4805e484ce4ca20cbf52d1",
+      "reviewReason": "Reviewed 2026-11-03: saved AI snapshot disclosure, main-checkout removal from inventory and shared repository action menu; inspected all three locales and sizes, fixed footer and evidence hierarchy. Manual AI boundary, verified backups and original pixel thresholds retained."
     },
     {
       "file": "worktree-analysis-zh_TW-1180x728.png",
-      "sha256": "ee2abe501f309486350107af0ddc73abaa2cf80fabc11e5b7edcb20b97e287ce",
-      "reviewReason": "Reviewed 2026-10-31: direct removal opens final confirmation; redundant pre-confirmation checkbox removed. Retention advice, fixed footer, aligned row actions and unchanged safety boundaries inspected in all sizes/locales. No threshold changes."
+      "sha256": "1764f4208c5e752ef4d5fdbf681d97d5f1a58bdb46686eca797b571e6d0527ef",
+      "reviewReason": "Reviewed 2026-11-03: saved AI snapshot disclosure, main-checkout removal from inventory and shared repository action menu; inspected all three locales and sizes, fixed footer and evidence hierarchy. Manual AI boundary, verified backups and original pixel thresholds retained."
     },
     {
       "file": "worktree-analysis-zh_TW-1440x900.png",
-      "sha256": "f3f58e9bf16f0e1c81bae58009478bf8ddac0f822e867c0b4cba105ebb6f1a14",
-      "reviewReason": "Reviewed 2026-10-31: direct removal opens final confirmation; redundant pre-confirmation checkbox removed. Retention advice, fixed footer, aligned row actions and unchanged safety boundaries inspected in all sizes/locales. No threshold changes."
+      "sha256": "87dc7300243711b68e2ec4fcddfef77a44d742c329568eac717c46fbf44784f2",
+      "reviewReason": "Reviewed 2026-11-03: saved AI snapshot disclosure, main-checkout removal from inventory and shared repository action menu; inspected all three locales and sizes, fixed footer and evidence hierarchy. Manual AI boundary, verified backups and original pixel thresholds retained."
     },
     {
       "file": "worktree-analysis-zh_TW-920x620.png",
-      "sha256": "1426a4232dbe029039ed45b423e59dff5bd7171f82c13649a6f48fb3fdf9d64e",
-      "reviewReason": "Reviewed 2026-10-31: direct removal opens final confirmation; redundant pre-confirmation checkbox removed. Retention advice, fixed footer, aligned row actions and unchanged safety boundaries inspected in all sizes/locales. No threshold changes."
+      "sha256": "bad3e2571222b23c29e6541b3f6eea8084ee9175832b39863f20cac95171d2fa",
+      "reviewReason": "Reviewed 2026-11-03: saved AI snapshot disclosure, main-checkout removal from inventory and shared repository action menu; inspected all three locales and sizes, fixed footer and evidence hierarchy. Manual AI boundary, verified backups and original pixel thresholds retained."
     },
     {
       "file": "skill-invocation-920.png",
@@ -697,6 +697,29 @@
       "scope": "Remote history search result only.",
       "method": "Inspected actual failed CI screenshot, difference image, prior baseline and corrected local capture at native size; verify completed search rather than transient unfiltered list.",
       "thresholdsChanged": false
+    },
+    {
+      "reviewedAt": "2026-11-03",
+      "sourceFingerprint": "f6c6778998da94b0670ddb2371833e6da9fab8131e639c8ed4b8bfa2026f1bca",
+      "artifactFingerprint": "90cc2246567986965603be8200464832aa2a3d437465df4d2c8e83fe3acedded",
+      "files": [
+        "worktree-analysis-en-1180x728.png",
+        "worktree-analysis-en-1440x900.png",
+        "worktree-analysis-en-920x620.png",
+        "worktree-analysis-zh_CN-1180x728.png",
+        "worktree-analysis-zh_CN-1440x900.png",
+        "worktree-analysis-zh_CN-920x620.png",
+        "worktree-analysis-zh_TW-1180x728.png",
+        "worktree-analysis-zh_TW-1440x900.png",
+        "worktree-analysis-zh_TW-920x620.png"
+      ],
+      "method": "Native-size inspection of nine saved-analysis views and minimum-window repository menu against existing shared dialog components. Only the nine reviewed Worktree captures changed; 117 other baselines retained.",
+      "thresholdsChanged": false,
+      "verification": {
+        "sourceFingerprint": "e16528a239c90c8e4ad749a83c87587fcb17951406b413a0f045ded15e5ef32a",
+        "artifactFingerprint": "b93c421bd1e7bd13df39db745373e33cfaf4e8d509a676ad976625f23ffb3f78",
+        "method": "Independent native Electron recaptures in all three locales and sizes; original 1.2% threshold retained."
+      }
     }
   ],
   "independentVerification": {

@@ -45,7 +45,9 @@ export const AIAnalysisReview = ({ subject, standalone = false, onClose, closeRe
     active.current = true; setPreview(undefined); setError(""); setEvidence(""); setBusy(undefined); setConfiguring(false); setNeedsConfig(false);
     revealRequested.current = false; setStopped(false);
     let valid = true;
-    void window.agentEnv?.prepareAIAnalysis?.(subject, locale).then((value) => { if (valid) { setPreview(value); setRecord(value.cached); } })
+    const saved = subject.kind === "worktree";
+    const load = saved ? window.agentEnv?.prepareAIAnalysis?.(subject, locale, "saved") : window.agentEnv?.prepareAIAnalysis?.(subject, locale);
+    void load?.then((value) => { if (valid) { setPreview(value); setRecord(value.cached); } })
       .catch((error) => { if (valid) setError(String(error)); });
     return () => { valid = false; active.current = false; if (request.current) void window.agentEnv.cancelAIAnalysis(request.current); };
   }, [identity]);
@@ -62,17 +64,20 @@ export const AIAnalysisReview = ({ subject, standalone = false, onClose, closeRe
     if ((!allowed && !retrySave) || busy) return;
     setBusy("loading"); setError(""); setStopped(false); cancelled.current = false; revealRequested.current = true;
     try {
-      const value = await window.agentEnv.prepareAIAnalysis(subject, locale);
+      const value = subject.kind === "worktree" ? undefined : await window.agentEnv.prepareAIAnalysis(subject, locale);
       const config = retrySave ? { endpoint: "", model: "" } : await window.agentEnv.readSkillSummaryConfig();
       if (active.current && currentIdentity.current === identity) {
-        setPreview(value); setRecord(value.cached);
+        if (value) { setPreview(value); setRecord(value.cached); }
         if (!retrySave && (!config.model || !config.endpoint)) { setNeedsConfig(true); return; }
         setNeedsConfig(false); setBusy("generating");
         const id = crypto.randomUUID(); request.current = id;
         try {
-          const generated = await window.agentEnv.generateAIAnalysis({ subject, locale, expectedKey: value.key, requestId: id,
+          const generated = await window.agentEnv.generateAIAnalysis({ subject, locale, expectedKey: value?.key ?? (retrySave ? record?.key : undefined), requestId: id,
             expectedEndpoint: config.endpoint, expectedModel: config.model, confirmed: true, regenerate: Boolean(record) && !retrySave, retrySave });
-          if (active.current && currentIdentity.current === identity) setRecord(generated);
+          if (active.current && currentIdentity.current === identity) {
+            setRecord(generated);
+            if (subject.kind === "worktree") setPreview({ key: generated.key, documents: [], warnings: [], partial: generated.partial, snapshotStatus: "saved" });
+          }
         } finally { if (request.current === id) request.current = ""; }
       }
     } catch (error) { if (active.current && currentIdentity.current === identity) {
@@ -107,7 +112,8 @@ export const AIAnalysisReview = ({ subject, standalone = false, onClose, closeRe
     {preview?.cacheDamaged && (!record || record.key !== preview.key) ? <Notice tone="warning">{t("Saved analysis is unreadable. Generate a new analysis; the old file will be preserved for diagnostics.")}</Notice> : null}
     {needsConfig || configuring ? <AIServiceSetup editing={configuring} onEditingChange={setConfiguring} onSaved={() => { setNeedsConfig(false); setError(""); }} /> : null}
     {record ? <div className="skill-summary-content">
-      {(!preview || record.key !== preview.key) ? <Notice tone="warning">{t("Inputs changed. This is the previous analysis; regenerate to analyze the current content.")}</Notice> : null}
+      {preview?.snapshotStatus === "saved" ? <p className="muted">{t("Saved analysis. Analyze again to read the latest state.")}</p>
+        : (!preview || record.key !== preview.key) ? <Notice tone="warning">{t("Inputs changed. This is the previous analysis; regenerate to analyze the current content.")}</Notice> : null}
       {standalone ? <AIReviewHeading title={t("AI analysis")} actions={actions} /> : null}
       <p className="ai-review-overview">{record.overview}</p>
       <AIResponseNotice result={record} busy={Boolean(busy)} onRetrySave={() => void prepare(true)} />

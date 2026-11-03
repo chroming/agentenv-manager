@@ -312,6 +312,9 @@ The toolbar owns scanning feedback without moving an existing list. Scope, revie
 confirmation and recovery use shared modal shells; metadata, state and action lanes
 are aligned across all inventory rows. Scan-location editing never deletes folders.
 The selection strip says Batch cleanup, not an internal candidate classification.
+The main checkout is repository context, not a cleanup row. Repository groups show
+only linked trees and count/measure only those rows; the main checkout remains in
+internal registration and safety checks but has no review or AI action in this list.
 Filters distinguish automatically selectable trees from those needing review and
 from kept trees; they never change safety eligibility or perform Git work.
 The default list and cleanup confirmation expose measured file modification dates
@@ -325,7 +328,7 @@ scrollbar-gutter so overlay scrollbars cannot cover row or repository selection 
 Worktree sorting is a device-local UI preference, defaults to name, and uses the shared
 icon-only sort menu also used by Conversations. It never triggers scanning or changes
 cleanup eligibility, keep decisions or selected paths. Repositories stay grouped and
-their main tree stays first. Name ordering uses folder names with full-path tie breaks;
+only linked trees are displayed. Name ordering uses folder names with full-path tie breaks;
 modification ordering uses measured file modification times, never conversation activity
 or proof of task completion. Size ordering uses linked-tree totals per repository,
 modification ordering uses the newest/oldest linked-tree time, and status ordering uses
@@ -398,6 +401,15 @@ selection may include multiple trees without opening their details one by one.
 One combined confirmation identifies which trees need full local recovery copies,
 the total copy count, sizes and estimated freed space. Each resource's original
 backup, freshness and transaction rules still apply; Preview alone changes no files.
+The shared repository action menu offers Select clean, Select all removable and Clear
+selection, plus Ignore/Stop ignoring repository. Select all removable is an explicit
+manual selection of every reviewable row in the current scope, including dirty trees;
+it is not automatic selection and does not include protected rows or authorize removal.
+These actions work while the repository is collapsed and never run AI or Preview.
+Multi-tree Preview is coordinated in main with at most two workers. Registration,
+integration choices, management settings and saved Workspace roots are shared within
+that request, not trusted across requests or at Remove. Results retain request order,
+report independent failures, and bind a separate fresh content/Git fingerprint per tree.
 Selection is not removal authorization or proof of code integration. Each tree is
 revalidated during Preview and again during Remove.
 Batch cleanup can stop after the current tree finishes its transaction. Remaining
@@ -432,6 +444,11 @@ records. Final pre-remove hashing, recovery verification and Git registration ch
 remain mandatory. Git removal disables fsmonitor; verified results immediately reconcile
 the visible inventory without holding the cleanup UI open for an unrelated global scan.
 Failed rows lose batch selection eligibility until refreshed or individually reviewed.
+Copy verification may reuse the immediately preceding source fingerprint, but the
+post-copy source and backup must both equal it; the final source/Git check remains
+mandatory. Progress distinguishes checking, backing up, removing and verifying, scoped
+to the initiating window and request. Device-local runtime logs record stage durations
+and batch preparation failures without storing file bodies or sending telemetry.
 Worktree review offers manually requested AI retention analysis using the existing
 configured service, privacy switches and immutable analysis cache. Preparation only
 reads previously discovered, freshly registered local linked trees; Git commands have
@@ -444,6 +461,12 @@ and unavailable target evidence are explicitly partial.
 Untracked/ignored bodies are excluded; missing evidence is explicit. Results are saved
 only under app-owned ai-analyses. AI never selects trees, approves removal, changes
 keep markers, writes Git data, or weakens Preview/Remove safeguards.
+Opening review reads only the saved analysis lookup/result, not Git evidence. Explicit
+Analyze/Regenerate collects current evidence once and generates against that immutable
+snapshot. A saved result is labelled as a snapshot, never certified current by merely
+opening it. Missing legacy lookups do not delete old results: explicit analysis can
+reuse a matching content-addressed result without another model call. Retry Save reuses
+the original pending result and sends no model request or fresh evidence collection.
 The manual analysis action stays in the review dialog's fixed footer, outside the scroll
 body. AI evidence must reference supplied document IDs. Unknown references are dropped
 and their findings explicitly marked unverified; they never become cleanup evidence.
@@ -2082,6 +2105,7 @@ Status: shared transient success, persistent error, background progress, GitHub 
 - Diagnostic context uses an explicit field allowlist. Clipboard text, Instructions, Skill contents, Conversation text, MCP definitions, environment values, credentials, authenticated URL components, and arbitrary IPC payloads MUST NOT enter logs, renderer diagnostics, or exported reports. Home paths are normalized to `~`, individual fields are size-bounded, and malformed log lines do not hide valid neighboring events.
 - AI update summaries, duplicate comparisons, Profile reviews and run interpretations share a single-column decision brief: one conclusion, at most three ordinary findings initially visible, and concrete risks retained visibly. Evidence links, metadata, coverage and additional ordinary findings belong in an explicit details disclosure. Never truncate cached findings or regenerate them automatically to meet a newer presentation preference. Regeneration belongs to the analysis heading, not between prose and evidence. Prompts prioritize behavior, consequences and specific actions rather than inventories or repeated generic advice.
 - An inline error containing a diagnostic reference MUST offer an adjacent icon-only Copy details action, including inside modals. It copies the redacted diagnostic record when available and falls back to the displayed error plus reference when lookup fails. Clipboard failure remains locally retryable; ordinary notices without a diagnostic reference do not gain a copy control.
+- All model requests require an explicit AI-labelled user command, such as Analyze, Generate summary, Suggest tags or Regenerate. Scanning, discovery, size accounting, sorting, selecting, Preview, cleanup, deletion, recovery and opening an object MUST NOT invoke a model or silently consume quota. They use deterministic local logic and do not depend on AI availability. An AI result is advisory and never grants mutation authority; no background retries are allowed to turn an ordinary operation into an AI request.
 - Skill change analysis treats invalid or dangerous Skill content as evidence to analyze, not instructions to execute or grounds to reject analysis. A completed, structurally valid model response with missing or invalid file citations remains readable and persistable: retain its findings, link only exact supplied evidence, and label affected findings as unverified. This limitation persists across cache/restart. Do not silently drop security findings, invent evidence, or automatically spend quota on retries. Transport errors, cancellation, incomplete output and unparseable responses remain genuine generation failures and preserve the previous summary.
 - Runtime errors show a concise message plus their diagnostic reference. Conditional review surfaces expose Copy details and Export report beside the affected object. Copy details resolves the reference to a selectable operation summary; View details exposes the redacted error chain when present. Settings > Data and the native Help menu export one redacted JSON report containing build/system metadata, safe Target discovery state, the selected operation timeline, recent runtime events, and startup diagnostics. Runtime logs and reports remain device-local, are never uploaded as telemetry, and are never included in Workspace Sync.
 - Export report acknowledges work on the initiating button, prevents duplicate exports, and turns

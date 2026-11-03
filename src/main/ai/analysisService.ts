@@ -33,8 +33,28 @@ export const createAnalysisService = ({ root, readInput, configStore, request = 
   const path = (key: string) => join(root, "ai-analyses", `${z.string().regex(/^[a-f0-9]{64}$/).parse(key)}.json`);
   const delivery = createAIResultDelivery<AIAnalysisRecord>((record) => saveAIResultFile(path(record.key), record, recordSchema, (value) => value.key === record.key));
   let running: { id: string; controller: AbortController } | undefined;
-  const prepare = async (subject: AIAnalysisSubject, locale: string): Promise<AIAnalysisPreview> => {
+  const latest = new Map<string, string>();
+  const latestId = (subject: AIAnalysisSubject, locale: string) => createHash("sha256").update(JSON.stringify([subject, locale])).digest("hex");
+  const pointerPath = (id: string) => join(root, "ai-analyses", "latest", `${id}.json`);
+  const pointerSchema = z.object({ key: z.string().regex(/^[a-f0-9]{64}$/) });
+  const remember = async (subject: AIAnalysisSubject, record: AIAnalysisRecord) => {
+    if (subject.kind !== "worktree") return record;
+    const id = latestId(subject, record.locale);
+    latest.set(id, record.key);
+    // This lookup is derived; a failure must not discard an already saved analysis.
+    if (!record.savePending) await saveAIResultFile(pointerPath(id), { key: record.key }, pointerSchema).catch(() => undefined);
+    return record;
+  };
+  const prepare = async (subject: AIAnalysisSubject, locale: string, mode?: "saved"): Promise<AIAnalysisPreview> => {
     z.enum(["en", "zh_CN", "zh_TW"]).parse(locale);
+    if (mode === "saved") {
+      const id = latestId(subject, locale);
+      const pointer = await readAIResultFile(pointerPath(id), pointerSchema);
+      const key = latest.get(id) ?? pointer.cached?.key;
+      const stored = key ? await readAIResultFile(path(key), recordSchema, (value) => value.key === key && value.kind === subject.kind && value.locale === locale) : undefined;
+      return { key: key ?? "", documents: [], warnings: [], partial: false, snapshotStatus: "saved",
+        cached: key ? delivery.read(key) ?? stored?.cached : undefined, cacheDamaged: pointer.damaged || stored?.damaged };
+    }
     const input = await readInput(subject);
     const key = createHash("sha256").update(JSON.stringify([2, subject.kind, locale, input])).digest("hex");
     const budget = planAnalysisBudget(input);
@@ -52,10 +72,14 @@ export const createAnalysisService = ({ root, readInput, configStore, request = 
       const onProgress = createAIProgress(input.requestId, progress);
       try {
         onProgress("preparing");
+        if (input.retrySave && input.subject.kind === "worktree" && input.expectedKey) {
+          onProgress("saving");
+          return await remember(input.subject, await delivery.retry(input.expectedKey, controller.signal));
+        }
         const snapshot = await prepare(input.subject, input.locale);
-        if (snapshot.key !== input.expectedKey) throw new Error("Analysis inputs changed. Refresh the analysis preview before generating.");
+        if (!(input.subject.kind === "worktree" && input.expectedKey === undefined) && snapshot.key !== input.expectedKey) throw new Error("Analysis inputs changed. Refresh the analysis preview before generating.");
         if (input.retrySave) { onProgress("saving"); return await delivery.retry(snapshot.key, controller.signal); }
-        if (snapshot.cached && !input.regenerate) return snapshot.cached;
+        if (snapshot.cached && !input.regenerate) return await remember(input.subject, snapshot.cached);
         const config = await configStore.credentials();
         if (config.endpoint !== input.expectedEndpoint || config.model !== input.expectedModel) throw new Error("AI service changed. Review the destination again.");
         controller.signal.throwIfAborted();
@@ -74,7 +98,7 @@ export const createAnalysisService = ({ root, readInput, configStore, request = 
           limitations: [...snapshot.warnings, ...output.limitations.map(redactSensitiveValues)] };
         controller.signal.throwIfAborted();
         onProgress("saving");
-        return await delivery.save(record, controller.signal);
+        return await remember(input.subject, await delivery.save(record, controller.signal));
       } finally { clearTimeout(timer); running = undefined; }
     }
   };

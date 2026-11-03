@@ -62,6 +62,11 @@ export interface WorktreeInventory {
 
 export type WorktreeScanResult = WorktreeInventory | { cancelled: true };
 
+export interface WorktreeCleanupRequest { commonDir: string; path: string; allowDirty: boolean }
+export type WorktreeCleanupPreparation = { path: string; preview: WorktreeCleanupPreview; error?: never } | { path: string; error: string; preview?: never };
+export type WorktreeOperationPhase = "preparing" | "backing-up" | "removing" | "verifying";
+export interface WorktreeOperationProgress { requestId: string; phase: WorktreeOperationPhase; path: string; completed: number; total: number }
+
 export interface WorktreeCleanupPreview {
   previewId: string;
   entry: WorktreeEntry;

@@ -1,13 +1,27 @@
 import { createHash } from "node:crypto";
 import { createReadStream } from "node:fs";
-import { chmod, lstat, mkdir, mkdtemp, readdir, readlink, rm, symlink, utimes, writeFile } from "node:fs/promises";
+import { chmod, lstat, mkdir, mkdtemp, readFile, readdir, readlink, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative, sep } from "node:path";
 import { afterEach, expect, it } from "vitest";
-import { fingerprintWorktreeTree, hashWorktreeTree, measureWorktreeTree } from "../../src/main/worktrees/worktreeSnapshot";
+import { copyWorktreeVerified, fingerprintWorktreeTree, hashWorktreeTree, measureWorktreeTree } from "../../src/main/worktrees/worktreeSnapshot";
 
 const roots: string[] = [];
 afterEach(async () => { for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }); });
+
+it("reuses a fresh source hash without weakening the source and destination backup verification", async () => {
+  const root = await mkdtemp(join(tmpdir(), "aem-worktree-verified-copy-"));
+  roots.push(root);
+  const source = join(root, "source");
+  await mkdir(source);
+  await writeFile(join(source, "note"), "reviewed content");
+  const hash = await hashWorktreeTree(source);
+  expect(await copyWorktreeVerified(source, join(root, "copy"), hash)).toBe(hash);
+  expect(await hashWorktreeTree(join(root, "copy"))).toBe(hash);
+  await writeFile(join(source, "note"), "external changes");
+  await expect(copyWorktreeVerified(source, join(root, "stale-copy"), hash)).rejects.toThrow("backup copy could not be verified");
+  expect(await readFile(join(source, "note"), "utf8")).toBe("external changes");
+});
 
 it("reports the newest local file mtime, including ignored files but excluding Git metadata and scan time", async () => {
   const root = await mkdtemp(join(tmpdir(), "aem-worktree-file-time-"));

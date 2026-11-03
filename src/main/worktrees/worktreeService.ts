@@ -5,6 +5,7 @@ import { homedir } from "node:os";
 import { z } from "zod";
 import type {
   WorktreeCleanupPreview,
+  WorktreeCleanupRequest, WorktreeCleanupPreparation, WorktreeOperationPhase,
   WorktreeEntry,
   WorktreeInventory,
   WorktreeRecoveryRecord,
@@ -132,7 +133,8 @@ export interface WorktreeService {
   setRepositoryKeep(commonDir: string, reason?: string): Promise<void>;
   setIntegrationRef(commonDir: string, ref?: string): Promise<void>;
   preview(commonDir: string, path: string, allowDirty?: boolean): Promise<WorktreeCleanupPreview>;
-  remove(preview: WorktreeCleanupPreview): Promise<WorktreeRecoveryRecord>;
+  previewBatch(items: WorktreeCleanupRequest[], progress?: (completed: number, path: string) => void): Promise<WorktreeCleanupPreparation[]>;
+  remove(preview: WorktreeCleanupPreview, progress?: (phase: WorktreeOperationPhase) => void): Promise<WorktreeRecoveryRecord>;
   listRecovery(): Promise<WorktreeRecoveryInventory>;
   restore(id: string): Promise<WorktreeRecoveryRecord>;
   cancelScan(): void;
@@ -324,16 +326,47 @@ export const createWorktreeService = ({
     };
   };
 
-  const findEntry = async (commonDir: string, path: string) => {
-    if (!isAbsolute(commonDir) || !isAbsolute(path)) throw new Error("Worktree path must be absolute");
+  const readRepository = async (commonDir: string) => {
+    if (!isAbsolute(commonDir)) throw new Error("Worktree path must be absolute");
     const runner = await git();
     const entries = await readRegistration(runner, commonDir);
-    const target = entries.find((entry) => resolve(entry.path) === resolve(path));
-    if (!target) throw new Error("This worktree is no longer registered. Refresh the inventory.");
     const settings = await readSettings();
     const integration = await readIntegration(runner, commonDir, settings.integrationRefs[commonDir]);
+    return { runner, entries, settings, integration };
+  };
+  const findEntry = async (commonDir: string, path: string, context?: Awaited<ReturnType<typeof readRepository>>) => {
+    if (!isAbsolute(commonDir) || !isAbsolute(path)) throw new Error("Worktree path must be absolute");
+    const { runner, entries, settings, integration } = context ?? await readRepository(commonDir);
+    const target = entries.find((entry) => resolve(entry.path) === resolve(path));
+    if (!target) throw new Error("This worktree is no longer registered. Refresh the inventory.");
     return inspect(runner, commonDir, target, entries[0].path,
       settings.kept[keepKey(commonDir, resolve(path))], undefined, false, integration, false, settings.keptRepositories[commonDir]);
+  };
+
+  const preview = async (commonDir: string, path: string, allowDirty = false, context?: Awaited<ReturnType<typeof readRepository>>, savedRoots?: string[]): Promise<WorktreeCleanupPreview> => {
+    if (!discovered.has(discoveredKey(commonDir, path))) throw new Error("Refresh Worktrees before cleanup");
+    const entry = await findEntry(commonDir, path, context);
+    if (isWithin(entry.path, recoveryRoot) || isWithin(entry.path, process.cwd())) throw new Error("This worktree contains AgentEnv recovery data or the running application");
+    const forceRequired = Boolean(entry.changes.length || entry.ignored.length || entry.headNeedsProtection);
+    if ((!entry.cleanupReviewAvailable && !(allowDirty && entry.manualReviewAvailable)) || (forceRequired && !allowDirty) || entry.keptReason || !entry.head) {
+      throw new Error(`Review this worktree before cleanup: ${entry.reasons.join("; ") || entry.state}`);
+    }
+    const fingerprint = await fingerprintWorktreeTree(entry.path);
+    entry.sizeBytes = fingerprint.sizeBytes;
+    entry.modifiedAt = fingerprint.modifiedAt;
+    const gitState = await readWorktreeGitState(context?.runner ?? await git(), entry.path);
+    if (gitState.head !== entry.head) throw new Error("Worktree changed after review. Refresh and review it again.");
+    const roots = savedRoots ?? await projectStore.listLocalRootPaths();
+    const savedWorkspace = (await Promise.all(roots.map(async (root) => {
+      const canonical = await realpath(root).catch((error) => { if (isMissingFileError(error)) return resolve(root); throw error; });
+      return isWithin(entry.path, canonical);
+    }))).some(Boolean);
+    const previewId = randomUUID();
+    issuedPreviews.set(previewId, { commonDir, path, fingerprint: fingerprint.hash,
+      forceRequired: Boolean(entry.changes.length || entry.ignored.length), issuedAt: Date.now(), reviewHash: reviewFingerprint(entry, gitState.fingerprint) });
+    return { previewId, entry, fingerprint: fingerprint.hash, checkedAt: new Date().toISOString(),
+      backupRequired: Boolean(entry.changes.length || entry.ignored.length), forceRequired: Boolean(entry.changes.length || entry.ignored.length),
+      savedWorkspace, gitFingerprint: gitState.fingerprint };
   };
 
   const service: WorktreeService = {
@@ -588,45 +621,31 @@ export const createWorktreeService = ({
       }
     },
     cancelScan: () => scanController?.abort(new WorktreeScanCancelledError()),
-    preview: async (commonDir, path, allowDirty = false) => {
-      if (!discovered.has(discoveredKey(commonDir, path))) throw new Error("Refresh Worktrees before cleanup");
-      const entry = await findEntry(commonDir, path);
-      if (isWithin(entry.path, recoveryRoot) || isWithin(entry.path, process.cwd())) {
-        throw new Error("This worktree contains AgentEnv recovery data or the running application");
-      }
-      const forceRequired = Boolean(entry.changes.length || entry.ignored.length || entry.headNeedsProtection);
-      if ((!entry.cleanupReviewAvailable && !(allowDirty && entry.manualReviewAvailable)) ||
-          (forceRequired && !allowDirty) || entry.keptReason || !entry.head) {
-        throw new Error(`Review this worktree before cleanup: ${entry.reasons.join("; ") || entry.state}`);
-      }
-      const fingerprint = await fingerprintWorktreeTree(entry.path);
-      entry.sizeBytes = fingerprint.sizeBytes;
-      entry.modifiedAt = fingerprint.modifiedAt;
-      const contentHash = fingerprint.hash;
-      const gitState = await readWorktreeGitState(await git(), entry.path);
-      if (gitState.head !== entry.head) throw new Error("Worktree changed after review. Refresh and review it again.");
+    preview,
+    previewBatch: async (items, progress) => {
+      if (items.length > 1000) throw new Error("Too many Worktrees selected");
+      const contexts = new Map<string, ReturnType<typeof readRepository>>();
       const savedRoots = await projectStore.listLocalRootPaths();
-      const savedWorkspace = (await Promise.all(savedRoots.map(async (root) => {
-        const canonical = await realpath(root).catch((error) => {
-          if (isMissingFileError(error)) return resolve(root);
-          throw error;
-        });
-        return isWithin(entry.path, canonical);
-      }))).some(Boolean);
-      const previewId = randomUUID();
-      issuedPreviews.set(previewId, {
-        commonDir, path, fingerprint: contentHash,
-        forceRequired: Boolean(entry.changes.length || entry.ignored.length), issuedAt: Date.now(),
-        reviewHash: reviewFingerprint(entry, gitState.fingerprint)
-      });
-      return {
-        previewId, entry, fingerprint: contentHash, checkedAt: new Date().toISOString(),
-        backupRequired: Boolean(entry.changes.length || entry.ignored.length),
-        forceRequired: Boolean(entry.changes.length || entry.ignored.length),
-        savedWorkspace, gitFingerprint: gitState.fingerprint
-      };
+      const results: WorktreeCleanupPreparation[] = new Array(items.length);
+      let cursor = 0, completed = 0;
+      await Promise.all(Array.from({ length: Math.min(2, items.length) }, async () => {
+        while (cursor < items.length) {
+          const index = cursor++, item = items[index];
+          try {
+            if (!discovered.has(discoveredKey(item.commonDir, item.path))) throw new Error("Refresh Worktrees before cleanup");
+            let context = contexts.get(item.commonDir);
+            if (!context) { context = readRepository(item.commonDir); contexts.set(item.commonDir, context); }
+            results[index] = { path: item.path, preview: await preview(item.commonDir, item.path, item.allowDirty, await context, savedRoots) };
+          } catch (cause) { results[index] = { path: item.path, error: cause instanceof Error ? cause.message : String(cause) }; }
+          ++completed;
+          try { progress?.(completed, item.path); } catch { /* Feedback is best effort. */ }
+        }
+      }));
+      return results;
     },
-    remove: async (preview) => {
+    remove: async (preview, progress) => {
+      const report = (phase: WorktreeOperationPhase) => { try { progress?.(phase); } catch { /* Feedback is best effort. */ } };
+      report("preparing");
       const issued = issuedPreviews.get(preview.previewId);
       issuedPreviews.delete(preview.previewId);
       if (!issued || issued.commonDir !== preview.entry.commonDir || issued.path !== preview.entry.path ||
@@ -661,8 +680,9 @@ export const createWorktreeService = ({
       const backup = backupPath(record.id);
       const runner = await git();
       if (issued.forceRequired) {
+        report("backing-up");
         await mkdir(dirname(backup), { recursive: true, mode: 0o700 });
-        const backupHash = await copyWorktreeVerified(fresh.path, backup);
+        const backupHash = await copyWorktreeVerified(fresh.path, backup, fingerprint.hash);
         if (backupHash !== preview.fingerprint) throw new Error("Worktree changed while backup was created");
         record.backupHash = backupHash;
         const gitDirOutput = await runner.run(["rev-parse", "--git-dir"], {
@@ -693,6 +713,7 @@ export const createWorktreeService = ({
         throw new Error("Worktree changed after backup. Refresh and review it again.");
       }
       try {
+        report("removing");
         await runner.run(["-c", "core.fsmonitor=false", "worktree", "remove", ...(preview.forceRequired ? ["--force"] : []), "--", fresh.path], {
           cwd: fresh.repositoryPath, timeoutMs: 60_000, maxOutputBytes: 1_000_000
         });
@@ -716,6 +737,7 @@ export const createWorktreeService = ({
         throw new Error(`Worktree removal needs recovery. Open Worktree recovery before retrying. ${error instanceof Error ? error.message : String(error)}`);
       }
       const remaining = await readRegistration(runner, fresh.commonDir);
+      report("verifying");
       if (remaining.some((item) => resolve(item.path) === fresh.path) ||
           await lstat(fresh.path).then(() => true, (error) => !isMissingFileError(error))) {
         throw new Error("Worktree removal needs recovery: verify the directory and Git registration");

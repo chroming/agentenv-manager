@@ -11,6 +11,12 @@ export const selectWorktreeManually = (current: WorktreeSelection[], entry: Work
   return [...current.filter((value) => value.key !== key), { key, origin: "manual" }];
 };
 
+export const selectRepositoryWorktrees = (current: WorktreeSelection[], entries: WorktreeEntry[], select: boolean): WorktreeSelection[] => {
+  const keys = new Set(entries.map(worktreeEntryKey));
+  const outside = current.filter((value) => !keys.has(value.key));
+  return select ? [...outside, ...entries.filter(canSelectWorktreeForCleanup).map((entry) => ({ key: worktreeEntryKey(entry), origin: "manual" as const }))] : outside;
+};
+
 export const toggleAutomaticWorktreeSelection = (current: WorktreeSelection[], entries: WorktreeEntry[]): WorktreeSelection[] => {
   const keys = new Set(entries.filter(isAutomaticCleanupCandidate).map(worktreeEntryKey));
   if (!keys.size) return current;

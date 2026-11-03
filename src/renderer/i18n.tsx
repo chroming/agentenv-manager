@@ -1235,6 +1235,12 @@ const zhCN: Record<string, string> = {
 };
 
 Object.assign(zhCN, {
+  "Repository actions": "仓库操作",
+  "Select all removable Worktrees": "选择全部可移除工作树",
+  "Backing up local files...": "正在备份本地文件…",
+  "Verifying removal...": "正在验证移除结果…",
+  "Checking selected Worktree...": "正在检查选中工作树…",
+  "Saved analysis. Analyze again to read the latest state.": "已保存的分析；重新分析会读取最新状态。",
   "Provided by Agent": "由 Agent 提供",
   "Bundled; activation unknown": "应用内置 · 启用状态未知",
   "Activation unknown": "启用状态未知",
@@ -3943,6 +3949,12 @@ Object.assign(zhCN, {
 });
 
 Object.assign(zhTW, {
+  "Repository actions": "儲存庫操作",
+  "Select all removable Worktrees": "選擇全部可移除工作樹",
+  "Backing up local files...": "正在備份本機檔案…",
+  "Verifying removal...": "正在驗證移除結果…",
+  "Checking selected Worktree...": "正在檢查選取的工作樹…",
+  "Saved analysis. Analyze again to read the latest state.": "已儲存的分析；重新分析會讀取最新狀態。",
   "Provided by Agent": "由 Agent 提供",
   "Bundled; activation unknown": "應用內建 · 啟用狀態未知",
   "Activation unknown": "啟用狀態未知",

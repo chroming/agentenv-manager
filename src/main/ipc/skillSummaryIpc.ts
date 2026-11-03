@@ -52,7 +52,7 @@ export const registerSkillSummaryIpc = (
     for (const window of BrowserWindow.getAllWindows()) window.webContents.send("ai:preferences-changed", result);
     return result;
   });
-  diagnosticHandle("ai:prepare", (_event, subject, locale) => analyses.prepare(AnalysisSubjectSchema.parse(subject), z.enum(["en", "zh_CN", "zh_TW"]).parse(locale)));
+  diagnosticHandle("ai:prepare", (_event, subject, locale, mode) => analyses.prepare(AnalysisSubjectSchema.parse(subject), z.enum(["en", "zh_CN", "zh_TW"]).parse(locale), mode === "saved" ? "saved" : undefined));
   diagnosticHandle("ai:generate", (_event, input) => {
     const subject = AnalysisSubjectSchema.parse(input.subject);
     if (input.retrySave === true) return analyses.generate({ ...input, subject });

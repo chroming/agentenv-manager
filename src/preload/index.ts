@@ -17,7 +17,7 @@ const api: AgentEnvApi = {
     ipcRenderer.on("ai:preferences-changed", listener);
     return () => { ipcRenderer.removeListener("ai:preferences-changed", listener); };
   },
-  prepareAIAnalysis: (subject, locale) => ipcRenderer.invoke("ai:prepare", subject, locale),
+  prepareAIAnalysis: (subject, locale, mode) => ipcRenderer.invoke("ai:prepare", subject, locale, mode),
   generateAIAnalysis: (input) => ipcRenderer.invoke("ai:generate", input),
   cancelAIAnalysis: (id) => ipcRenderer.invoke("ai:cancel", id),
   readSkillSummaryConfig: () => ipcRenderer.invoke("skill-summaries:config"),
@@ -104,7 +104,13 @@ const api: AgentEnvApi = {
   setWorktreeRepositoryKeep: (commonDir, reason) => ipcRenderer.invoke("worktrees:set-repository-keep", commonDir, reason),
   setWorktreeIntegrationRef: (commonDir, ref) => ipcRenderer.invoke("worktrees:set-integration-ref", commonDir, ref),
   previewWorktreeCleanup: (commonDir, path, allowDirty) => ipcRenderer.invoke("worktrees:preview", commonDir, path, allowDirty),
-  removeWorktree: (preview) => ipcRenderer.invoke("worktrees:remove", preview),
+  previewWorktreeCleanupBatch: (items, requestId) => ipcRenderer.invoke("worktrees:preview-batch", items, requestId),
+  onWorktreeProgress: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, value: import("../shared/worktrees").WorktreeOperationProgress) => callback(value);
+    ipcRenderer.on("worktrees:progress", listener);
+    return () => { ipcRenderer.removeListener("worktrees:progress", listener); };
+  },
+  removeWorktree: (preview, requestId) => ipcRenderer.invoke("worktrees:remove", preview, requestId),
   listWorktreeRecovery: () => ipcRenderer.invoke("worktrees:list-recovery"),
   restoreWorktree: (id) => ipcRenderer.invoke("worktrees:restore", id),
   selectConversationWorkspace: () =>

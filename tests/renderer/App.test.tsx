@@ -320,6 +320,8 @@ const managedState = (overrides: Partial<TargetManagementState> = {}): TargetMan
 
 const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
   const api: AgentEnvApi = {
+    previewWorktreeCleanupBatch: vi.fn(),
+    onWorktreeProgress: vi.fn(() => () => undefined),
     onAIRequestProgress: vi.fn(() => () => undefined),
     conversationHistoryStatus: vi.fn().mockResolvedValue({ config: { version: 1, enabled: false, paused: false, sources: [] }, needsConsent: true, running: false, sources: [], availableSources: [] }),
     configureConversationHistory: vi.fn(),

@@ -107,7 +107,7 @@ export interface AgentEnvApi {
   saveAIPreferences(input: import("./aiAssistance").AIPreferences): Promise<import("./aiAssistance").AIPreferences>;
   onAIPreferencesChanged(callback: (value: import("./aiAssistance").AIPreferences) => void): () => void;
   onAIRequestProgress(callback: (value: import("./aiReliability").AIRequestProgress) => void): () => void;
-  prepareAIAnalysis(subject: import("./aiAssistance").AIAnalysisSubject, locale: string): Promise<import("./aiAssistance").AIAnalysisPreview>;
+  prepareAIAnalysis(subject: import("./aiAssistance").AIAnalysisSubject, locale: string, mode?: "saved"): Promise<import("./aiAssistance").AIAnalysisPreview>;
   generateAIAnalysis(input: import("./aiAssistance").AIAnalysisGenerateInput): Promise<import("./aiAssistance").AIAnalysisRecord>;
   cancelAIAnalysis(id: string): Promise<void>;
   readonly runtimeVersion: number;
@@ -155,7 +155,9 @@ export interface AgentEnvApi {
   setWorktreeRepositoryKeep(commonDir: string, reason?: string): Promise<void>;
   setWorktreeIntegrationRef(commonDir: string, ref?: string): Promise<void>;
   previewWorktreeCleanup(commonDir: string, path: string, allowDirty?: boolean): Promise<import("./worktrees").WorktreeCleanupPreview>;
-  removeWorktree(preview: import("./worktrees").WorktreeCleanupPreview): Promise<import("./worktrees").WorktreeRecoveryRecord>;
+  previewWorktreeCleanupBatch(items: import("./worktrees").WorktreeCleanupRequest[], requestId: string): Promise<import("./worktrees").WorktreeCleanupPreparation[]>;
+  onWorktreeProgress(callback: (value: import("./worktrees").WorktreeOperationProgress) => void): () => void;
+  removeWorktree(preview: import("./worktrees").WorktreeCleanupPreview, requestId?: string): Promise<import("./worktrees").WorktreeRecoveryRecord>;
   listWorktreeRecovery(): Promise<import("./worktrees").WorktreeRecoveryInventory>;
   restoreWorktree(id: string): Promise<import("./worktrees").WorktreeRecoveryRecord>;
   selectConversationWorkspace(): Promise<string | undefined>;
