@@ -19,6 +19,7 @@ const inventorySchema = z.object({
     measurementPending: z.boolean().optional(),
     keptReason: z.string().optional(), repositoryKeptReason: z.string().optional(), cleanupReviewAvailable: z.boolean(),
     manualReviewAvailable: z.boolean(), headNeedsProtection: z.boolean(),
+    pausedOperations: strings.optional(), localContentUncertain: z.boolean().optional(),
     integration: z.object({ ref: z.string().optional(), head: z.string().optional(),
       merged: z.boolean().optional(), explicit: z.boolean(), choices: strings }).optional()
   }))

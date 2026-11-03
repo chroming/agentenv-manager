@@ -8,6 +8,9 @@ export const worktreeStatus = (entry: WorktreeEntry): {
   if (entry.locked) return neutral("Git locked");
   if (!entry.exists) return neutral("Folder unavailable");
   if (entry.prunable) return neutral("Registration needs repair");
+  if (entry.reasons.some((reason) => reason.includes("active writer lock"))) return neutral("Git write lock");
+  if (entry.pausedOperations?.length) return neutral("Unfinished Git operation");
+  if (entry.localContentUncertain) return neutral("Extra backup required");
   if (entry.reasons.includes("Git operation in progress")) return neutral("Git operation in progress");
   if (entry.reasons.includes("Unresolved Git conflicts")) return { message: "Unresolved Git conflicts", tone: "warning" };
   if (entry.submodules) return neutral("Contains submodules");

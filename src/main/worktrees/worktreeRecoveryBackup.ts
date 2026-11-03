@@ -14,7 +14,8 @@ const RecoveryRecord = z.object({
   createdAt: z.string().refine((value) => Number.isFinite(Date.parse(value))),
   status: z.enum(["prepared", "removed", "restoring", "restored", "unchanged"]),
   backupHash: z.string().regex(/^[a-f0-9]{64}$/).optional(),
-  indexHash: z.string().regex(/^[a-f0-9]{64}$/).optional()
+  indexHash: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+  operationHash: z.string().regex(/^[a-f0-9]{64}$/).optional()
 });
 const MAX_SCANNED_ENTRIES = 100_000;
 const MAX_PREVIEW_ENTRIES = 1_000;
@@ -123,7 +124,8 @@ const inspectBackup = async (root: string, id: string, preview: boolean, budget:
   }
   for (const [required, path, directory] of [
     [record?.backupHash, join(storage, "files"), true],
-    [record?.indexHash, join(storage, "index"), false]
+    [record?.indexHash, join(storage, "index"), false],
+    [record?.operationHash, join(storage, "operation"), true]
   ] as const) {
     // Safe no-op removal discards redundant payloads but retains their recorded hashes.
     if (!required || record?.status === "unchanged") continue;

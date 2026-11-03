@@ -752,6 +752,65 @@ describe("Worktrees desktop workflow", () => {
     await expect(readFile(join(activePath!, "README.md"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
     expect(await readFile(join(retainedPath, "README.md"), "utf8")).toBe("base\n");
     expect((await run("git", ["-C", repo, "worktree", "list", "--porcelain"])).stdout).toContain(retainedPath);
+
+    // A paused merge is a recoverable state, not an actively running Git process.
+    const paused = join(home, ".codex", "worktrees", "paused-merge");
+    const identity = ["-c", "user.name=Fixture", "-c", "user.email=fixture@example.com"];
+    await run("git", ["-C", repo, "worktree", "add", "-b", "paused-merge", paused]);
+    await writeFile(join(paused, "README.md"), "local branch content\n");
+    await run("git", ["-C", paused, "add", "README.md"]);
+    await run("git", ["-C", paused, ...identity, "commit", "-m", "local side"]);
+    await writeFile(join(repo, "README.md"), "integration branch content\n");
+    await run("git", ["-C", repo, "add", "README.md"]);
+    await run("git", ["-C", repo, ...identity, "commit", "-m", "integration side"]);
+    await expect(run("git", ["-C", paused, ...identity, "merge", "main", "--no-edit"])).rejects.toMatchObject({ code: 1 });
+    const pausedStatus = (await run("git", ["-C", paused, "status", "--porcelain=v1", "-z"])).stdout;
+    const pausedGitDir = (await run("git", ["-C", paused, "rev-parse", "--absolute-git-dir"])).stdout.trim();
+    const mergeHead = await readFile(join(pausedGitDir, "MERGE_HEAD"), "utf8");
+    const mergeMessage = await readFile(join(pausedGitDir, "MERGE_MSG"), "utf8");
+    const conflictedContent = await readFile(join(paused, "README.md"), "utf8");
+    await reopened.getByRole("button", { name: t("Worktrees"), exact: true }).click();
+    await reopenedWorkspace.getByRole("button", { name: t("Refresh Worktrees"), exact: true }).click();
+    await expect.poll(() => reopenedWorkspace.getByRole("button", { name: t("Refresh Worktrees"), exact: true }).getAttribute("aria-busy")).toBe("false");
+    await reopened.setViewportSize({ width: 920, height: 620 });
+    const pausedRow = reopenedWorkspace.locator(".ui-resource-row").filter({ has: reopened.getByText(paused, { exact: true }) });
+    await pausedRow.getByRole("checkbox", { name: t("Select Worktree for review"), exact: true }).check();
+    // Optional measurement can still be pending when the real Git preview is ready.
+    await app.evaluate(({ ipcMain }) => {
+      const channel = "worktrees:preview";
+      const handlers = (ipcMain as unknown as { _invokeHandlers: Map<string, (...args: unknown[]) => unknown> })._invokeHandlers;
+      const original = handlers.get(channel)!;
+      ipcMain.removeHandler(channel);
+      ipcMain.handle(channel, async (...args) => {
+        try {
+          const result = await original(...args) as { entry: { sizeBytes?: number; measurementPending?: boolean } };
+          return { ...result, entry: { ...result.entry, sizeBytes: undefined, measurementPending: true } };
+        } finally {
+          ipcMain.removeHandler(channel);
+          ipcMain.handle(channel, original);
+        }
+      });
+    });
+    await reopenedWorkspace.getByRole("button", { name: `${t("Remove selected...")} (1)`, exact: true }).click();
+    const pausedConfirm = reopened.getByRole("dialog", { name: t("Remove this Worktree?"), exact: true });
+    await pausedConfirm.getByRole("button", { name: t("Remove 1 Worktree"), exact: true }).click({ trial: true });
+    await expect.poll(() => pausedConfirm.getByText(t("Not measured"), { exact: true }).count()).toBeGreaterThan(0);
+    if (process.env.AGENTENV_CAPTURE_WORKTREES_DIR) await reopened.screenshot({ path: join(process.env.AGENTENV_CAPTURE_WORKTREES_DIR, `worktree-paused-operation-${locale}-920.png`) });
+    await pausedConfirm.getByRole("button", { name: t("Remove 1 Worktree"), exact: true }).click();
+    const pausedResults = reopened.getByRole("dialog", { name: t("Cleanup results"), exact: true });
+    await pausedResults.getByText(t("Removed"), { exact: true }).waitFor();
+    await expect(readFile(join(paused, "README.md"), "utf8")).rejects.toMatchObject({ code: "ENOENT" });
+    await pausedResults.getByRole("button", { name: t("View recovery copies"), exact: true }).click();
+    const pausedRecovery = reopened.getByRole("dialog", { name: t("Worktree recovery"), exact: true })
+      .locator(".ui-resource-row").filter({ has: reopened.getByText(paused, { exact: true }) });
+    await pausedRecovery.getByRole("button", { name: t("Restore"), exact: true }).click();
+    await pausedRecovery.getByText(t("Restored"), { exact: true }).waitFor();
+    expect((await run("git", ["-C", paused, "status", "--porcelain=v1", "-z"])).stdout).toBe(pausedStatus);
+    const restoredGitDir = (await run("git", ["-C", paused, "rev-parse", "--absolute-git-dir"])).stdout.trim();
+    expect(await readFile(join(restoredGitDir, "MERGE_HEAD"), "utf8")).toBe(mergeHead);
+    expect(await readFile(join(restoredGitDir, "MERGE_MSG"), "utf8")).toBe(mergeMessage);
+    expect(await readFile(join(paused, "README.md"), "utf8")).toBe(conflictedContent);
+    expect(calls).toBe(1);
     const cleanupEvents = (await readFile(join(root, "logs", "runtime.jsonl"), "utf8")).trim().split("\n").map((line) => JSON.parse(line));
     expect(cleanupEvents.some((event) => event.action === "worktrees:preview-batch" && event.phase === "prepared-worktrees")).toBe(true);
     const stages = cleanupEvents.filter((event) => event.action === "worktrees:remove" && event.phase === "stage-finished");

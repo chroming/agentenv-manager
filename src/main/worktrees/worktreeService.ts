@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { cp, lstat, mkdir, readFile, readdir, realpath, rm, stat } from "node:fs/promises";
+import { lstat, mkdir, readFile, readdir, realpath, rm, stat } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { homedir } from "node:os";
 import { z } from "zod";
@@ -21,10 +21,11 @@ import { readWorktreeAnalysis } from "./worktreeAnalysis";
 import { createWorktreeInventoryCache } from "./worktreeInventoryCache";
 import { createWorktreeMeasurements } from "./worktreeMeasurements";
 import {
-  ACTIVE_WORKTREE_MARKERS, readIntegration, readMainGitState, readRepositoryRefs, readWorktreeGitState,
+  ACTIVE_WORKTREE_LOCKS, PAUSED_WORKTREE_MARKERS, assertNoWorktreeWriter, readIntegration, readMainGitState, readRepositoryRefs, readWorktreeGitState,
   reviewFingerprint, withIntegrationEvidence
 } from "./worktreeGitState";
 import type { WorktreeIntegration } from "../../shared/worktrees";
+import { assertLinkedGitDirectory, assertRestoreRegistration, backupOperationMetadata, copyRecoveryPathExclusive, operationMetadataHash, operationRecoveryObjects, pinRestoreRegistration, readLinkedRegistrationIdentity, recoveryGitStateHash, worktreeAdminIdentities } from "./worktreeOperationRecovery";
 
 const SettingsSchema = z.object({
   formatVersion: z.literal(1),
@@ -44,6 +45,17 @@ const RecoverySchema = z.object({
   protectedRef: z.string().optional(),
   backupHash: z.string().length(64).optional(),
   indexHash: z.string().length(64).optional(),
+  operationHash: z.string().length(64).optional(),
+  protectedRefs: z.array(z.object({ ref: z.string(), object: z.string().regex(/^[0-9a-f]{40,64}$/) }).strict()).optional(),
+  restoreAttemptGitHash: z.string().length(64).optional(),
+  restoreRegistration: z.object({
+    gitDir: z.string(), commonDir: z.string(), adminDevice: z.string(), adminInode: z.string(),
+    worktreeDevice: z.string(), worktreeInode: z.string(), linkDevice: z.string(), linkInode: z.string(),
+    gitFileHash: z.string().length(64), backlinkHash: z.string().length(64), commonLinkHash: z.string().length(64)
+  }).strict().optional(),
+  legacyCheckoutMigration: z.boolean().optional(),
+  gitStatusHash: z.string().length(64).optional(),
+  sourceGitFingerprint: z.string().length(64).optional(),
   sourceHash: z.string().length(64).optional(),
   restoreAttemptHash: z.string().length(64).optional(),
   sourceSizeBytes: z.number().int().nonnegative().optional(),
@@ -176,6 +188,8 @@ export const createWorktreeService = ({
   const issuedPreviews = new Map<string, {
     commonDir: string; path: string; fingerprint: string; forceRequired: boolean; issuedAt: number;
     reviewHash: string;
+    backupRequired: boolean;
+    manualAuthorized: boolean;
   }>();
   const discovered = new Set<string>();
   const discoveredKey = (commonDir: string, path: string) => `${commonDir}\0${path}`;
@@ -229,7 +243,8 @@ export const createWorktreeService = ({
     keptReason?: string,
     signal?: AbortSignal,
     base?: WorktreeIntegration,
-    repositoryKeptReason?: string
+    repositoryKeptReason?: string,
+    lightweight = false
   ): Promise<WorktreeEntry> => {
     keptReason ??= repositoryKeptReason;
     const path = resolve(registration.path);
@@ -244,6 +259,8 @@ export const createWorktreeService = ({
     let submodules = false;
     let unsafeLocalState = false;
     let headNeedsProtection = false;
+    let localContentUncertain = false;
+    const pausedOperations: string[] = [];
     let integration = base;
     let exists = false;
     try {
@@ -259,7 +276,7 @@ export const createWorktreeService = ({
     if (exists && !main) {
       try {
         const status = await readGit(runner,
-          ["status", "--porcelain=v1", "-z", "--ignored=matching", "--untracked-files=all"],
+          ["status", "--porcelain=v1", "-z", "--ignored=matching", lightweight ? "--untracked-files=normal" : "--untracked-files=all"],
           { cwd: path, env: { GIT_OPTIONAL_LOCKS: "0" }, timeoutMs: 12_000, maxOutputBytes: 4_000_000, signal }
         );
         for (const record of status.stdout.split("\0").filter(Boolean)) {
@@ -269,7 +286,6 @@ export const createWorktreeService = ({
         if (changes.length) addReason(`${changes.length} changed or untracked paths`, "{{count}} changed or untracked paths", { count: changes.length });
         if (changes.some((record) => /^(?:DD|AU|UD|UA|DU|AA|UU) /.test(record))) {
           addReason("Unresolved Git conflicts");
-          unsafeLocalState = true;
         }
         if (ignored.length) addReason(`${ignored.length} ignored paths`, "{{count}} ignored paths", { count: ignored.length });
         // Gitlinks protect initialized and missing submodules without launching git-submodule.
@@ -278,15 +294,25 @@ export const createWorktreeService = ({
         });
         submodules = modules.stdout.split("\0").some((record) => record.startsWith("160000 "));
         if (submodules) addReason("Contains submodules");
+        const flags = await readGit(runner, ["ls-files", "-v", "-z"], {
+          cwd: path, timeoutMs: 8_000, maxOutputBytes: 4_000_000, signal
+        });
+        localContentUncertain = flags.stdout.split("\0").some((record) => /^[a-zS] /.test(record));
+        if (localContentUncertain) addReason("Index flags can hide local changes; recovery backup required");
         const gitDirResult = await readGit(runner, ["rev-parse", "--git-dir"], {
           cwd: path, timeoutMs: 8_000, maxOutputBytes: 32_000, signal
         });
         const gitDir = resolve(path, gitDirResult.stdout.trim());
-        if ((await Promise.all(ACTIVE_WORKTREE_MARKERS.map((marker) => pathExists(join(gitDir, marker))))).some(Boolean)) {
-          addReason("Git operation in progress");
+        if ((await Promise.all(ACTIVE_WORKTREE_LOCKS.map((marker) => pathExists(join(gitDir, marker))))).some(Boolean)) {
+          addReason("Git operation in progress: active writer lock");
           unsafeLocalState = true;
         }
-        if (await hasNestedRepository(path, signal)) {
+        for (const marker of PAUSED_WORKTREE_MARKERS) if (await pathExists(join(gitDir, marker))) pausedOperations.push(marker);
+        if (pausedOperations.length) addReason("Paused Git operation; manual recovery backup required");
+        const reportedNested = lightweight && (await Promise.all([...changes.map((record) => record.slice(3)), ...ignored]
+          .filter((name) => name.endsWith("/"))
+          .map((name) => pathExists(join(path, name, ".git"))))).some(Boolean);
+        if (reportedNested || !lightweight && await hasNestedRepository(path, signal)) {
           addReason("Contains a nested repository");
           unsafeLocalState = true;
         }
@@ -314,7 +340,7 @@ export const createWorktreeService = ({
     const manualReviewAvailable = !main && exists && !registration.locked && !registration.prunable &&
       !submodules && !unsafeLocalState && Boolean(registration.head) &&
       !reasons.some((reason) => reason.startsWith("Git check failed") || reason.startsWith("Could not inspect"));
-    const cleanupReviewAvailable = manualReviewAvailable && !headNeedsProtection &&
+    const cleanupReviewAvailable = manualReviewAvailable && !headNeedsProtection && !localContentUncertain &&
       !changes.length && !ignored.length && !submodules && Boolean(registration.head) &&
       reasons.every((reason) => INTEGRATION_REVIEW_REASONS.has(reason));
     return {
@@ -323,7 +349,7 @@ export const createWorktreeService = ({
       locked: registration.locked, prunable: registration.prunable, exists,
       state, reasons, reasonDetails, changes, ignored, submodules,
       keptReason, repositoryKeptReason, cleanupReviewAvailable,
-      manualReviewAvailable, headNeedsProtection, integration
+      manualReviewAvailable, headNeedsProtection, integration, pausedOperations, localContentUncertain
     };
   };
 
@@ -335,13 +361,13 @@ export const createWorktreeService = ({
     const integration = await readIntegration(runner, commonDir, settings.integrationRefs[commonDir]);
     return { runner, entries, settings, integration };
   };
-  const findEntry = async (commonDir: string, path: string, context?: Awaited<ReturnType<typeof readRepository>>) => {
+  const findEntry = async (commonDir: string, path: string, context?: Awaited<ReturnType<typeof readRepository>>, lightweight = false) => {
     if (!isAbsolute(commonDir) || !isAbsolute(path)) throw new Error("Worktree path must be absolute");
     const { runner, entries, settings, integration } = context ?? await readRepository(commonDir);
     const target = entries.find((entry) => resolve(entry.path) === resolve(path));
     if (!target) throw new Error("This worktree is no longer registered. Refresh the inventory.");
     return inspect(runner, commonDir, target, entries[0].path,
-      settings.kept[keepKey(commonDir, resolve(path))], undefined, integration, settings.keptRepositories[commonDir]);
+      settings.kept[keepKey(commonDir, resolve(path))], undefined, integration, settings.keptRepositories[commonDir], lightweight);
   };
 
   const isKnownCandidate = async (commonDir: string, path?: string) => {
@@ -353,16 +379,24 @@ export const createWorktreeService = ({
 
   const preview = async (commonDir: string, path: string, allowDirty = false, context?: Awaited<ReturnType<typeof readRepository>>, savedRoots?: string[]): Promise<WorktreeCleanupPreview> => {
     if (!await isKnownCandidate(commonDir, path)) throw new Error("Refresh Worktrees before cleanup");
-    const entry = await findEntry(commonDir, path, context);
+    const cached = (await inventoryCache.read()).inventory?.entries.find((item) => item.commonDir === commonDir && item.path === path);
+    if (cached?.reasons.includes("Contains a nested repository")) {
+      throw new Error("Review this worktree before cleanup: Contains a nested repository. Refresh after resolving it.");
+    }
+    const entry = await findEntry(commonDir, path, context, true);
     if (isWithin(entry.path, recoveryRoot) || isWithin(entry.path, process.cwd())) throw new Error("This worktree contains AgentEnv recovery data or the running application");
-    const forceRequired = Boolean(entry.changes.length || entry.ignored.length || entry.headNeedsProtection);
-    if ((!entry.cleanupReviewAvailable && !(allowDirty && entry.manualReviewAvailable)) || (forceRequired && !allowDirty) || entry.keptReason || !entry.head) {
+    const forceRequired = Boolean(entry.changes.length || entry.ignored.length || entry.pausedOperations?.length);
+    const backupRequired = forceRequired || Boolean(entry.localContentUncertain);
+    const needsManual = forceRequired || entry.headNeedsProtection;
+    if ((!entry.cleanupReviewAvailable && !(allowDirty && entry.manualReviewAvailable)) || (needsManual && !allowDirty) || entry.keptReason || !entry.head) {
       throw new Error(`Review this worktree before cleanup: ${entry.reasons.join("; ") || entry.state}`);
     }
-    const fingerprint = await fingerprintWorktreeTree(entry.path);
-    entry.sizeBytes = fingerprint.sizeBytes;
-    entry.modifiedAt = fingerprint.modifiedAt;
+    const measurement = measurements.get(entry.path)?.value;
+    entry.sizeBytes = measurement?.sizeBytes;
+    entry.modifiedAt = measurement?.modifiedAt;
+    entry.measurementPending = !measurement;
     const gitState = await readWorktreeGitState(context?.runner ?? await git(), entry.path);
+    await assertLinkedGitDirectory(entry.commonDir, entry.path, gitState.gitDir);
     if (gitState.head !== entry.head) throw new Error("Worktree changed after review. Refresh and review it again.");
     const roots = savedRoots ?? await projectStore.listLocalRootPaths();
     const savedWorkspace = (await Promise.all(roots.map(async (root) => {
@@ -370,10 +404,11 @@ export const createWorktreeService = ({
       return isWithin(entry.path, canonical);
     }))).some(Boolean);
     const previewId = randomUUID();
-    issuedPreviews.set(previewId, { commonDir, path, fingerprint: fingerprint.hash,
-      forceRequired: Boolean(entry.changes.length || entry.ignored.length), issuedAt: Date.now(), reviewHash: reviewFingerprint(entry, gitState.fingerprint) });
-    return { previewId, entry, fingerprint: fingerprint.hash, checkedAt: new Date().toISOString(),
-      backupRequired: Boolean(entry.changes.length || entry.ignored.length), forceRequired: Boolean(entry.changes.length || entry.ignored.length),
+    const fingerprint = reviewFingerprint(entry, gitState.fingerprint);
+    issuedPreviews.set(previewId, { commonDir, path, fingerprint,
+      forceRequired, backupRequired, manualAuthorized: allowDirty, issuedAt: Date.now(), reviewHash: fingerprint });
+    return { previewId, entry, fingerprint, fingerprintScope: "git-and-selected-paths", checkedAt: new Date().toISOString(),
+      backupRequired, forceRequired,
       savedWorkspace, gitFingerprint: gitState.fingerprint };
   };
 
@@ -669,41 +704,44 @@ export const createWorktreeService = ({
       issuedPreviews.delete(preview.previewId);
       if (!issued || issued.commonDir !== preview.entry.commonDir || issued.path !== preview.entry.path ||
           issued.fingerprint !== preview.fingerprint || issued.forceRequired !== preview.forceRequired ||
+          preview.fingerprintScope !== "git-and-selected-paths" ||
           !preview.gitFingerprint || reviewFingerprint(preview.entry, preview.gitFingerprint) !== issued.reviewHash ||
-          preview.backupRequired !== issued.forceRequired ||
+          preview.backupRequired !== issued.backupRequired ||
           Date.now() - issued.issuedAt > 10 * 60_000) {
         throw new Error("Cleanup review expired. Review this worktree again.");
       }
       const fresh = await findEntry(preview.entry.commonDir, preview.entry.path);
       const gitState = await readWorktreeGitState(await git(), fresh.path);
+      await assertLinkedGitDirectory(fresh.commonDir, fresh.path, gitState.gitDir);
       if (reviewFingerprint(fresh, gitState.fingerprint) !== issued.reviewHash) {
         throw new Error("Worktree changed after review. Refresh and review it again.");
       }
-      if ((!fresh.cleanupReviewAvailable && !(preview.forceRequired || preview.entry.headNeedsProtection && fresh.manualReviewAvailable)) ||
+      if ((!fresh.cleanupReviewAvailable && !(issued.manualAuthorized && fresh.manualReviewAvailable)) ||
           !fresh.manualReviewAvailable || fresh.keptReason ||
-          Boolean(fresh.changes.length || fresh.ignored.length) !== preview.forceRequired ||
+          Boolean(fresh.changes.length || fresh.ignored.length || fresh.pausedOperations?.length) !== preview.forceRequired ||
+          Boolean(fresh.localContentUncertain) !== Boolean(preview.entry.localContentUncertain) ||
           fresh.headNeedsProtection !== preview.entry.headNeedsProtection ||
           fresh.head !== preview.entry.head ||
           fresh.branch !== preview.entry.branch || fresh.repositoryPath !== preview.entry.repositoryPath) {
         throw new Error("Worktree changed after review. Refresh and review it again.");
       }
       const fingerprint = await fingerprintWorktreeTree(fresh.path, { progress: progress ? (value) => report("preparing", value) : undefined });
-      if (fingerprint.hash !== preview.fingerprint) {
-        throw new Error("Worktree changed after review. Refresh and review it again.");
-      }
+      // The preview authorized Git state and bounded path signatures, not whole
+      // content equality. This exact snapshot includes the newest folder bytes.
       const record: WorktreeRecoveryRecord = {
         id: randomUUID(), path: fresh.path, repositoryPath: fresh.repositoryPath,
         head: fresh.head!, branch: fresh.branch, createdAt: new Date().toISOString(),
-        status: "prepared", sourceHash: preview.fingerprint, sourceSizeBytes: fingerprint.sizeBytes
+        status: "prepared", sourceHash: fingerprint.hash, sourceSizeBytes: fingerprint.sizeBytes,
+        sourceGitFingerprint: gitState.fingerprint
       };
       const backup = backupPath(record.id);
       const runner = await git();
-      if (issued.forceRequired) {
+      if (issued.backupRequired) {
         report("backing-up");
         await mkdir(dirname(backup), { recursive: true, mode: 0o700 });
         const backupHash = await copyWorktreeVerified(fresh.path, backup, fingerprint.hash,
           progress ? (value) => report("backing-up", value) : undefined);
-        if (backupHash !== preview.fingerprint) throw new Error("Worktree changed while backup was created");
+        if (backupHash !== fingerprint.hash) throw new Error("Worktree changed while backup was created");
         record.backupHash = backupHash;
         const gitDirOutput = await runner.run(["rev-parse", "--git-dir"], {
           cwd: fresh.path, timeoutMs: 8_000, maxOutputBytes: 32_000
@@ -715,6 +753,8 @@ export const createWorktreeService = ({
           });
         }
         if ((record.indexHash ?? null) !== gitState.index) throw new Error("Worktree changed while its staged-state backup was created");
+        record.operationHash = await backupOperationMetadata(gitState.gitDir, join(recoveryRoot, record.id, "operation"));
+        record.gitStatusHash = createHash("sha256").update(gitState.status).digest("hex");
       }
       const mainBefore = await readMainGitState(runner, fresh.repositoryPath);
       const refsBefore = await readRepositoryRefs(runner, fresh.repositoryPath);
@@ -722,19 +762,34 @@ export const createWorktreeService = ({
       await runner.run(["update-ref", record.protectedRef, record.head], {
         cwd: fresh.repositoryPath, timeoutMs: 8_000, maxOutputBytes: 100_000
       });
+      record.protectedRefs = [];
+      const recoveryObjects = issued.backupRequired
+        ? await operationRecoveryObjects(runner, fresh.path, join(recoveryRoot, record.id, "operation"), record.head) : [];
+      for (const [index, object] of recoveryObjects.entries()) {
+        const ref = `refs/agentenv/worktree-recovery/${record.id}-objects/${index}`;
+        await runner.run(["update-ref", ref, object], { cwd: fresh.repositoryPath, timeoutMs: 8_000, maxOutputBytes: 100_000 });
+        const verified = await runner.run(["rev-parse", "--verify", ref], { cwd: fresh.repositoryPath, timeoutMs: 8_000, maxOutputBytes: 32_000 });
+        if (verified.stdout.trim() !== object) throw new Error("Git recovery reference could not be verified; nothing was removed");
+        record.protectedRefs.push({ ref, object });
+      }
+      if ((await runner.run(["rev-parse", "--verify", record.protectedRef], {
+        cwd: fresh.repositoryPath, timeoutMs: 8_000, maxOutputBytes: 32_000
+      })).stdout.trim() !== record.head) throw new Error("Git recovery reference could not be verified; nothing was removed");
       await saveRecovery(record);
+      report("removing");
       if (await hashWorktreeTree(fresh.path, { step: "verifying-source",
-        progress: progress ? (value) => report(issued.forceRequired ? "backing-up" : "preparing", value) : undefined }) !== preview.fingerprint) {
+        progress: progress ? (value) => report("removing", value) : undefined }) !== fingerprint.hash) {
         throw new Error("Worktree changed after backup. Refresh and review it again.");
       }
       const finalEntry = await findEntry(fresh.commonDir, fresh.path);
       const finalGitState = await readWorktreeGitState(runner, fresh.path);
       if (!finalEntry.manualReviewAvailable || finalEntry.keptReason ||
+          (record.operationHash && record.operationHash !== await operationMetadataHash(finalGitState.gitDir)) ||
           reviewFingerprint({ ...finalEntry, headNeedsProtection: fresh.headNeedsProtection }, finalGitState.fingerprint) !== issued.reviewHash) {
         throw new Error("Worktree changed after backup. Refresh and review it again.");
       }
       try {
-        report("removing");
+        await assertNoWorktreeWriter(finalGitState.gitDir);
         await runner.run(["-c", "core.fsmonitor=false", "worktree", "remove", ...(preview.forceRequired ? ["--force"] : []), "--", fresh.path], {
           cwd: fresh.repositoryPath, timeoutMs: 60_000, maxOutputBytes: 1_000_000
         });
@@ -743,15 +798,21 @@ export const createWorktreeService = ({
           readRegistration(runner, fresh.commonDir)
             .then((items) => items.some((item) => resolve(item.path) === fresh.path), () => false),
           lstat(fresh.path).then(() => true, () => false),
-          hashWorktreeTree(fresh.path).then((hash) => hash === preview.fingerprint, () => false)
+          hashWorktreeTree(fresh.path).then((hash) => hash === fingerprint.hash, () => false)
         ]);
-        if (registered && stillExists && sameContent) {
+        const sameGit = registered && stillExists && await readWorktreeGitState(runner, fresh.path)
+          .then(async (state) => state.fingerprint === finalGitState.fingerprint &&
+            (!record.operationHash || await operationMetadataHash(state.gitDir) === record.operationHash), () => false);
+        if (registered && stillExists && sameContent && sameGit) {
           await saveRecovery({ ...record, status: "unchanged" });
           await rm(join(recoveryRoot, record.id), { recursive: true, force: true });
           if (record.protectedRef) {
             await runner.run(["update-ref", "-d", record.protectedRef, record.head], {
               cwd: fresh.repositoryPath, timeoutMs: 8_000, maxOutputBytes: 100_000
             });
+          }
+          for (const { ref, object } of record.protectedRefs ?? []) {
+            await runner.run(["update-ref", "-d", ref, object], { cwd: fresh.repositoryPath, timeoutMs: 8_000, maxOutputBytes: 100_000 });
           }
           throw new Error(`Git could not remove this worktree; the original directory is unchanged. ${error instanceof Error ? error.message : String(error)}`);
         }
@@ -801,7 +862,8 @@ export const createWorktreeService = ({
                 record = { ...record, status: "removed", reclaimedSizeBytes: record.backupHash ? 0 : record.sourceSizeBytes };
                 await saveRecovery(record);
               } else if (registered && exists && record.sourceHash &&
-                         await hashWorktreeTree(record.path) === record.sourceHash) {
+                         await hashWorktreeTree(record.path) === record.sourceHash &&
+                         (!record.sourceGitFingerprint || (await readWorktreeGitState(runner, record.path)).fingerprint === record.sourceGitFingerprint)) {
                 record = { ...record, status: "unchanged" };
                 await saveRecovery(record);
               }
@@ -833,15 +895,94 @@ export const createWorktreeService = ({
           await hashRequiredPathEntry(join(recoveryRoot, id, "index")) !== record.indexHash) {
         throw new Error("Worktree staged-state recovery copy failed its integrity check");
       }
+      const operation = join(recoveryRoot, id, "operation");
+      if (record.operationHash && await operationMetadataHash(operation) !== record.operationHash) {
+        throw new Error("Worktree operation-state recovery copy failed its integrity check");
+      }
       const runner = await git();
       const registration = await readRegistration(runner, record.repositoryPath);
-      const isRegistered = registration.some((item) => resolve(item.path) === record.path);
-      const exists = await pathExists(record.path);
+      if (resolve(registration[0].path) === resolve(record.path) || resolve(record.repositoryPath) === resolve(record.path)) {
+        throw new Error("Recovery cannot overwrite the main working tree");
+      }
+      let isRegistered = registration.some((item) => resolve(item.path) === record.path);
+      let exists = await pathExists(record.path);
+      const commonDir = resolve(record.repositoryPath, (await readGit(runner, ["rev-parse", "--git-common-dir"], {
+        cwd: record.repositoryPath, timeoutMs: 8_000, maxOutputBytes: 32_000
+      })).stdout.trim());
+      const readRestoreGitDir = async () => {
+        if (!record.restoreRegistration) throw new Error("Recovery Git registration identity is unverified; nothing was overwritten");
+        await assertRestoreRegistration(record.restoreRegistration, commonDir, record.path);
+        return record.restoreRegistration.gitDir;
+      };
+      const checkpoint = async () => {
+        const gitDir = await readRestoreGitDir();
+        record = { ...record, restoreAttemptHash: await hashWorktreeTree(record.path),
+          restoreAttemptGitHash: await recoveryGitStateHash(gitDir) };
+        await readRestoreGitDir();
+        await saveRecovery(record);
+      };
+      if (exists && isRegistered && record.status === "restoring" &&
+          (!record.restoreRegistration || record.legacyCheckoutMigration)) {
+        if (!record.restoreAttemptHash || await hashWorktreeTree(record.path) !== record.restoreAttemptHash) {
+          throw new Error("Legacy recovery checkout changed; nothing was overwritten");
+        }
+        const state = await readWorktreeGitState(runner, record.path);
+        const flags = await readGit(runner, ["ls-files", "-v", "-z"], {
+          cwd: record.path, timeoutMs: 8_000, maxOutputBytes: 4_000_000
+        });
+        if (state.head !== record.head || state.status || flags.stdout.split("\0").some((line) => /^[a-zS] /.test(line))) {
+          throw new Error("Legacy recovery checkout or index contains unverified changes; nothing was overwritten");
+        }
+        for (const name of await readdir(state.gitDir)) {
+          if (["HEAD", "index", "gitdir", "commondir", "logs"].includes(name)) continue;
+          if (name === "refs" && (await lstat(join(state.gitDir, name))).isDirectory() &&
+              (await readdir(join(state.gitDir, name))).length === 0) continue;
+          if (name === "ORIG_HEAD" && (await readFile(join(state.gitDir, name), "utf8")).trim() === record.head) continue;
+          throw new Error(`Legacy recovery Git metadata contains unverified changes (${name}); nothing was overwritten`);
+        }
+        if (!record.restoreRegistration) record = { ...record,
+          restoreRegistration: await readLinkedRegistrationIdentity(commonDir, record.path, state.gitDir) };
+        const gitDir = await readRestoreGitDir();
+        if (record.restoreAttemptGitHash && await recoveryGitStateHash(gitDir) !== record.restoreAttemptGitHash) {
+          throw new Error("Legacy recovery Git state changed; nothing was overwritten");
+        }
+        // Preserve the entire verified legacy checkout and admin directory before
+        // replacing the pristine placeholder via Git, never by overwriting it.
+        const legacyRoot = join(recoveryRoot, id, "legacy-checkout");
+        await mkdir(legacyRoot, { recursive: true, mode: 0o700 });
+        const adminHash = await hashRequiredPathEntry(gitDir);
+        await copyRecoveryPathExclusive(record.path, join(legacyRoot, "files"));
+        await copyRecoveryPathExclusive(gitDir, join(legacyRoot, "git"));
+        if (await hashWorktreeTree(record.path) !== record.restoreAttemptHash ||
+            await hashWorktreeTree(join(legacyRoot, "files")) !== record.restoreAttemptHash ||
+            await hashRequiredPathEntry(gitDir) !== adminHash ||
+            await hashRequiredPathEntry(join(legacyRoot, "git")) !== adminHash) {
+          throw new Error("Legacy recovery checkout changed during migration; nothing was removed");
+        }
+        await checkpoint();
+        record = { ...record, legacyCheckoutMigration: true };
+        await saveRecovery(record);
+        await assertNoWorktreeWriter(await readRestoreGitDir());
+        await runner.run(["-c", "core.fsmonitor=false", "worktree", "remove", "--", record.path], {
+          cwd: record.repositoryPath, timeoutMs: 60_000, maxOutputBytes: 1_000_000
+        });
+        if (await pathExists(record.path) || (await readRegistration(runner, record.repositoryPath))
+          .some((item) => resolve(item.path) === record.path)) {
+          throw new Error("Legacy recovery migration is incomplete; preserved checkout remains available");
+        }
+        exists = false;
+        isRegistered = false;
+      }
       if (exists || isRegistered) {
         if (record.status !== "restoring" || !record.restoreAttemptHash || !exists || !isRegistered ||
             await hashWorktreeTree(record.path) !== record.restoreAttemptHash) {
           throw new Error("The recovery path contains unverified files or Git registration. Nothing was overwritten; inspect it before retrying.");
         }
+        if (record.restoreAttemptGitHash &&
+            await recoveryGitStateHash(await readRestoreGitDir()) !== record.restoreAttemptGitHash) {
+          throw new Error("The recovery Git state contains unverified files. Nothing was overwritten; inspect it before retrying.");
+        }
+        await assertNoWorktreeWriter(await readRestoreGitDir());
         const currentHead = await runner.run(["rev-parse", "HEAD"], {
           cwd: record.path, timeoutMs: 8_000, maxOutputBytes: 100_000
         });
@@ -849,8 +990,10 @@ export const createWorktreeService = ({
           throw new Error("The recovery worktree changed commit. Nothing was overwritten; inspect it before retrying.");
         }
       } else {
-        record = { ...record, status: "restoring", restoreAttemptHash: undefined };
+        record = { ...record, status: "restoring", restoreAttemptHash: undefined, restoreAttemptGitHash: undefined,
+          restoreRegistration: undefined, legacyCheckoutMigration: undefined };
         await saveRecovery(record);
+        const adminBefore = await worktreeAdminIdentities(commonDir);
         try {
           let useBranch = false;
           if (record.branch) {
@@ -859,18 +1002,23 @@ export const createWorktreeService = ({
             }).then((result) => result.stdout.trim(), () => undefined);
             useBranch = currentBranch === record.head;
           }
-          await runner.run(["worktree", "add", ...(useBranch ? [] : ["--detach"]),
+          await runner.run(["worktree", "add", ...(record.backupHash ? ["--no-checkout"] : []), ...(useBranch ? [] : ["--detach"]),
             record.path, useBranch ? record.branch! : record.head], {
             cwd: record.repositoryPath, timeoutMs: 60_000, maxOutputBytes: 1_000_000
           });
-          record = { ...record, restoreAttemptHash: await hashWorktreeTree(record.path) };
-          await saveRecovery(record);
+          record = { ...record, restoreRegistration: await pinRestoreRegistration(commonDir, record.path, adminBefore) };
+          await checkpoint();
         } catch (error) {
           if (await pathExists(record.path)) {
             const current = await readRegistration(runner, record.repositoryPath);
             if (current.some((item) => resolve(item.path) === record.path)) {
-              record = { ...record, restoreAttemptHash: await hashWorktreeTree(record.path) };
-              await saveRecovery(record);
+              // An interrupted no-checkout add owns only its .git link, never
+              // adopt arbitrary files another writer put in the new directory.
+              if (!record.backupHash || (await readdir(record.path)).every((name) => name === ".git")) {
+                if (!record.restoreRegistration) record = { ...record,
+                  restoreRegistration: await pinRestoreRegistration(commonDir, record.path, adminBefore) };
+                await checkpoint();
+              }
             }
           }
           throw error;
@@ -878,19 +1026,40 @@ export const createWorktreeService = ({
       }
       try {
         if (record.backupHash) {
+          await assertNoWorktreeWriter(await readRestoreGitDir());
           for (const file of await readdir(backup)) {
             if (file === ".git") continue;
-            await cp(join(backup, file), join(record.path, file), {
-              recursive: true, force: true, dereference: false, verbatimSymlinks: true,
-              preserveTimestamps: true
-            });
+            await copyRecoveryPathExclusive(join(backup, file), join(record.path, file));
           }
+          if (await hashWorktreeTree(record.path, { omitGitFile: true }) !== await hashWorktreeTree(backup, { omitGitFile: true }) ||
+              record.restoreAttemptGitHash !== await recoveryGitStateHash(await readRestoreGitDir())) {
+            throw new Error("The recovery path contains unverified files or Git state. Nothing was overwritten.");
+          }
+          await checkpoint();
         }
         if (record.indexHash) {
           const gitDirOutput = await runner.run(["rev-parse", "--git-dir"], {
             cwd: record.path, timeoutMs: 8_000, maxOutputBytes: 32_000
           });
-          await cp(join(recoveryRoot, id, "index"), resolve(record.path, gitDirOutput.stdout.trim(), "index"));
+          const gitDir = await readRestoreGitDir();
+          if (await realpath(resolve(record.path, gitDirOutput.stdout.trim())) !== gitDir) {
+            throw new Error("Recovery Git registration identity changed; nothing was overwritten");
+          }
+          await assertNoWorktreeWriter(gitDir);
+          await copyRecoveryPathExclusive(join(recoveryRoot, id, "index"), join(gitDir, "index"));
+          await checkpoint();
+        }
+        if (record.operationHash) {
+          const gitDir = await readRestoreGitDir();
+          await assertNoWorktreeWriter(gitDir);
+          for (const name of await readdir(operation)) {
+            await readRestoreGitDir();
+            await copyRecoveryPathExclusive(join(operation, name), join(gitDir, name));
+          }
+          if (await operationMetadataHash(gitDir) !== record.operationHash) {
+            throw new Error("Restored Git operation state does not match the recovery point");
+          }
+          await checkpoint();
         }
         if (record.backupHash) {
           if (await hashWorktreeTree(record.path, { omitGitFile: true }) !==
@@ -905,12 +1074,19 @@ export const createWorktreeService = ({
             throw new Error("Restored Git commit does not match the recovery point");
           }
         }
+        const restoredState = await readWorktreeGitState(runner, record.path);
+        await readRestoreGitDir();
+        if (restoredState.head !== record.head || (record.indexHash && restoredState.index !== record.indexHash) ||
+            (record.gitStatusHash && createHash("sha256").update(restoredState.status).digest("hex") !== record.gitStatusHash)) {
+          throw new Error("Restored Git state does not match the recovery point");
+        }
       } catch (error) {
-        record = { ...record, restoreAttemptHash: await hashWorktreeTree(record.path) };
-        await saveRecovery(record);
+        // Only completed phases advance the journal (bounded full-tree passes).
+        // A crash inside a copy phase may require manual recovery; all payloads
+        // stay protected, and unjournaled partial files are never overwritten.
         throw error;
       }
-      const restored = { ...record, status: "restored" as const, restoreAttemptHash: undefined };
+      const restored = { ...record, status: "restored" as const, restoreAttemptHash: undefined, restoreAttemptGitHash: undefined };
       await saveRecovery(restored);
       return restored;
     }

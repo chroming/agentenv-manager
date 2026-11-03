@@ -2,6 +2,31 @@
   "formatVersion": 1,
   "features": [
     {
+      "id": "recoverable-unfinished-worktree-cleanup",
+      "summary": "Manually remove paused Git working directories without waiting for full-tree size scans, retaining verified recovery state.",
+      "contract": { "path": "docs/product-audit/2026-11-03-worktree-action-readiness.md", "anchor": "## Feature Admission: Recoverable Unfinished Git State" },
+      "support": { "opencode": "not-applicable", "claude-code": "not-applicable", "codex": "not-applicable", "antigravity": "not-applicable", "antigravity-app": "not-applicable", "trae-cli": "not-applicable", "pi": "not-applicable", "workbuddy": "not-applicable" },
+      "states": {
+        "idle": "Cached paused-operation classifications do not prevent manual selection.",
+        "working": "Read-only preview checks scoped Git intent; exact snapshots run only after explicit Remove with progress.",
+        "success": "Git registration and folder are removed after verified file, index and operation recovery is saved.",
+        "error": "Real write locks, changed registrations and incomplete recovery stop removal with a scoped retry.",
+        "cancelled": "Cancelling confirmation does not snapshot, measure or write the working directory.",
+        "noOp": "Unknown disk size is optional information, not a readiness gate.",
+        "stale": "Execution rechecks registration, index and operation intent before creating exact recovery.",
+        "partial": "Batch failures remain separate; automatic selection still excludes dirty or uncertain contents.",
+        "persisted": "Paused metadata, staged index and required Git objects survive restart and Git GC.",
+        "rollback": "Restore checks ownership and refuses external overwrites; incomplete records and payloads stay protected."
+      },
+      "evidence": {
+        "domain": ["tests/main/worktreeService.test.ts", "tests/main/worktreeOperationRecovery.test.ts", "tests/main/worktreeRecoveryBackup.test.ts"],
+        "renderer": ["tests/renderer/WorktreeDialog.test.tsx", "tests/renderer/worktreePresentation.test.ts"],
+        "desktop": ["tests/e2e/worktrees.e2e.test.ts"],
+        "persistence": ["tests/main/worktreeService.test.ts", "tests/e2e/worktrees.e2e.test.ts"],
+        "visual": ["worktree-paused-operation-en-920.png", "worktree-paused-operation-zh_CN-920.png", "worktree-paused-operation-zh_TW-920.png"]
+      }
+    },
+    {
       "id": "protected-worktree-recovery-backups",
       "summary": "Inspect Worktree recovery storage in the existing Backup manager without making unique local content disposable.",
       "contract": { "path": "docs/product-audit/2026-11-03-worktree-recovery-backups.md", "anchor": "## Feature Admission: Protected Worktree Recovery Backups" },

@@ -74,6 +74,35 @@ afterEach(() => {
 });
 
 describe("WorktreeDialog", () => {
+  it.each(["Git operation in progress", "Git operation in progress: active writer lock"])("lets cached %s be manually selected without treating the cached classification as permission", async (reason) => {
+    const api = installApi();
+    const unfinished = { ...dirty, manualReviewAvailable: false, reasons: [reason] };
+    api.cachedWorktreeInventory.mockResolvedValue({ inventory: { ...inventory, entries: [unfinished] }, fresh: true, scanning: false });
+    render(<WorktreeWorkspace />);
+    const row = within((await screen.findByText(dirty.path)).closest(".ui-resource-row")! as HTMLElement);
+    expect(row.getByRole("checkbox")).toBeEnabled();
+    fireEvent.click(row.getByRole("checkbox"));
+    expect(screen.getByRole("button", { name: "Remove selected... (1)" })).toBeEnabled();
+    expect(api.previewWorktreeCleanup).not.toHaveBeenCalled();
+    expect(api.removeWorktree).not.toHaveBeenCalled();
+  });
+
+  it("keeps final removal enabled with unknown size while background measurement never completes", async () => {
+    const api = installApi();
+    const pending = { ...dirty, sizeBytes: undefined, modifiedAt: undefined, measurementPending: true };
+    api.cachedWorktreeInventory.mockResolvedValue({ inventory: { ...inventory, measuring: true, entries: [pending] }, fresh: true, scanning: false });
+    api.previewWorktreeCleanup.mockResolvedValue(preparedPreview(pending));
+    render(<WorktreeWorkspace />);
+    const row = within((await screen.findByText(dirty.path)).closest(".ui-resource-row")! as HTMLElement);
+    fireEvent.click(row.getByRole("button", { name: "Remove Worktree..." }));
+    const confirm = screen.getByRole("dialog");
+    const remove = await readyRemoval(1, confirm);
+    expect(confirm.querySelector(".ui-detail-list")).toHaveTextContent("Recovery copies retained");
+    fireEvent.click(remove);
+    await waitFor(() => expect(api.removeWorktree).toHaveBeenCalledTimes(1));
+    expect(api.inventoryWorktrees).not.toHaveBeenCalled();
+  });
+
   it("streams per-item results into immediate confirmation, retaining failures and disabling removal until all checks finish", async () => {
     const api = installApi();
     let report!: (value: WorktreeOperationProgress) => void;

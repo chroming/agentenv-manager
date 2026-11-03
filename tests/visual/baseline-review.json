@@ -1,19 +1,19 @@
 {
   "formatVersion": 1,
-  "reviewedAt": "2026-11-03T08:20:58.287Z",
+  "reviewedAt": "2026-11-03T14:01:53.344Z",
   "applicationVersion": "0.2.5",
-  "baseCommit": "c894d488",
+  "baseCommit": "65a7d197",
   "build": {
-    "sourceFingerprint": "64427d492d91f338ae274ede10788fc3e9542c2fe4b64f79208f3d41860b8d0a",
-    "artifactFingerprint": "cd353d7c783300315e3edd104d469247993b9fd5a65d95edff1ab621e3026285",
-    "generatedAt": "2026-11-03T08:15:34.352Z"
+    "sourceFingerprint": "b7436fd58c0a7cf0c44266bd7aeca0282154f8f46f8c40e62c1f9a570addb4b0",
+    "artifactFingerprint": "5b1842908b0011b3fbfbd528a1f94acdf6db28631fb891dacd71f01195f94699",
+    "generatedAt": "2026-11-03T13:59:23.726Z"
   },
   "review": {
-    "scenarios": 127,
-    "method": "Inspected nine Worktree AI/review captures at native sizes across three locales plus the protected backup list. Checked concrete states, collapsed Git details, on-demand AI, footer containment and recovery disclosure. Other reviewed baselines retained.",
-    "scope": "Mock Electron on macOS with isolated Home and temporary Git repositories; no user resources or paid model requests",
+    "scenarios": 130,
+    "method": "Inspected three native minimum-window paused-operation confirmations in en, zh_CN and zh_TW with optional size intentionally unknown. Verified recovery disclosure, aligned actions and enabled final confirmation. Other 127 reviewed baselines retained.",
+    "scope": "Mock Electron on macOS with isolated Home and real temporary Git repositories; paused merge removal and exact restoration verified; no paid model requests",
     "thresholdsChanged": false,
-    "updatedScenarios": 10
+    "updatedScenarios": 3
   },
   "files": [
     {
@@ -650,6 +650,21 @@
       "file": "worktree-recovery-backups-en-920.png",
       "sha256": "5787cca91f695b00082a1fe29e0b350b5f40e306d9e140f54f44ea5e21e308a7",
       "reviewReason": "Reviewed 2026-11-03: concrete Worktree states, contextual removal, collapsed Git details and protected recovery inventory. Inspected native pixels and minimum-size controls; original thresholds retained."
+    },
+    {
+      "file": "worktree-paused-operation-en-920.png",
+      "sha256": "9d0c06e4ac8dcc7ec5f524fe9d4f00ff4e1f9f45b79a5051da5c8b02557347a0",
+      "reviewReason": "Reviewed 2026-11-03 at native 920x620: unfinished Git state is recoverable, unknown size does not gate removal, warning and fixed-footer actions remain legible. Original comparison thresholds retained."
+    },
+    {
+      "file": "worktree-paused-operation-zh_CN-920.png",
+      "sha256": "8f498035e9e99c262ac067facc880e6f8d46abfd4f4813def73e7393aa69a608",
+      "reviewReason": "Reviewed 2026-11-03 at native 920x620: unfinished Git state is recoverable, unknown size does not gate removal, warning and fixed-footer actions remain legible. Original comparison thresholds retained."
+    },
+    {
+      "file": "worktree-paused-operation-zh_TW-920.png",
+      "sha256": "fa798f4ad1b1cd45d7f30ff36b803c836f5b59d2d0ad4dabe1e581a57247681e",
+      "reviewReason": "Reviewed 2026-11-03 at native 920x620: unfinished Git state is recoverable, unknown size does not gate removal, warning and fixed-footer actions remain legible. Original comparison thresholds retained."
     }
   ],
   "incrementalReviews": [

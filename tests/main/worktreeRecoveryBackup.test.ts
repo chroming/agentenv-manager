@@ -22,6 +22,21 @@ const journal = (id: string, status = "removed") => ({
 });
 
 describe("read-only worktree recovery backup projection", () => {
+  it("requires the operation metadata payload when its hash is recorded and keeps it read-only", async () => {
+    const recovery = await setup();
+    const id = randomUUID();
+    const serialized = JSON.stringify({ ...journal(id), backupHash: undefined, indexHash: undefined, operationHash: "d".repeat(64) });
+    await mkdir(join(recovery, id), { recursive: true });
+    await writeFile(join(recovery, `${id}.json`), serialized);
+    expect((await listWorktreeRecoveryBackups(root))[0]).toMatchObject({ deletable: false, requiredReason: "worktree-recovery-incomplete" });
+    await mkdir(join(recovery, id, "operation"));
+    await writeFile(join(recovery, id, "operation", "MERGE_HEAD"), "saved operation commit\n");
+    expect((await listWorktreeRecoveryBackups(root))[0]).toMatchObject({ deletable: false, requiredReason: "worktree-recovery" });
+    expect((await previewWorktreeRecoveryBackup(root, id)).files.map((file) => file.path))
+      .toContain(join(recovery, id, "operation", "MERGE_HEAD"));
+    expect(await readFile(join(recovery, `${id}.json`), "utf8")).toBe(serialized);
+  });
+
   it("inventories existing journal, files and index bytes without a registration write or source-size estimate", async () => {
     const recovery = await setup();
     const id = randomUUID();

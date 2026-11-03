@@ -52,6 +52,229 @@ const fixture = async () => {
 };
 
 describe("worktree inventory and cleanup", () => {
+  it.each(["unchanged", "working files", "index", "operation metadata"])("migrates a verified legacy full checkout but refuses changed %s", async (change) => {
+    const { root, repo, linked, service } = await fixture();
+    await writeFile(join(linked, "README.md"), "staged recovery payload\n");
+    await run("git", ["-C", linked, "add", "README.md"]);
+    const entry = (await service.inventory()).entries.find((item) => item.path === linked)!;
+    const removed = await service.remove(await service.preview(entry.commonDir, linked, true));
+    await run("git", ["-C", repo, "worktree", "add", linked, "feature"]);
+    const journalPath = join(root, "data", "worktree-recovery", `${removed.id}.json`);
+    const legacy = JSON.parse(await readFile(journalPath, "utf8"));
+    legacy.status = "restoring";
+    legacy.restoreAttemptHash = await snapshot.hashWorktreeTree(linked);
+    for (const field of ["restoreAttemptGitHash", "restoreRegistration", "operationHash", "protectedRefs", "gitStatusHash"]) delete legacy[field];
+    await writeFile(journalPath, JSON.stringify(legacy));
+    const gitDir = resolve(linked, (await run("git", ["-C", linked, "rev-parse", "--git-dir"])).stdout.trim());
+    if (change === "working files") await writeFile(join(linked, "README.md"), "new external contents\n");
+    if (change === "index") {
+      await writeFile(join(linked, "README.md"), "new external index\n");
+      await run("git", ["-C", linked, "add", "README.md"]);
+      await run("git", ["-C", linked, "restore", "--source=HEAD", "--worktree", "README.md"]);
+    }
+    if (change === "operation metadata") await writeFile(join(gitDir, "MERGE_MSG"), "new external operation data\n");
+    const indexBefore = await readFile(join(gitDir, "index"));
+    const bodyBefore = await readFile(join(linked, "README.md"), "utf8");
+    if (change === "unchanged") {
+      expect((await service.restore(removed.id)).status).toBe("restored");
+      expect(await readFile(join(linked, "README.md"), "utf8")).toBe("staged recovery payload\n");
+      expect((await run("git", ["-C", linked, "show", ":README.md"])).stdout).toBe("staged recovery payload\n");
+    } else {
+      await expect(service.restore(removed.id)).rejects.toThrow(/unverified|changed|legacy/i);
+      expect(await readFile(join(gitDir, "index"))).toEqual(indexBefore);
+      expect(await readFile(join(linked, "README.md"), "utf8")).toBe(bodyBefore);
+      if (change === "operation metadata") expect(await readFile(join(gitDir, "MERGE_MSG"), "utf8")).toBe("new external operation data\n");
+    }
+  });
+
+  it("rejects a restore admin-directory substitution before writing another worktree", async () => {
+    const { root, repo, linked, service, runner } = await fixture();
+    const head = (await run("git", ["-C", linked, "rev-parse", "HEAD"])).stdout.trim();
+    const gitDir = resolve(linked, (await run("git", ["-C", linked, "rev-parse", "--git-dir"])).stdout.trim());
+    await writeFile(join(gitDir, "MERGE_HEAD"), `${head}\n`);
+    const entry = (await service.inventory()).entries.find((item) => item.path === linked)!;
+    const removed = await service.remove(await service.preview(entry.commonDir, linked, true));
+    const other = join(root, "other");
+    await run("git", ["-C", repo, "worktree", "add", "--no-checkout", "--detach", other, head]);
+    const otherGitDir = resolve(other, (await run("git", ["-C", other, "rev-parse", "--git-dir"])).stdout.trim());
+    const otherHead = await readFile(join(otherGitDir, "HEAD"));
+    const original = runner.run.bind(runner);
+    vi.spyOn(runner, "run").mockImplementation(async (args, options) => {
+      const result = await original(args, options);
+      if (options?.cwd === linked && args.includes("rev-parse") && args.includes("--git-dir")) {
+        await writeFile(join(linked, ".git"), `gitdir: ${otherGitDir}\n`);
+        await writeFile(join(otherGitDir, "gitdir"), `${join(linked, ".git")}\n`);
+        return { ...result, stdout: `${otherGitDir}\n` };
+      }
+      return result;
+    });
+    await expect(service.restore(removed.id)).rejects.toThrow(/registration|identity|changed/i);
+    await expect(lstat(join(otherGitDir, "index"))).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(lstat(join(otherGitDir, "MERGE_HEAD"))).rejects.toMatchObject({ code: "ENOENT" });
+    expect(await readFile(join(otherGitDir, "HEAD"))).toEqual(otherHead);
+  });
+
+  it.each(["MERGE_HEAD", "ORIG_HEAD"])("does not remove when required %s object resolution times out", async (marker) => {
+    const { repo, linked, service, runner } = await fixture();
+    const required = (await run("git", ["-C", repo, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.com",
+      "commit-tree", "HEAD^{tree}", "-m", `required-${marker}`])).stdout.trim();
+    const gitDir = resolve(linked, (await run("git", ["-C", linked, "rev-parse", "--git-dir"])).stdout.trim());
+    await writeFile(join(gitDir, marker), `${required}\n`);
+    await writeFile(join(linked, "local.txt"), "keep newest local bytes\n");
+    const entry = (await service.inventory()).entries.find((item) => item.path === linked)!;
+    const original = runner.run.bind(runner);
+    const spy = vi.spyOn(runner, "run").mockImplementation(async (args, options) => {
+      if (args.includes("rev-parse") && args.some((arg) => arg.startsWith(`${required}^{`))) throw new Error("required object resolution timeout");
+      return original(args, options);
+    });
+    await expect(service.remove(await service.preview(entry.commonDir, linked, true))).rejects.toThrow("required object resolution timeout");
+    expect(spy.mock.calls.some(([args]) => args.includes("worktree") && args.includes("remove"))).toBe(false);
+    expect(await readFile(join(linked, "local.txt"), "utf8")).toBe("keep newest local bytes\n");
+  });
+
+  it.each(["MERGE_HEAD", "rebase-merge"])("allows manual review of paused %s metadata", async (marker) => {
+    const { linked, service } = await fixture();
+    const gitDir = resolve(linked, (await run("git", ["-C", linked, "rev-parse", "--git-dir"])).stdout.trim());
+    if (marker === "rebase-merge") await mkdir(join(gitDir, marker));
+    else await writeFile(join(gitDir, marker), (await run("git", ["-C", linked, "rev-parse", "HEAD"])).stdout);
+    const entry = (await service.inventory()).entries.find((item) => item.path === linked)!;
+    expect(entry.manualReviewAvailable).toBe(true);
+    expect(entry.cleanupReviewAvailable).toBe(false);
+    await expect(service.preview(entry.commonDir, linked, true)).resolves.toMatchObject({ backupRequired: true });
+  });
+
+  it("resolves preview without fingerprinting or measuring the working directory", async () => {
+    const { linked, service } = await fixture();
+    const entry = (await service.inventory()).entries.find((item) => item.path === linked)!;
+    await measuredInventory(service);
+    const fingerprint = vi.spyOn(snapshot, "fingerprintWorktreeTree").mockRejectedValue(new Error("preview traversed the whole tree"));
+    const measure = vi.spyOn(snapshot, "measureWorktreeTree");
+    await expect(service.preview(entry.commonDir, linked)).resolves.toMatchObject({ entry: { path: linked } });
+    expect(fingerprint).not.toHaveBeenCalled();
+    expect(measure).not.toHaveBeenCalled();
+  });
+
+  it.each(["merge", "rebase"])("recovers a real paused %s, conflict index and operation commits after restart and GC", async (operation) => {
+    const { root, repo, linked, service, runner } = await fixture();
+    const commit = async (cwd: string, body: string) => {
+      await writeFile(join(cwd, "README.md"), body);
+      await run("git", ["-C", cwd, "add", "README.md"]);
+      await run("git", ["-C", cwd, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.com", "commit", "-m", body.trim()]);
+    };
+    await commit(linked, "feature\n");
+    await commit(repo, "main\n");
+    await expect(run("git", ["-C", linked, operation, "main"])).rejects.toThrow();
+    const gitDir = resolve(linked, (await run("git", ["-C", linked, "rev-parse", "--git-dir"])).stdout.trim());
+    const marker = operation === "merge" ? "MERGE_HEAD" : "rebase-merge/orig-head";
+    const metadata = await readFile(join(gitDir, marker), "utf8");
+    const origHead = await readFile(join(gitDir, "ORIG_HEAD"), "utf8");
+    const before = (await run("git", ["-C", linked, "status", "--porcelain=v1", "-z"])).stdout;
+    const stages = (await run("git", ["-C", linked, "ls-files", "--stage"])).stdout;
+    const body = await readFile(join(linked, "README.md"), "utf8");
+    const mainBefore = (await run("git", ["-C", repo, "status", "--porcelain=v1", "-z"])).stdout;
+    const entry = (await service.inventory()).entries.find((item) => item.path === linked)!;
+    expect(entry.manualReviewAvailable).toBe(true);
+    const removed = await service.remove(await service.preview(entry.commonDir, linked, true));
+    expect(removed.operationHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(removed.backupHash).toBe(removed.sourceHash);
+    await run("git", ["-C", repo, "branch", "-D", "feature"]);
+    await run("git", ["-C", repo, "reflog", "expire", "--expire=now", "--all"]);
+    await run("git", ["-C", repo, "gc", "--prune=now"]);
+    const restarted = createWorktreeService({ appDataRoot: join(root, "data"), homeDir: join(root, "home"),
+      projectStore: { listLocalRootPaths: async () => [] } as unknown as ProjectStore, resolveRunner: async () => runner });
+    await restarted.restore(removed.id);
+    const restoredGitDir = resolve(linked, (await run("git", ["-C", linked, "rev-parse", "--git-dir"])).stdout.trim());
+    expect(await readFile(join(restoredGitDir, marker), "utf8")).toBe(metadata);
+    expect(await readFile(join(restoredGitDir, "ORIG_HEAD"), "utf8")).toBe(origHead);
+    expect((await run("git", ["-C", linked, "status", "--porcelain=v1", "-z"])).stdout).toBe(before);
+    expect((await run("git", ["-C", linked, "ls-files", "--stage"])).stdout).toBe(stages);
+    expect(await readFile(join(linked, "README.md"), "utf8")).toBe(body);
+    await run("git", ["-C", linked, operation, "--abort"]);
+    expect((await run("git", ["-C", repo, "status", "--porcelain=v1", "-z"])).stdout).toBe(mainBefore);
+  });
+
+  it.each(["--skip-worktree", "--assume-unchanged"])("backs up otherwise hidden %s edits without slowing the clean refs-only path", async (flag) => {
+    const { root, repo, linked, service } = await fixture();
+    await run("git", ["-C", linked, "update-index", flag, "README.md"]);
+    const entry = (await service.inventory()).entries.find((item) => item.path === linked)!;
+    expect(entry.manualReviewAvailable).toBe(true);
+    expect(entry.cleanupReviewAvailable).toBe(false);
+    await expect(service.preview(entry.commonDir, linked)).rejects.toThrow("Review this worktree");
+    const preview = await service.preview(entry.commonDir, linked, true);
+    expect(preview.backupRequired).toBe(true);
+    expect(preview.forceRequired).toBe(false);
+    await writeFile(join(linked, "README.md"), "newest authorized hidden contents\n");
+    const removed = await service.remove(preview);
+    expect(await readFile(join(root, "data", "worktree-recovery", removed.id, "files", "README.md"), "utf8"))
+      .toBe("newest authorized hidden contents\n");
+    expect(removed.reclaimedSizeBytes).toBe(0);
+    await service.restore(removed.id);
+    expect(await readFile(join(linked, "README.md"), "utf8")).toBe("newest authorized hidden contents\n");
+    expect((await run("git", ["-C", repo, "status", "--porcelain=v1"])).stdout).toBe("");
+  });
+
+  it("does not block linked cleanup solely because the main tree has paused operation metadata", async () => {
+    const { repo, linked, service } = await fixture();
+    const mainHead = (await run("git", ["-C", repo, "rev-parse", "HEAD"])).stdout;
+    await writeFile(join(repo, ".git", "MERGE_HEAD"), mainHead);
+    const entry = (await service.inventory()).entries.find((item) => item.path === linked)!;
+    const removed = await service.remove(await service.preview(entry.commonDir, linked));
+    expect(removed.status).toBe("removed");
+    expect(removed.backupHash).toBeUndefined();
+    expect(removed.reclaimedSizeBytes).toBe(5);
+    expect(await readFile(join(repo, ".git", "MERGE_HEAD"), "utf8")).toBe(mainHead);
+  });
+
+  it("protects only otherwise-unreachable staged objects in a single tree and restores them after GC", async () => {
+    const { repo, linked, service, runner } = await fixture();
+    for (let i = 0; i < 60; ++i) await writeFile(join(linked, `tracked-${i}`), `tracked ${i}\n`);
+    await run("git", ["-C", linked, "add", "."]);
+    await run("git", ["-C", linked, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.com", "commit", "-m", "tracked files"]);
+    await writeFile(join(linked, "README.md"), "unique staged blob\n");
+    await run("git", ["-C", linked, "add", "README.md"]);
+    await writeFile(join(linked, "README.md"), "different working bytes\n");
+    const entry = (await service.inventory()).entries.find((item) => item.path === linked)!;
+    const spy = vi.spyOn(runner, "run");
+    const removed = await service.remove(await service.preview(entry.commonDir, linked, true));
+    // The recovery tree is one ref; ORIG_HEAD may require a separate operation
+    // commit ref depending on Git's worktree initialization behavior.
+    expect(removed.protectedRefs!.length).toBeLessThanOrEqual(2);
+    const types = await Promise.all(removed.protectedRefs!.map(async ({ object }) =>
+      (await run("git", ["-C", repo, "cat-file", "-t", object])).stdout.trim()));
+    expect(types.filter((type) => type === "tree")).toHaveLength(1);
+    expect(types.every((type) => type === "tree" || type === "commit")).toBe(true);
+    expect(spy.mock.calls.filter(([args]) => args[0] === "update-ref").length).toBeLessThanOrEqual(3);
+    expect(spy.mock.calls.filter(([args]) => args[0] === "ls-tree")).toHaveLength(1);
+    await run("git", ["-C", repo, "reflog", "expire", "--expire=now", "--all"]);
+    await run("git", ["-C", repo, "gc", "--prune=now"]);
+    await service.restore(removed.id);
+    expect((await run("git", ["-C", linked, "show", ":README.md"])).stdout).toBe("unique staged blob\n");
+    expect(await readFile(join(linked, "README.md"), "utf8")).toBe("different working bytes\n");
+  });
+
+  it("rejects a writer lock created by the removing progress observer without deleting it", async () => {
+    const { linked, service } = await fixture();
+    const entry = (await service.inventory()).entries.find((item) => item.path === linked)!;
+    const gitDir = resolve(linked, (await run("git", ["-C", linked, "rev-parse", "--git-dir"])).stdout.trim());
+    // A synchronous observer starts an external lock before the final safety read.
+    const fs = await import("node:fs");
+    await expect(service.remove(await service.preview(entry.commonDir, linked), (phase, file) => {
+      if (phase === "removing" && !file) fs.writeFileSync(join(gitDir, "HEAD.lock"), "external writer\n");
+    })).rejects.toThrow("Git write lock is present (HEAD.lock)");
+    expect(await readFile(join(gitDir, "HEAD.lock"), "utf8")).toBe("external writer\n");
+    expect(await readFile(join(linked, "README.md"), "utf8")).toBe("base\n");
+  });
+
+  it("refuses a linked Git pointer redirected to main before creating any recovery writes", async () => {
+    const { repo, linked, service } = await fixture();
+    const entry = (await service.inventory()).entries.find((item) => item.path === linked)!;
+    const mainIndex = await readFile(join(repo, ".git", "index"));
+    await writeFile(join(linked, ".git"), `gitdir: ${join(repo, ".git")}\n`);
+    await expect(service.preview(entry.commonDir, linked, true)).rejects.toThrow("Unverified linked Worktree Git registration");
+    expect(await readFile(join(repo, ".git", "index"))).toEqual(mainIndex);
+    expect(await readFile(join(repo, "README.md"), "utf8")).toBe("base\n");
+  });
+
   it("returns actionable rows before size measurement finishes and does not wait for it to remove a tree", async () => {
     const { linked, service } = await fixture();
     let release!: (value: undefined) => void;
@@ -121,14 +344,14 @@ describe("worktree inventory and cleanup", () => {
   });
 
   it("streams only completed previews, isolates hostile observers and preserves final request order", async () => {
-    const { repo, linked, service } = await fixture();
+    const { repo, linked, service, runner } = await fixture();
     const entry = (await service.inventory()).entries.find((item) => item.path === linked)!;
-    const fingerprint = snapshot.fingerprintWorktreeTree;
+    const runGit = runner.run.bind(runner);
     let release!: () => void;
     const gate = new Promise<void>((resolve) => { release = resolve; });
-    const held = vi.spyOn(snapshot, "fingerprintWorktreeTree").mockImplementation(async (path, options) => {
-      if (path === linked) await gate;
-      return fingerprint(path, options);
+    const held = vi.spyOn(runner, "run").mockImplementation(async (args, options) => {
+      if (options?.cwd === linked && args.includes("status")) await gate;
+      return runGit(args, options);
     });
     const observations: Array<{ completed: number; path: string; result: import("../../src/shared/worktrees").WorktreeCleanupPreparation }> = [];
     let finished = false;
@@ -343,7 +566,7 @@ describe("worktree inventory and cleanup", () => {
     });
     await service.addScanRoot(root);
     const entry = (await service.inventory()).entries.find((item) => item.path === linked)!;
-    await expect(service.remove(await service.preview(entry.commonDir, linked))).rejects.toThrow("Git operation in progress");
+    await expect(service.remove(await service.preview(entry.commonDir, linked))).rejects.toThrow("Git write lock is present (index.lock)");
     expect(await readFile(join(linked, "README.md"), "utf8")).toBe("base\n");
   });
 
@@ -471,14 +694,14 @@ describe("worktree inventory and cleanup", () => {
     await run("git", ["-C", repo, "worktree", "remove", linked]);
     await expect(service.readAnalysis(entry.commonDir, linked)).rejects.toThrow("no longer registered");
   });
-  it("measures cleanup sizes in the fingerprint pass without repeating inventory measurements", async () => {
+  it("measures exact cleanup sizes only during execution without repeating inventory measurements", async () => {
     const { linked, service } = await fixture();
     const measurements = vi.spyOn(snapshot, "measureWorktreeTree");
     const inventory = await service.inventory();
     const entry = inventory.entries.find((item) => item.path === linked)!;
     measurements.mockClear();
     const preview = await service.preview(entry.commonDir, linked);
-    expect(preview.entry.sizeBytes).toBe(5);
+    expect(preview.entry.sizeBytes === undefined || preview.entry.sizeBytes === 5).toBe(true);
     const removed = await service.remove(preview);
     expect(measurements).not.toHaveBeenCalled();
     expect(removed.sourceSizeBytes).toBe(5);
@@ -492,7 +715,7 @@ describe("worktree inventory and cleanup", () => {
     const entry = (await service.inventory()).entries.find((item) => item.path === linked)!;
     const preview = await service.preview(entry.commonDir, linked, true);
     const removed = await service.remove(preview);
-    expect(preview.entry.sizeBytes).toBe(13);
+    expect(preview.entry.sizeBytes === undefined || preview.entry.sizeBytes === 13).toBe(true);
     expect(removed.sourceSizeBytes).toBe(13);
     expect(removed.reclaimedSizeBytes).toBe(0);
     expect(await readFile(join(linked, "notes.txt"), "utf8").catch(() => "removed")).toBe("removed");
@@ -1130,14 +1353,15 @@ describe("worktree inventory and cleanup", () => {
     expect(await readFile(join(linked, "secret.env"), "utf8")).toBe("local-only\n");
   });
 
-  it("blocks cleanup while Git has an operation in progress", async () => {
+  it.each(["index.lock", "HEAD.lock"])("blocks cleanup while Git has an active %s writer", async (marker) => {
     const { linked, service } = await fixture();
     const gitDir = (await run("git", ["-C", linked, "rev-parse", "--git-dir"])).stdout.trim();
-    await writeFile(resolve(linked, gitDir, "MERGE_HEAD"), "pending\n");
+    await writeFile(resolve(linked, gitDir, marker), "pending\n");
     const entry = (await service.inventory()).entries.find((item) => item.path === linked)!;
-    expect(entry.reasons).toContain("Git operation in progress");
+    expect(entry.reasons).toContain("Git operation in progress: active writer lock");
     expect(entry.manualReviewAvailable).toBe(false);
     await expect(service.preview(entry.commonDir, linked, true)).rejects.toThrow("Review this worktree");
+    expect(await readFile(resolve(linked, gitDir, marker), "utf8")).toBe("pending\n");
   });
 
   it("blocks cleanup of a worktree containing an independent nested repository", async () => {

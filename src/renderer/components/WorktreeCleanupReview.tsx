@@ -19,7 +19,7 @@ export function WorktreeCleanupReview({ items, busy, onRetry }: {
   const failures = items.filter((item) => item.error);
   const failureMessage = failures.length === 1 ? t("1 item could not be prepared and will not be removed.")
     : t("{{count}} items could not be prepared and will not be removed.", { count: failures.length });
-  const size = (bytes: number | undefined) => pending ? "…" : bytes === undefined ? t("Unavailable") : formatBytes(bytes);
+  const size = (bytes: number | undefined) => pending ? "…" : bytes === undefined ? t("Not measured") : formatBytes(bytes);
   return <>
     <DetailList items={[
       { label: t("Estimated space freed"), value: size(sumSizes(previews.map((preview) => preview.backupRequired ? 0 : preview.entry.sizeBytes))) },
@@ -29,6 +29,7 @@ export function WorktreeCleanupReview({ items, busy, onRetry }: {
     <p>{t("Local branches and commits are kept. Remote branches are not changed.")}</p>
     {backups.length ? <Notice tone="warning" icon={<AlertTriangle size={15} />}>
       {t("Local content is backed up in full before removal. Its recovery copy still uses disk space.")}
+      {backups.some((preview) => preview.entry.pausedOperations?.length) ? <><br />{t("Unfinished Git state will also be saved and can be restored.")}</> : null}
     </Notice> : null}
     {previews.some((preview) => preview.savedWorkspace) ? <Notice tone="warning" icon={<AlertTriangle size={15} />}>
       {t("A saved Workspace is inside a selected Worktree. Its shortcut will remain, but the folder will be unavailable after removal.")}

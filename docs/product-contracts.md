@@ -376,8 +376,12 @@ Metric publication is coalesced to at most once per 100ms except final completio
 New scans and mutations cancel obsolete enrichment without joining its filesystem
 walk; cancelled results cannot repopulate the cache or revive removed rows. Cache
 writes and invalidation remain ordered, and shutdown drains only publication work,
-never waits for optional measurement reads. Preview/Remove still obtain their own
-fresh exact fingerprints and sizes; no background metric authorizes a destructive act.
+never waits for optional measurement reads. Preview uses a lightweight intent
+snapshot of live Git registration, HEAD/index/operation state and bounded path
+metadata; it never hashes or measures the complete working directory. Its explicit
+fingerprint scope is not whole-content equality. Unknown size/date remains optional
+and cannot delay confirmation. Remove captures exact current content and size only
+after explicit confirmation; no background metric authorizes a destructive act.
 Changing roots or removing/restoring worktrees invalidates cached inventory. Keep and
 integration decisions invalidate freshness without requiring directory rediscovery.
 Explicitly stopping a scan is a normal cancellation,
@@ -393,6 +397,15 @@ retain their exact commit through a recovery ref without duplicating their files
 or ignored-content trees require a verified full recovery copy and explicit user
 selection/confirmation before Git's force option can be used. They may be selected
 individually for a combined preview, but automatic selection never includes them.
+Paused merge/rebase/cherry-pick/bisect state and unresolved conflicts are not an
+active writer and remain manually selectable, including older cached classifications.
+Their working contents, conflict/staged index, operation metadata and otherwise
+unreachable operation/index objects are preserved and verified before removal.
+Restoration verifies those saved payloads and never overwrites a newly occupied
+path or changed Git state. Real index/HEAD writer locks remain an execution safety
+condition; AgentEnv never kills Git processes or deletes their lock files.
+Normal clean trees retain the refs-only path and free space immediately; index
+flags that may hide changes require full recovery instead of claiming no local value.
 Leaving the owning cleanup surface stops the remaining queue after the current
 transaction completes its backup/removal/verification; navigation never cancels a
 destructive filesystem step midway or silently continues later selected removals.
@@ -457,7 +470,11 @@ These actions work while the repository is collapsed and never run AI or Preview
 Multi-tree Preview is coordinated in main with at most two workers. Registration,
 integration choices, management settings and saved Workspace roots are shared within
 that request, not trusted across requests or at Remove. Results retain request order,
-report independent failures, and bind a separate fresh content/Git fingerprint per tree.
+report independent failures, and bind a separate fresh Git/path-metadata intent
+fingerprint per tree. Full file snapshot/hash/copy verification runs after Remove,
+not as a hidden precondition for enabling the confirmation button. Local contents
+outside bounded preview metadata may be newer at execution; required recovery
+captures those newest authorized bytes, and unstable copies are never removed.
 Selection is not removal authorization or proof of code integration. Each tree is
 revalidated during Preview and again during Remove.
 Batch cleanup can stop after the current tree finishes its transaction. Remaining
