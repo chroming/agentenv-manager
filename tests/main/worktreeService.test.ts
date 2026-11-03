@@ -4,7 +4,7 @@ import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { promisify } from "node:util";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createWorktreeService, parseWorktreeList } from "../../src/main/worktrees/worktreeService";
+import { createWorktreeService as makeWorktreeService, parseWorktreeList, type WorktreeService } from "../../src/main/worktrees/worktreeService";
 import { createGitCommandRunner } from "../../src/main/skillSources/gitCommandRunner";
 import { findExecutable } from "../../src/main/executableDiscovery";
 import type { ProjectStore } from "../../src/main/projects/projectStore";
@@ -12,7 +12,16 @@ import * as snapshot from "../../src/main/worktrees/worktreeSnapshot";
 
 const run = promisify(execFile);
 const roots: string[] = [];
+const services: WorktreeService[] = [];
+const createWorktreeService = (...args: Parameters<typeof makeWorktreeService>) => {
+  const service = makeWorktreeService(...args); services.push(service); return service;
+};
+const measuredInventory = async (service: WorktreeService) => {
+  await vi.waitFor(async () => expect((await service.cachedInventory()).inventory?.measuring).toBe(false));
+  return (await service.cachedInventory()).inventory!;
+};
 afterEach(async () => {
+  await Promise.all(services.splice(0).map((service) => service.dispose()));
   vi.restoreAllMocks();
   for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
 });
@@ -43,6 +52,27 @@ const fixture = async () => {
 };
 
 describe("worktree inventory and cleanup", () => {
+  it("returns actionable rows before size measurement finishes and does not wait for it to remove a tree", async () => {
+    const { linked, service } = await fixture();
+    let release!: (value: undefined) => void;
+    const pending = new Promise<undefined>((resolve) => { release = resolve; });
+    vi.spyOn(snapshot, "measureWorktreeTree").mockImplementation(() => pending);
+    const scan = service.inventory();
+    let ready = false;
+    void scan.then(() => { ready = true; });
+    try {
+      await vi.waitFor(() => expect(ready).toBe(true), { timeout: 1500 });
+      const inventory = await scan;
+      const entry = inventory.entries.find((item) => item.path === linked)!;
+      expect(entry.cleanupReviewAvailable).toBe(true);
+      expect(entry.sizeBytes).toBeUndefined();
+      expect(inventory.measuring).toBe(true);
+      const result = await service.remove(await service.preview(entry.commonDir, linked));
+      expect(result.status).toBe("removed");
+    } finally { release(undefined); await scan; }
+    await new Promise((resolve) => setImmediate(resolve));
+    expect((await service.cachedInventory()).inventory).toBeUndefined();
+  });
   it("prepares a repository batch with one registration read and independent per-tree safety checks", async () => {
     const { root, repo, linked, service, runner } = await fixture();
     const second = join(root, "second");
@@ -114,7 +144,7 @@ describe("worktree inventory and cleanup", () => {
       state: "unavailable", cleanupReviewAvailable: false, manualReviewAvailable: false
     });
     expect((await service.cachedInventory()).fresh).toBe(false);
-    await expect(service.preview(entry.commonDir, linked)).rejects.toThrow("Refresh Worktrees");
+    await expect(service.preview(entry.commonDir, linked)).rejects.toThrow("Temporary read failure");
     fail.mockRestore();
     expect((await service.inventory()).entries.find((item) => item.path === linked)?.state).toBe("candidate");
   });
@@ -123,13 +153,16 @@ describe("worktree inventory and cleanup", () => {
     const { root, repo, service } = await fixture();
     const measure = vi.spyOn(snapshot, "measureWorktreeTree");
     await service.inventory();
+    await measuredInventory(service);
     const reads = measure.mock.calls.length;
     const extra = join(root, "extra");
     await run("git", ["-C", repo, "worktree", "add", "-b", "extra", extra]);
     const refreshed = await service.inventory("background");
+    await measuredInventory(service);
     expect(refreshed.entries.some((entry) => entry.path === extra)).toBe(true);
     expect(measure.mock.calls.length).toBe(reads + 1);
     await service.inventory();
+    await measuredInventory(service);
     expect(measure.mock.calls.length).toBe(reads + 3);
   });
 
@@ -144,13 +177,13 @@ describe("worktree inventory and cleanup", () => {
       resolveRunner: async () => runner });
     expect(await restarted.cachedInventory()).toMatchObject({ inventory: JSON.parse(JSON.stringify(inventory)), fresh: false });
     const entry = inventory.entries.find((item) => item.path === linked)!;
-    await expect(restarted.preview(entry.commonDir, linked)).rejects.toThrow("Refresh Worktrees");
+    await expect(restarted.preview(entry.commonDir, linked)).resolves.toMatchObject({ entry: { path: linked, cleanupReviewAvailable: true } });
     await service.setKeep(entry.commonDir, linked, "Keep");
     expect(await service.cachedInventory()).toMatchObject({ fresh: false });
     expect((await service.inventory("background")).entries.find((item) => item.path === linked)?.state).toBe("kept");
   });
 
-  it("revalidates cached trees for read-only analysis after restart without authorizing cleanup", async () => {
+  it("revalidates cached rows on demand after restart instead of trusting old cleanup state", async () => {
     const { root, repo, linked, runner, service } = await fixture();
     const entry = (await service.inventory()).entries.find((item) => item.path === linked)!;
     const restarted = createWorktreeService({ appDataRoot: join(root, "data"), homeDir: join(root, "home"),
@@ -159,7 +192,8 @@ describe("worktree inventory and cleanup", () => {
     await writeFile(join(linked, "README.md"), "fresh changes after cached scan\n");
     const analysis = await restarted.readAnalysis(entry.commonDir, linked);
     expect(analysis.documents.find((doc) => doc.id === "local-diff")?.content).toContain("fresh changes after cached scan");
-    await expect(restarted.preview(entry.commonDir, linked)).rejects.toThrow("Refresh Worktrees");
+    await expect(restarted.preview(entry.commonDir, linked)).rejects.toThrow("Review this worktree before cleanup");
+    expect((await restarted.preview(entry.commonDir, linked, true)).entry.changes).toContain(" M README.md");
     await run("git", ["-C", linked, "restore", "README.md"]);
     await run("git", ["-C", repo, "worktree", "remove", linked]);
     await expect(restarted.readAnalysis(entry.commonDir, linked)).rejects.toThrow("no longer registered");
@@ -558,8 +592,9 @@ describe("worktree inventory and cleanup", () => {
     const worktree = inventory.entries.find((entry) => entry.path === linked)!;
     expect(worktree.main).toBe(false);
     expect(worktree.cleanupReviewAvailable).toBe(true);
-    expect(worktree.sizeBytes).toBeGreaterThan(0);
-    expect(worktree.modifiedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    const measured = (await measuredInventory(service)).entries.find((entry) => entry.path === linked)!;
+    expect(measured.sizeBytes).toBeGreaterThan(0);
+    expect(measured.modifiedAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
     expect(inventory.entries.find((entry) => entry.path === repo)?.main).toBe(true);
     const preview = await service.preview(worktree.commonDir, linked);
     expect(preview.backupRequired).toBe(false);
@@ -1076,7 +1111,7 @@ describe("worktree inventory and cleanup", () => {
     const pending = service.inventory();
     service.cancelScan();
     await expect(pending).rejects.toThrow("Worktree scan cancelled");
-    await expect(service.preview(previous.commonDir, linked)).rejects.toThrow("Refresh Worktrees");
+    await expect(service.preview(previous.commonDir, linked)).resolves.toMatchObject({ entry: { path: linked } });
   });
 
   it("joins an in-flight scan and retains its cleanup eligibility", async () => {

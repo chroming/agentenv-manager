@@ -1001,6 +1001,7 @@ const createServices = async (
       return projectGitRunner;
     }
   });
+  app.once("will-quit", () => { void worktreeService.dispose().catch(() => undefined); });
   const projectEnvironmentService = createProjectEnvironmentService({
     projectStore,
     targetRegistry,

@@ -98,14 +98,20 @@ describe("Worktrees desktop workflow", () => {
     };
     app = await electron.launch(launchOptions);
     const page = await app.firstWindow();
+    await page.setViewportSize({ width: 920, height: 620 });
     await page.getByRole("button", { name: t("Worktrees"), exact: true }).waitFor();
     await page.evaluate((port) => window.agentEnv.saveSkillSummaryConfig({ endpoint: `http://127.0.0.1:${port}/v1`, model: "fixture" }), port);
     const notNow = page.getByRole("button", { name: t("Not now"), exact: true });
     if (await notNow.isVisible().catch(() => false)) await notNow.click();
     await page.getByRole("button", { name: t("Worktrees"), exact: true }).click();
     const workspace = page.locator(".worktree-workspace");
-    await page.setViewportSize({ width: 920, height: 620 });
     await workspace.getByText(linked).waitFor();
+    const initialChoice = workspace.locator(".ui-resource-row").filter({ has: page.getByText(linked, { exact: true }) }).getByRole("checkbox");
+    expect(await initialChoice.isEnabled()).toBe(true);
+    await initialChoice.check();
+    await initialChoice.uncheck();
+    await expect.poll(() => page.evaluate(async () => (await window.agentEnv.cachedWorktreeInventory()).inventory?.measuring)).toBe(false);
+    await expect.poll(() => workspace.getByText(t("Measuring size..."), { exact: true }).count()).toBe(0);
     expect(await workspace.getByText(t("Main"), { exact: true }).count()).toBe(0);
     await workspace.getByRole("button", { name: t("Repository actions"), exact: true }).click();
     const repositoryMenu = page.getByRole("menu", { name: t("Repository actions"), exact: true });
@@ -151,6 +157,8 @@ describe("Worktrees desktop workflow", () => {
     const scanEvents = runtimeEvents.filter((event) => event.action === "worktrees:inventory");
     expect(scanEvents.filter((event) => event.outcome === "cancelled")).toHaveLength(1);
     expect(scanEvents.some((event) => event.error)).toBe(false);
+    await expect.poll(() => page.evaluate(async () => (await window.agentEnv.cachedWorktreeInventory()).inventory?.measuring)).toBe(false);
+    await expect.poll(() => workspace.getByText(t("Measuring size..."), { exact: true }).count()).toBe(0);
     for (const viewport of [{ width: 920, height: 620 }, { width: 1180, height: 728 }, { width: 1440, height: 900 }]) {
       await page.setViewportSize(viewport);
       await expectCatalogToolbar(workspace.locator(".ui-catalog-toolbar"), "wide");

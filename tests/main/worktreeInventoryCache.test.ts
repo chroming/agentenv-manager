@@ -17,6 +17,24 @@ const fixture = async () => {
 const inventory = { scanRoots: [], configuredRoots: [], builtinRoots: [], entries: [],
   issues: [], incomplete: false, scannedAt: "2026-10-08T00:00:00.000Z" };
 
+it("enriches metrics without extending Git freshness or resurrecting an invalidated snapshot", async () => {
+  const path = await fixture();
+  const cache = createWorktreeInventoryCache(path);
+  const now = vi.spyOn(Date, "now").mockReturnValue(1000);
+  await cache.save({ ...inventory, measuring: true, measurementRevision: 0 });
+  now.mockReturnValue(300_000);
+  await cache.enrich({ ...inventory, measuring: false, measurementRevision: 1 });
+  expect((await cache.read()).fresh).toBe(true);
+  now.mockReturnValue(301_001);
+  expect((await cache.read()).fresh).toBe(false);
+  await Promise.all([
+    cache.enrich({ ...inventory, measuring: false, measurementRevision: 2 }),
+    cache.invalidate()
+  ]);
+  expect((await cache.read()).inventory).toBeUndefined();
+  await expect(readFile(path)).rejects.toMatchObject({ code: "ENOENT" });
+});
+
 it("expires in memory and keeps disk snapshots stale across restarts", async () => {
   const path = await fixture();
   const now = vi.spyOn(Date, "now").mockReturnValue(1000);

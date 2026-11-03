@@ -88,7 +88,7 @@ Open local folders with an installed Agent. For remote folders, supported integr
 
 Scan common repository and worktree folders without first adding a Workspace, including common Codex, Claude Code, and Superpowers locations. Add your own scan folders when needed. Entries are grouped by repository, searchable by path or branch, and sortable by name, modification time, or size. Sort choices are remembered, and the matching information is shown in the list.
 
-Recent scan results appear immediately when you return to the page or restart the app. Keep an individual worktree or ignore a whole repository. Ignored repositories stay in a separate section at the bottom, where you can restore them at any time.
+Recent scan results appear immediately when you return to the page or restart the app. Size measurement runs in the background without blocking selection or cleanup. Keep an individual worktree or ignore a whole repository. Ignored repositories stay in a separate section at the bottom, where you can restore them at any time.
 
 ![Git worktrees](docs/images/worktrees.png)
 

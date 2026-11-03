@@ -350,11 +350,30 @@ results do not acquire a full freshness TTL. Failure to remove a display-cache f
 diagnostic only; in-memory invalidation still happens and resource operations may continue.
 Leaving Worktrees does not cancel its main-process scan. Concurrent requests join one
 scan; reopening within five minutes reuses the completed result. A validated local
-display snapshot survives restarts, but is always stale on restart and cannot restore
-cleanup eligibility. Stale results remain visible during background refresh. Background
+display snapshot survives restarts, but is always stale on restart and cannot authorize
+cleanup. A visible cached row may identify an on-demand read: Preview, keep decisions
+and integration-target selection reread live registration and the relevant current
+safety/settings state without requiring a whole-inventory refresh. Old eligibility,
+fingerprints and keep markers never authorize removal. Stale results remain usable
+during background refresh; starting a foreground action supersedes that renderer's
+pending refresh and its late response cannot overwrite the action. Background
 refresh can reuse discovered repositories for thirty minutes when roots are unchanged,
 but rereads Git worktree registrations and safety state. Display-only size measurements
 can be reused for fifteen minutes; explicit Refresh performs full discovery and measurement.
+Registration and safety inspection complete independently of directory measurements.
+The inventory returns actionable rows before statistics finish; a bounded two-worker
+read-only queue enriches size/date fields afterward. Pending metrics do not disable
+selection, repository actions, review, analysis or cleanup. Per-row pending text and
+one repository-level indicator replace false zero/unavailable values during measurement.
+Metric updates preserve selection and row safety state, carry a monotonic revision for
+the same scan, and cannot be overwritten by an earlier IPC reply. They never extend
+the Git freshness TTL. Size failures leave the tree usable and the measurement unknown.
+Metric publication is coalesced to at most once per 100ms except final completion.
+New scans and mutations cancel obsolete enrichment without joining its filesystem
+walk; cancelled results cannot repopulate the cache or revive removed rows. Cache
+writes and invalidation remain ordered, and shutdown drains only publication work,
+never waits for optional measurement reads. Preview/Remove still obtain their own
+fresh exact fingerprints and sizes; no background metric authorizes a destructive act.
 Changing roots or removing/restoring worktrees invalidates cached inventory. Keep and
 integration decisions invalidate freshness without requiring directory rediscovery.
 Explicitly stopping a scan is a normal cancellation,

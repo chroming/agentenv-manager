@@ -105,6 +105,11 @@ const api: AgentEnvApi = {
   setWorktreeIntegrationRef: (commonDir, ref) => ipcRenderer.invoke("worktrees:set-integration-ref", commonDir, ref),
   previewWorktreeCleanup: (commonDir, path, allowDirty) => ipcRenderer.invoke("worktrees:preview", commonDir, path, allowDirty),
   previewWorktreeCleanupBatch: (items, requestId) => ipcRenderer.invoke("worktrees:preview-batch", items, requestId),
+  onWorktreeInventoryChanged: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, inventory: import("../shared/worktrees").WorktreeInventory) => callback(inventory);
+    ipcRenderer.on("worktrees:inventory-changed", listener);
+    return () => { ipcRenderer.removeListener("worktrees:inventory-changed", listener); };
+  },
   onWorktreeProgress: (callback) => {
     const listener = (_event: Electron.IpcRendererEvent, value: import("../shared/worktrees").WorktreeOperationProgress) => callback(value);
     ipcRenderer.on("worktrees:progress", listener);

@@ -56,6 +56,28 @@ afterEach(() => {
 });
 
 describe("WorktreeDialog", () => {
+  it("enriches size without resetting selection or letting a late scan reply overwrite newer metrics", async () => {
+    const api = installApi();
+    let publish!: (value: WorktreeInventory) => void;
+    Object.assign(api, { onWorktreeInventoryChanged: vi.fn((listener) => { publish = listener; return () => undefined; }) });
+    const pending = { ...inventory, measuring: true, measurementRevision: 0,
+      entries: inventory.entries.map((entry) => ({ ...entry, sizeBytes: undefined, measurementPending: true })) };
+    api.cachedWorktreeInventory.mockResolvedValue({ inventory: pending, fresh: false, scanning: true });
+    let complete!: (value: WorktreeInventory) => void;
+    api.inventoryWorktrees.mockImplementation(() => new Promise((resolve) => { complete = resolve; }));
+    render(<WorktreeWorkspace />);
+    const row = within((await screen.findByText(clean.path)).closest(".ui-resource-row")! as HTMLElement);
+    expect(row.getByText("Measuring size...")).toBeInTheDocument();
+    fireEvent.click(row.getByRole("checkbox"));
+    const measured = { ...pending, measuring: false, measurementRevision: 1,
+      entries: pending.entries.map((entry) => ({ ...entry, measurementPending: false, sizeBytes: 2048 })) };
+    act(() => publish(measured));
+    await act(async () => complete(pending));
+    expect(row.getByRole("checkbox")).toBeChecked();
+    expect(row.getByLabelText("Size: 2.0 KB")).toBeInTheDocument();
+    expect(row.queryByText("Measuring size...")).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Review cleanup (1)" })).toBeEnabled();
+  });
   it("shows actual cleanup phases only for the initiating request", async () => {
     const api = installApi();
     let report!: (value: WorktreeOperationProgress) => void;
@@ -398,6 +420,12 @@ describe("WorktreeDialog", () => {
     await screen.findByText(clean.path);
     expect(screen.queryByText("Scanning Worktrees...")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Refresh Worktrees" })).toHaveAttribute("aria-busy", "true");
+    const row = within(screen.getByText(clean.path).closest(".ui-resource-row")! as HTMLElement);
+    expect(row.getByRole("checkbox")).toBeEnabled();
+    fireEvent.click(row.getByRole("checkbox"));
+    expect(screen.getByRole("button", { name: "Review cleanup (1)" })).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "Review cleanup (1)" }));
+    await screen.findByRole("dialog", { name: "Remove this Worktree?" });
   });
 
   it("excludes a freshly changed review-needed tree from batch confirmation", async () => {

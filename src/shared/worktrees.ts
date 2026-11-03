@@ -31,6 +31,7 @@ export interface WorktreeEntry {
   submodules: boolean;
   sizeBytes?: number;
   modifiedAt?: string;
+  measurementPending?: boolean;
   keptReason?: string;
   repositoryKeptReason?: string;
   cleanupReviewAvailable: boolean;
@@ -51,6 +52,8 @@ export const isAutomaticCleanupCandidate = (entry: WorktreeEntry): boolean =>
   entry.reasons.length === 0 && entry.changes.length === 0 && entry.ignored.length === 0;
 
 export interface WorktreeInventory {
+  measuring?: boolean;
+  measurementRevision?: number;
   scanRoots: string[];
   configuredRoots: string[];
   builtinRoots: string[];

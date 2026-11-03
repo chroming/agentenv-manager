@@ -10,6 +10,12 @@ export const registerWorktreeIpc = (
   service: WorktreeService,
   diagnostics?: Pick<RuntimeDiagnostics, "record">
 ) => {
+  service.onInventoryChanged((inventory) => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      try { if (!window.isDestroyed() && !window.webContents.isDestroyed()) window.webContents.send("worktrees:inventory-changed", inventory); }
+      catch { /* Windows may close while read-only metrics finish. */ }
+    }
+  });
   diagnosticHandle("worktrees:cached-inventory", () => service.cachedInventory());
   diagnosticHandle("dialog:select-worktree-scan-root", async (event) => {
     const owner = BrowserWindow.fromWebContents(event.sender);

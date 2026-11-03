@@ -1235,6 +1235,7 @@ const zhCN: Record<string, string> = {
 };
 
 Object.assign(zhCN, {
+  "Measuring size...": "正在统计空间…",
   "Repository actions": "仓库操作",
   "Select all removable Worktrees": "选择全部可移除工作树",
   "Backing up local files...": "正在备份本地文件…",
@@ -3949,6 +3950,7 @@ Object.assign(zhCN, {
 });
 
 Object.assign(zhTW, {
+  "Measuring size...": "正在統計空間…",
   "Repository actions": "儲存庫操作",
   "Select all removable Worktrees": "選擇全部可移除工作樹",
   "Backing up local files...": "正在備份本機檔案…",
