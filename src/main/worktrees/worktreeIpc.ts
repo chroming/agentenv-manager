@@ -1,6 +1,6 @@
 import { BrowserWindow, dialog } from "electron";
 import { z } from "zod";
-import type { WorktreeCleanupPreview, WorktreeScanResult } from "../../shared/worktrees";
+import type { WorktreeCleanupPreview, WorktreeOperationProgress, WorktreeScanResult } from "../../shared/worktrees";
 import type { IpcRegistrationHandles } from "../ipc/registration";
 import { WorktreeScanCancelledError, type WorktreeService } from "./worktreeService";
 import type { RuntimeDiagnostics } from "../runtimeDiagnostics";
@@ -10,6 +10,10 @@ export const registerWorktreeIpc = (
   service: WorktreeService,
   diagnostics?: Pick<RuntimeDiagnostics, "record">
 ) => {
+  const sendProgress = (event: Electron.IpcMainInvokeEvent, value: WorktreeOperationProgress) => {
+    try { if (!event.sender.isDestroyed()) event.sender.send("worktrees:progress", value); }
+    catch { /* A closing renderer cannot fail a local operation. */ }
+  };
   service.onInventoryChanged((inventory) => {
     for (const window of BrowserWindow.getAllWindows()) {
       try { if (!window.isDestroyed() && !window.webContents.isDestroyed()) window.webContents.send("worktrees:inventory-changed", inventory); }
@@ -41,8 +45,9 @@ export const registerWorktreeIpc = (
   diagnosticHandle("worktrees:preview-batch", async (event, raw, id) => {
     const requestId = z.string().uuid().parse(id);
     const items = z.array(z.object({ commonDir: z.string().min(1), path: z.string().min(1), allowDirty: z.boolean() })).max(1000).parse(raw);
-    const results = await service.previewBatch(items, (completed, path) => {
-      if (!event.sender.isDestroyed()) event.sender.send("worktrees:progress", { requestId, phase: "preparing", path, completed, total: items.length });
+    const results = await service.previewBatch(items, (completed, path, preparation) => {
+      sendProgress(event, { requestId, phase: "preparing", path, completed, total: items.length,
+        ...(preparation ? { preparation } : {}) });
     });
     const failures = results.filter((item) => item.error !== undefined);
     const reference = await diagnostics?.record("worktrees:preview-batch", "prepared-worktrees", {
@@ -73,9 +78,10 @@ export const registerWorktreeIpc = (
       }).catch(() => undefined));
     };
     try {
-      return await service.remove(preview, (phase) => {
-        finishStage(); previous = phase; started = performance.now();
-        if (requestId && !event.sender.isDestroyed()) event.sender.send("worktrees:progress", { requestId, phase, path: preview.entry.path, completed: 0, total: 1 });
+      return await service.remove(preview, (phase, fileProgress) => {
+        if (previous !== phase) { finishStage(); previous = phase; started = performance.now(); }
+        if (requestId) sendProgress(event, { requestId, phase, path: preview.entry.path, completed: 0, total: 1,
+          ...(fileProgress ? { fileProgress } : {}) });
       });
     } finally { finishStage(); await Promise.allSettled(logs); }
   });

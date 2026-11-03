@@ -45,7 +45,9 @@ export const DataSettingsSection = ({
   const storageSummary = [
     t(recoveryCount === 1 ? "1 recovery point" : "{{count}} recovery points", { count: recoveryCount }),
     t(conversationCount === 1 ? "1 conversation record" : "{{count}} conversation records", { count: conversationCount }),
-    formatBytes(inventory?.totalBytes ?? 0)
+    inventory?.items.some((item) => item.sizeIncomplete)
+      ? t("At least {{size}}", { size: formatBytes(inventory.totalBytes) })
+      : formatBytes(inventory?.totalBytes ?? 0)
   ].join(" · ");
 
   return (

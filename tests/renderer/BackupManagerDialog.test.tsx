@@ -24,6 +24,39 @@ const props = () => ({ busy: false, cleanupConfirm: false, dialogRef: createRef<
 });
 
 describe("Backup catalog controls", () => {
+  it("shows a scoped Worktree inventory diagnostic while preserving ordinary backups and actions", () => {
+    render(<BackupManagerDialog {...props()} inventory={{ ...inventory, issues: ["Worktree recovery storage is not a regular directory; nothing was changed"] }} />);
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("Worktree recovery backups could not be listed.");
+    expect(alert).toHaveTextContent("not a regular directory");
+    expect(screen.getByRole("button", { name: "Preview backup Older · Codex" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Clean up now" })).toBeEnabled();
+  });
+  it.each(["en", "zh_CN", "zh_TW"] as const)("shows protected Worktree sizes, filters and read-only previews in %s", (preference) => {
+    const handlers = props();
+    const t = (message: string, values?: Record<string, string | number>) => translate(preference, message, values);
+    const worktree = { id: "worktree", kind: "worktree-recovery" as const, worktreePath: "/repo/long-worktree-path", createdAt: "2020-01-01",
+      sizeBytes: 1_234, fileCount: 2, cleanupStatus: "required" as const, requiredReason: "worktree-recovery-incomplete" as const, deletable: false, sizeIncomplete: true };
+    const combined = { ...inventory, items: [...inventory.items, worktree] };
+    const view = render(<I18nProvider preference={preference}><BackupManagerDialog {...handlers} inventory={combined} /></I18nProvider>);
+    expect(screen.getByText(t("At least {{size}}", { size: "1234 B" }), { exact: false })).toBeInTheDocument();
+    expect(screen.getByText(t("Incomplete Worktree recovery"))).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: t("Filters") }));
+    const filter = screen.getByRole("combobox", { name: t("Backup type filter") });
+    fireEvent.change(filter, { target: { value: "worktree-recovery" } });
+    fireEvent.keyDown(document, { key: "Escape" });
+    expect(screen.getAllByRole("button", { name: new RegExp(t("Preview backup {{name}}", { name: "" })) })).toHaveLength(1);
+    expect(screen.queryByRole("button", { name: /More actions/ })).not.toBeInTheDocument();
+    expect(screen.getByText(t("{{count}} eligible · {{size}}", { count: 1, size: "100 B" }))).toBeInTheDocument();
+    view.rerender(<I18nProvider preference={preference}><BackupManagerDialog {...handlers} inventory={combined} previewCandidate={worktree}
+      preview={{ id: worktree.id, kind: worktree.kind, files: [{ path: "/saved/files/note", state: "saved" }], truncated: true }} /></I18nProvider>);
+    expect(screen.getByText(t("Worktree recovery may hold the only copy of uncommitted files. Retention cleanup and manual deletion are disabled. Git recovery references are preserved."))).toBeInTheDocument();
+    expect(screen.getByText(t("Only part of the saved file list is shown. No saved files were changed."))).toBeInTheDocument();
+    expect(screen.getByText("/saved/files/note")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: t("Back") })).toBeEnabled();
+    expect(screen.queryByRole("button", { name: t("Delete backup") })).not.toBeInTheDocument();
+    expect(handlers.onDelete).not.toHaveBeenCalled();
+  });
   it.each(["en", "zh_CN", "zh_TW"] as const)("formats Agent names and expiration with the app locale in %s", (preference) => {
     const expiresAt = "2026-11-20T12:00:00Z";
     const item = { ...inventory.items[0], kind: "conversation-delete" as const, conversationTitle: "Fixture", targetId: "claude-code", expiresAt };

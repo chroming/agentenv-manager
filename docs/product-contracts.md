@@ -311,7 +311,9 @@ inventory does not launch recursive git-submodule commands just to identify them
 The toolbar owns scanning feedback without moving an existing list. Scope, review,
 confirmation and recovery use shared modal shells; metadata, state and action lanes
 are aligned across all inventory rows. Scan-location editing never deletes folders.
-The selection strip says Batch cleanup, not an internal candidate classification.
+Zero selection has no disabled batch-cleanup strip. Global and repository selection
+use the same named selection menu; selecting items reveals count/size and Remove
+selected... rather than exposing an internal preparation phase as a command.
 The main checkout is repository context, not a cleanup row. Repository groups show
 only linked trees and count/measure only those rows; the main checkout remains in
 internal registration and safety checks but has no review or AI action in this list.
@@ -322,8 +324,10 @@ alongside sizes without requiring date sorting. Calendar dates include the year 
 expose their full timestamp on inspection. File times exclude root .git metadata,
 include ignored files, and are neither scan time nor last-commit time. Unknown dates
 remain unavailable, never fall back to the scan timestamp, and never authorize removal.
-Full branch and path remain inspectable in the existing review; branch is also available
-on the row identity. The page scroll owner reserves a trailing safe area in addition to
+Full branch and path remain inspectable in the existing review; a distinct branch
+also appears in the supporting identity line. Paths within the main repository may
+display relative paths; their full absolute path remains inspectable/copyable.
+The page scroll owner reserves a trailing safe area in addition to
 scrollbar-gutter so overlay scrollbars cannot cover row or repository selection controls.
 Worktree sorting is a device-local UI preference, defaults to name, and uses the shared
 icon-only sort menu also used by Conversations. It never triggers scanning or changes
@@ -389,6 +393,9 @@ retain their exact commit through a recovery ref without duplicating their files
 or ignored-content trees require a verified full recovery copy and explicit user
 selection/confirmation before Git's force option can be used. They may be selected
 individually for a combined preview, but automatic selection never includes them.
+Leaving the owning cleanup surface stops the remaining queue after the current
+transaction completes its backup/removal/verification; navigation never cancels a
+destructive filesystem step midway or silently continues later selected removals.
 Main, locked, missing, and submodule worktrees are not cleanup candidates.
 Individual review is not a mandatory navigation step. A reviewable tree
 has a compact Remove Worktree... secondary row action that prepares the same fresh preview
@@ -402,12 +409,15 @@ one row shows progress on that initiating action, not on the batch command.
 Detached commits without another ref receive a recovery ref before removal.
 An operation cannot claim success until the directory and Git registration are both
 verified absent. Recovery must not overwrite a path created after cleanup.
-The list and each repository offer automatic selection of all Clean (`candidate`) trees
-within the current search/filter scope, including collapsed groups. Selection
-controls remain visible when no candidates qualify, but are disabled; partial
-selection uses the native indeterminate state. The list shows selected count and
-size, with unknown measurements never treated as zero, plus the count requiring
-individual review. Changing search/filter or refreshing clears selection.
+The list and each repository offer Select integrated, unchanged Worktrees within
+the current search/filter scope, including collapsed groups. The command requires
+the existing strict automatic-candidate predicate, including no ignored local
+content; it does not mean all Git-clean trees and never proves task completion.
+The same menu offers manual Select all removable Worktrees and Clear selection.
+Selection shows count and size; unknown measurements are never treated as zero.
+Changing search/filter or refreshing clears selection. Row status describes facts
+such as local changes, ignored files, integration unconfirmed or Git locked; user
+exclusions say Ignored and cannot be confused with Git's own worktree lock.
 Automatic selection is distinct from manual selection. Each selected identity retains
 its origin. Row checkboxes may explicitly select reviewable dirty, ignored-content,
 detached or unconfirmed trees. Automatic repository/global controls only add clean
@@ -420,8 +430,27 @@ selection may include multiple trees without opening their details one by one.
 One combined confirmation identifies which trees need full local recovery copies,
 the total copy count, sizes and estimated freed space. Each resource's original
 backup, freshness and transaction rules still apply; Preview alone changes no files.
-The shared repository action menu offers Select clean, Select all removable and Clear
-selection, plus Ignore/Stop ignoring repository. Select all removable is an explicit
+Confirmation opens immediately during preparation. Request-scoped per-item results
+are advisory until the final batch response arrives; Remove remains disabled while
+any preparation is pending. Failed items retain inline diagnostics and an individual
+retry with the original selection origin. Partial failures are explicitly excluded
+from the final destructive count, not silently treated as successful previews.
+The UI can never grant a changed automatic pick manual force permission on retry.
+Git metadata and integration-target configuration are collapsed in ordinary review;
+local content and explicit AI analysis remain available without configuring Git.
+Confirmation distinguishes estimated freed logical bytes from bytes retained as
+full local recovery copies. Counts and per-pass read/enumeration progress are best
+effort, throttled and not percentages or a durability guarantee. Callback failure
+and a closing renderer cannot fail backup/hash verification or Git removal.
+Results provide a direct recovery entry. Existing Backup manager exposes Worktree
+recovery journals, saved paths and bounded size accounting as a protected projection.
+Neither normal retention nor manual ordinary-backup deletion can discard Worktree
+recovery content or Git recovery refs. The Worktree transaction remains their owner;
+listing a backup does not certify its contents or prove successful restoration.
+An unchanged cleanup journal may legitimately have no retained payload after the
+original directory was verified untouched; this is not an incomplete transaction.
+The repository overflow menu offers Ignore/Stop ignoring repository, independently
+of its selection menu. Select all removable is an explicit
 manual selection of every reviewable row in the current scope, including dirty trees;
 it is not automatic selection and does not include protected rows or authorize removal.
 These actions work while the repository is collapsed and never run AI or Preview.

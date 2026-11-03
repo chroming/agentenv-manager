@@ -3,11 +3,89 @@ import { createReadStream } from "node:fs";
 import { chmod, lstat, mkdir, mkdtemp, readFile, readdir, readlink, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, relative, sep } from "node:path";
-import { afterEach, expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
+import type { WorktreeFileProgress } from "../../src/shared/worktrees";
 import { copyWorktreeVerified, fingerprintWorktreeTree, hashWorktreeTree, measureWorktreeTree } from "../../src/main/worktrees/worktreeSnapshot";
 
 const roots: string[] = [];
-afterEach(async () => { for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }); });
+afterEach(async () => {
+  vi.restoreAllMocks();
+  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
+});
+
+it("throttles counted fingerprints and flushes exact counts without changing the persisted hash", async () => {
+  const root = await mkdtemp(join(tmpdir(), "aem-worktree-counted-"));
+  roots.push(root);
+  await mkdir(join(root, "nested"));
+  for (let i = 0; i < 40; i++) await writeFile(join(root, "nested", `${i}`), "hello");
+  await writeFile(join(root, ".git"), "gitdir: ignored for this pass");
+  await writeFile(join(root, "empty"), "");
+  if (process.platform !== "win32") await symlink("missing", join(root, "link"));
+  vi.spyOn(performance, "now").mockReturnValue(0);
+  const progress = vi.fn();
+  const result = await fingerprintWorktreeTree(root, { omitGitFile: true, progress });
+  expect(result.hash).toBe(await streamingHash(root, true));
+  expect(progress.mock.calls.map(([value]) => value)).toEqual([
+    { step: "fingerprinting", filesCounted: 0, bytesCounted: 0 },
+    { step: "fingerprinting", filesCounted: process.platform === "win32" ? 41 : 42,
+      bytesCounted: 200 + (process.platform === "win32" ? 0 : 7) }
+  ]);
+});
+
+it("reports bytes while a large file is still being hashed, even with a hostile observer", async () => {
+  const root = await mkdtemp(join(tmpdir(), "aem-worktree-stream-progress-"));
+  roots.push(root);
+  await writeFile(join(root, "large"), Buffer.alloc(1024 * 1024, 42));
+  let now = 0;
+  vi.spyOn(performance, "now").mockImplementation(() => now += 75);
+  const updates: WorktreeFileProgress[] = [];
+  const result = await fingerprintWorktreeTree(root, { progress: (value) => {
+    updates.push({ ...value });
+    value.bytesCounted = -1;
+    throw new Error("observer failed");
+  } });
+  expect(result.hash).toBe(await streamingHash(root));
+  expect(updates.some((value) => value.bytesCounted > 0 && value.bytesCounted < 1024 * 1024 && value.filesCounted === 0)).toBe(true);
+  expect(updates.at(-1)).toEqual({ step: "fingerprinting", filesCounted: 1, bytesCounted: 1024 * 1024 });
+  expect(updates.every((value, index) => !index || value.bytesCounted >= updates[index - 1].bytesCounted)).toBe(true);
+});
+
+it("reports independent copy and verification counts without weakening stale-hash rejection", async () => {
+  const root = await mkdtemp(join(tmpdir(), "aem-worktree-copy-progress-"));
+  roots.push(root);
+  const source = join(root, "source");
+  await mkdir(source);
+  await writeFile(join(source, "large"), Buffer.alloc(256 * 1024, 42));
+  await writeFile(join(source, "empty"), "");
+  const expected = await hashWorktreeTree(source);
+  const updates: WorktreeFileProgress[] = [];
+  const progress = (value: WorktreeFileProgress) => { updates.push(value); throw new Error("closed observer"); };
+  expect(await copyWorktreeVerified(source, join(root, "copy"), expected, progress)).toBe(expected);
+  for (const step of ["copying", "verifying-source", "verifying-backup"] as const) {
+    const pass = updates.filter((value) => value.step === step);
+    expect(pass[0]).toEqual({ step, filesCounted: 0, bytesCounted: 0 });
+    expect(pass.at(-1)).toEqual({ step, filesCounted: 2, bytesCounted: 256 * 1024 });
+  }
+  expect(updates.some((value) => value.step === "fingerprinting")).toBe(false);
+  expect(await hashWorktreeTree(join(root, "copy"))).toBe(expected);
+  await writeFile(join(source, "empty"), "changed");
+  await expect(copyWorktreeVerified(source, join(root, "stale"), expected, progress)).rejects.toThrow("backup copy could not be verified");
+  expect(await readFile(join(source, "empty"), "utf8")).toBe("changed");
+});
+
+it("ignores rejected asynchronous observers for empty fingerprints and verified copies", async () => {
+  const root = await mkdtemp(join(tmpdir(), "aem-worktree-async-observer-"));
+  roots.push(root);
+  const source = join(root, "source");
+  await mkdir(source);
+  const progress = vi.fn(async () => { throw new Error("async observer failed"); });
+  const expected = await hashWorktreeTree(source);
+  expect((await fingerprintWorktreeTree(source, { progress })).hash).toBe(expected);
+  expect(await copyWorktreeVerified(source, join(root, "copy"), undefined, progress)).toBe(expected);
+  expect(progress).toHaveBeenCalledWith({ step: "fingerprinting", filesCounted: 0, bytesCounted: 0 });
+  expect(progress).toHaveBeenCalledWith({ step: "copying", filesCounted: 0, bytesCounted: 0 });
+  await new Promise((resolve) => setImmediate(resolve));
+});
 
 it("reuses a fresh source hash without weakening the source and destination backup verification", async () => {
   const root = await mkdtemp(join(tmpdir(), "aem-worktree-verified-copy-"));

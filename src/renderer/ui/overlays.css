@@ -349,6 +349,15 @@
   z-index: var(--z-popover);
 }
 
+.ui-action-menu.toolbar-overflow-menu--wrap {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.ui-action-menu.toolbar-overflow-menu--wrap > button > span {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
 .ui-action-menu.toolbar-overflow-menu--modal {
   z-index: var(--z-modal-popover);
 }

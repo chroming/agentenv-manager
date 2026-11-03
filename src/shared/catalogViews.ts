@@ -21,7 +21,7 @@ export const CatalogViewsSchema = z.object({
   instructions: z.object({ sort: z.enum(["name", "modified"]), usageFilter: usage }).partial().strict(),
   backups: z.object({
     sort: z.enum(["newest", "oldest", "size"]),
-    kindFilter: z.enum(["all", "target-recovery", "skill-cleanup", "workspace-sync"]),
+    kindFilter: z.enum(["all", "target-recovery", "skill-cleanup", "workspace-sync", "worktree-recovery"]),
     statusFilter: z.enum(["all", "eligible", "protected"]),
     targetFilter: z.string()
   }).partial().strict()

@@ -8,11 +8,11 @@ import {
   type ReactNode
 } from "react";
 import { createPortal } from "react-dom";
-import { MoreHorizontal } from "lucide-react";
+import { ChevronDown, MoreHorizontal } from "lucide-react";
 import { ActionMenu } from "./ActionMenu";
 import { focusInitialActionMenuItem } from "./actionMenuKeyboard";
 import { IconButton } from "./IconButton";
-import type { ButtonVariant } from "./Button";
+import { Button, type ButtonVariant } from "./Button";
 import { TagChip } from "./TagChip";
 import { useControlDensity } from "./controlDensity";
 
@@ -27,8 +27,9 @@ export interface ToolbarOverflowMenuItem {
 }
 
 interface ToolbarOverflowMenuProps {
+  labelLayout?: "single-line" | "wrap";
   variant?: ButtonVariant;
-  triggerVariant?: "icon" | "tag";
+  triggerVariant?: "icon" | "tag" | "button";
   triggerContent?: ReactNode;
   label: string;
   menuLabel: string;
@@ -44,7 +45,7 @@ const viewportInset = 8;
 const anchorGap = 6;
 
 export const ToolbarOverflowMenu = forwardRef<HTMLButtonElement, ToolbarOverflowMenuProps>(
-  ({ label, menuLabel, disabled = false, busy = false, allowWhileBusy = false, items, reserveSpace = false, triggerContent, triggerVariant = "icon", variant = "ghost" }, forwardedRef) => {
+  ({ label, menuLabel, labelLayout = "single-line", disabled = false, busy = false, allowWhileBusy = false, items, reserveSpace = false, triggerContent, triggerVariant = "icon", variant = "ghost" }, forwardedRef) => {
     const density = useControlDensity() ?? "default";
     const [open, setOpen] = useState(false);
     const [style, setStyle] = useState<CSSProperties>();
@@ -103,7 +104,23 @@ export const ToolbarOverflowMenu = forwardRef<HTMLButtonElement, ToolbarOverflow
     if (reserveSpace && items.length === 0) return <span aria-hidden="true" className={`ui-menu-placeholder ui-menu-placeholder--${density}`} />;
     return (
       <>
-        {triggerVariant === "tag" ? <TagChip
+        {triggerVariant === "button" ? <Button
+          ref={(node) => {
+            triggerRef.current = node;
+            if (typeof forwardedRef === "function") forwardedRef(node);
+            else if (forwardedRef) forwardedRef.current = node;
+          }}
+          className="ui-toolbar-overflow-menu__trigger"
+          variant={variant}
+          aria-label={label}
+          title={label}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          disabled={disabled}
+          busy={busy}
+          icon={<ChevronDown size={14} />}
+          onClick={() => setOpen((current) => !current)}
+        >{triggerContent ?? label}</Button> : triggerVariant === "tag" ? <TagChip
           ref={(node) => {
             triggerRef.current = node;
             if (typeof forwardedRef === "function") forwardedRef(node);
@@ -137,7 +154,7 @@ export const ToolbarOverflowMenu = forwardRef<HTMLButtonElement, ToolbarOverflow
         {open ? createPortal(
           <ActionMenu
             ariaLabel={menuLabel}
-            className={`toolbar-overflow-menu${inModal ? " toolbar-overflow-menu--modal" : ""}`}
+            className={`toolbar-overflow-menu${labelLayout === "wrap" ? " toolbar-overflow-menu--wrap" : ""}${inModal ? " toolbar-overflow-menu--modal" : ""}`}
             menuRef={menuRef}
             style={style}
           >

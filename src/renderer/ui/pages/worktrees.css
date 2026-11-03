@@ -38,7 +38,7 @@
 
 .worktree-dialog__selectable-entries {
   --resource-row-actions-compact: calc(2 * var(--control-height-default) + var(--space-2));
-  --resource-row-state-track: 120px;
+  --resource-row-state-track: 150px;
 }
 
 .worktree-dialog__recovery {
@@ -78,4 +78,25 @@
   display: flex;
   inline-size: var(--control-height-default);
   justify-content: center;
+}
+
+.worktree-dialog__identity {
+  display: flex;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.worktree-dialog__identity > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.worktree-dialog__identity > span:first-child {
+  flex: 1;
+}
+
+.worktree-dialog__identity > span + span {
+  max-width: 45%;
 }

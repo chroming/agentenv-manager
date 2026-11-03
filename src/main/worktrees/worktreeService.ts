@@ -5,7 +5,7 @@ import { homedir } from "node:os";
 import { z } from "zod";
 import type {
   WorktreeCleanupPreview,
-  WorktreeCleanupRequest, WorktreeCleanupPreparation, WorktreeOperationPhase,
+  WorktreeCleanupRequest, WorktreeCleanupPreparation, WorktreeOperationPhase, WorktreeFileProgress,
   WorktreeEntry,
   WorktreeInventory,
   WorktreeRecoveryRecord,
@@ -136,8 +136,8 @@ export interface WorktreeService {
   setRepositoryKeep(commonDir: string, reason?: string): Promise<void>;
   setIntegrationRef(commonDir: string, ref?: string): Promise<void>;
   preview(commonDir: string, path: string, allowDirty?: boolean): Promise<WorktreeCleanupPreview>;
-  previewBatch(items: WorktreeCleanupRequest[], progress?: (completed: number, path: string) => void): Promise<WorktreeCleanupPreparation[]>;
-  remove(preview: WorktreeCleanupPreview, progress?: (phase: WorktreeOperationPhase) => void): Promise<WorktreeRecoveryRecord>;
+  previewBatch(items: WorktreeCleanupRequest[], progress?: (completed: number, path: string, result?: WorktreeCleanupPreparation) => void): Promise<WorktreeCleanupPreparation[]>;
+  remove(preview: WorktreeCleanupPreview, progress?: (phase: WorktreeOperationPhase, fileProgress?: WorktreeFileProgress) => void): Promise<WorktreeRecoveryRecord>;
   listRecovery(): Promise<WorktreeRecoveryInventory>;
   restore(id: string): Promise<WorktreeRecoveryRecord>;
   cancelScan(): void;
@@ -653,13 +653,17 @@ export const createWorktreeService = ({
             results[index] = { path: item.path, preview: await preview(item.commonDir, item.path, item.allowDirty, await context, savedRoots) };
           } catch (cause) { results[index] = { path: item.path, error: cause instanceof Error ? cause.message : String(cause) }; }
           ++completed;
-          try { progress?.(completed, item.path); } catch { /* Feedback is best effort. */ }
+          try { Promise.resolve(progress?.(completed, item.path, structuredClone(results[index]))).catch(() => undefined); }
+          catch { /* Feedback is best effort. */ }
         }
       }));
       return results;
     },
     remove: async (preview, progress) => {
-      const report = (phase: WorktreeOperationPhase) => { try { progress?.(phase); } catch { /* Feedback is best effort. */ } };
+      const report = (phase: WorktreeOperationPhase, fileProgress?: WorktreeFileProgress) => {
+        try { Promise.resolve(progress?.(phase, fileProgress)).catch(() => undefined); }
+        catch { /* Feedback is best effort. */ }
+      };
       report("preparing");
       const issued = issuedPreviews.get(preview.previewId);
       issuedPreviews.delete(preview.previewId);
@@ -683,7 +687,7 @@ export const createWorktreeService = ({
           fresh.branch !== preview.entry.branch || fresh.repositoryPath !== preview.entry.repositoryPath) {
         throw new Error("Worktree changed after review. Refresh and review it again.");
       }
-      const fingerprint = await fingerprintWorktreeTree(fresh.path);
+      const fingerprint = await fingerprintWorktreeTree(fresh.path, { progress: progress ? (value) => report("preparing", value) : undefined });
       if (fingerprint.hash !== preview.fingerprint) {
         throw new Error("Worktree changed after review. Refresh and review it again.");
       }
@@ -697,7 +701,8 @@ export const createWorktreeService = ({
       if (issued.forceRequired) {
         report("backing-up");
         await mkdir(dirname(backup), { recursive: true, mode: 0o700 });
-        const backupHash = await copyWorktreeVerified(fresh.path, backup, fingerprint.hash);
+        const backupHash = await copyWorktreeVerified(fresh.path, backup, fingerprint.hash,
+          progress ? (value) => report("backing-up", value) : undefined);
         if (backupHash !== preview.fingerprint) throw new Error("Worktree changed while backup was created");
         record.backupHash = backupHash;
         const gitDirOutput = await runner.run(["rev-parse", "--git-dir"], {
@@ -718,7 +723,8 @@ export const createWorktreeService = ({
         cwd: fresh.repositoryPath, timeoutMs: 8_000, maxOutputBytes: 100_000
       });
       await saveRecovery(record);
-      if (await hashWorktreeTree(fresh.path) !== preview.fingerprint) {
+      if (await hashWorktreeTree(fresh.path, { step: "verifying-source",
+        progress: progress ? (value) => report(issued.forceRequired ? "backing-up" : "preparing", value) : undefined }) !== preview.fingerprint) {
         throw new Error("Worktree changed after backup. Refresh and review it again.");
       }
       const finalEntry = await findEntry(fresh.commonDir, fresh.path);

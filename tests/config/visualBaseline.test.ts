@@ -29,5 +29,6 @@ it("captures history and invocation scenarios in both visual verification entry 
     expect(source, file).toContain("AGENTENV_STATUS_CAPTURE_DIR");
     expect(source, file).toContain("recovers partial analysis");
     expect(source, file).toContain("AGENTENV_CAPTURE_AI_DIR");
+    expect(source, file).toContain("tests/e2e/worktreeRecoveryBackups.e2e.test.ts");
   }
 });

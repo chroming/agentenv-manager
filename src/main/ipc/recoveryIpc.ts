@@ -11,7 +11,7 @@ import { parseId, type IpcRegistrationHandles } from "./registration";
 const parseManagedBackupInput = (value: unknown): DeleteManagedBackupInput => {
   if (!value || typeof value !== "object") throw new Error("Invalid backup selection");
   const input = value as { id?: unknown; kind?: unknown };
-  if (input.kind !== "target-recovery" && input.kind !== "skill-cleanup" && input.kind !== "workspace-sync" && input.kind !== "conversation-delete") {
+  if (input.kind !== "target-recovery" && input.kind !== "skill-cleanup" && input.kind !== "workspace-sync" && input.kind !== "conversation-delete" && input.kind !== "worktree-recovery") {
     throw new Error("Invalid backup kind");
   }
   return { id: parseId(input.id, "backup id"), kind: input.kind };

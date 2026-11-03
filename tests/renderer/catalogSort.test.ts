@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { projectBackups, projectInstructions, sortLibrarySkills, sortSourceGroups } from "../../src/renderer/catalogSort";
 import type { InstructionBlock, ManagedBackupItem, SkillLibraryEntry, SkillSourceGroupView } from "../../src/shared/types";
+import { CatalogViewsSchema } from "../../src/shared/catalogViews";
 
 const skill = (id: string, upstreamDate?: string): SkillLibraryEntry => ({
   id, name: id, description: "", path: `/library/${id}`, sourceType: "local",
@@ -17,6 +18,15 @@ const backup = (id: string, sizeBytes: number, createdAt: string, protectedCopy 
 });
 
 describe("catalog projections", () => {
+  it("persists and projects the protected Worktree backup kind without changing retention eligibility", () => {
+    const view = { sort: "size" as const, kindFilter: "worktree-recovery" as const, targetFilter: "all", statusFilter: "protected" as const };
+    expect(CatalogViewsSchema.parse({ backups: view }).backups).toEqual(view);
+    const recovery = { ...backup("worktree", 500, "2000-01-01", true), kind: "worktree-recovery" as const, targetId: undefined };
+    const input = [backup("ordinary", 50, "2000-01-01"), recovery];
+    expect(projectBackups(input, view)).toEqual([recovery]);
+    expect(projectBackups(input, { ...view, statusFilter: "eligible" })).toEqual([]);
+    expect(recovery).toMatchObject({ cleanupStatus: "required", deletable: false });
+  });
   it("uses natural names and stable IDs without modifying the loaded catalog", () => {
     const input = Object.freeze([skill("Skill10"), skill("Skill2"), { ...skill("other"), name: "Skill2" }]);
     const before = JSON.stringify(input);

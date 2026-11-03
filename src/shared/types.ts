@@ -1719,9 +1719,9 @@ export interface ProjectSkillScanResult {
 
 export type BackupRetentionDays = 7 | 30 | 90 | null;
 
-export type ManagedBackupKind = "target-recovery" | "skill-cleanup" | "workspace-sync" | "conversation-delete";
+export type ManagedBackupKind = "target-recovery" | "skill-cleanup" | "workspace-sync" | "conversation-delete" | "worktree-recovery";
 export type ManagedBackupCleanupStatus = "required" | "retained" | "kept" | "eligible";
-export type ManagedBackupRequiredReason = "recovery-required" | "takeover-baseline" | "workspace-sync-recovery";
+export type ManagedBackupRequiredReason = "recovery-required" | "takeover-baseline" | "workspace-sync-recovery" | "worktree-recovery" | "worktree-recovery-incomplete";
 
 export interface ManagedBackupItem {
   conversationTitle?: string;
@@ -1731,7 +1731,9 @@ export interface ManagedBackupItem {
   kind: ManagedBackupKind;
   createdAt: string;
   sizeBytes: number;
+  sizeIncomplete?: boolean;
   fileCount: number;
+  worktreePath?: string;
   operation?: BackupManifest["operation"] | SkillCleanupBackupSummary["operation"];
   targetId?: string;
   profileName?: string;
@@ -1744,6 +1746,7 @@ export interface ManagedBackupItem {
 
 export interface ManagedBackupInventory {
   items: ManagedBackupItem[];
+  issues?: string[];
   totalBytes: number;
   eligibleBytes: number;
   eligibleCount: number;
@@ -1765,6 +1768,8 @@ export interface ManagedBackupPreview {
   id: string;
   kind: ManagedBackupKind;
   files: ManagedBackupFile[];
+  truncated?: boolean;
+  sizeIncomplete?: boolean;
 }
 
 export interface ManagedBackupDeleteResult {

@@ -91,6 +91,7 @@ await run(
     "tests/e2e/projects.e2e.test.ts",
     "tests/e2e/conversationHistorySearch.e2e.test.ts",
     "tests/e2e/worktrees.e2e.test.ts",
+    "tests/e2e/worktreeRecoveryBackups.e2e.test.ts",
     "tests/e2e/conversationDeletion.e2e.test.ts",
     "--maxWorkers=1",
     "--no-file-parallelism"

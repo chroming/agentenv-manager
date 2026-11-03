@@ -1,4 +1,5 @@
-import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
+import { lstat, mkdir, mkdtemp, readFile, readdir, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -14,6 +15,102 @@ afterEach(async () => {
 });
 
 describe("backup maintenance service", () => {
+  it.each(["unchanged", "removed", "restored"])("classifies a %s journal with retained hashes and no payload without rewriting recovery data", async (status) => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-backup-maintenance-"));
+    const paths = createPaths({ appDataRoot: join(root, "data"), homeDir: join(root, "home") });
+    const id = randomUUID();
+    const recovery = join(paths.appDataRoot, "worktree-recovery");
+    const original = join(root, "original-worktree");
+    await mkdir(recovery, { recursive: true });
+    await mkdir(original);
+    await writeFile(join(original, "note.txt"), "original uncommitted content remains");
+    const journal = join(recovery, `${id}.json`);
+    const serialized = JSON.stringify({
+      id, path: original, repositoryPath: join(root, "repository"),
+      head: "a".repeat(40), createdAt: "2000-01-01T00:00:00.000Z", status,
+      backupHash: "b".repeat(64), indexHash: "c".repeat(64),
+      sourceHash: "b".repeat(64), sourceSizeBytes: 36,
+      protectedRef: `refs/agentenv/worktree-recovery/${id}`
+    });
+    await writeFile(journal, serialized);
+    const timestamp = (await lstat(journal)).mtimeMs;
+    const service = createBackupMaintenanceService(paths, createBackupStore(paths), {
+      listCleanupBackups: vi.fn().mockResolvedValue([]), previewCleanupBackup: vi.fn(), deleteCleanupBackup: vi.fn()
+    }, { readSettings: vi.fn().mockResolvedValue({ backupRetentionDays: 7 }) });
+    const inventory = await service.listInventory();
+    expect(inventory.items).toEqual([expect.objectContaining({
+      id, kind: "worktree-recovery", cleanupStatus: "required", deletable: false,
+      requiredReason: status === "unchanged" ? "worktree-recovery" : "worktree-recovery-incomplete",
+      sizeBytes: Buffer.byteLength(serialized), sizeIncomplete: false, fileCount: 1
+    })]);
+    expect(await service.previewBackup({ id, kind: "worktree-recovery" })).toMatchObject({
+      files: [{ path: journal, kind: "file", state: "saved" }], truncated: false
+    });
+    expect(await service.cleanup()).toMatchObject({ deletedCount: 0, freedBytes: 0 });
+    await expect(service.deleteBackup({ id, kind: "worktree-recovery" })).rejects.toThrow("whole-transaction");
+    expect(await readFile(journal, "utf8")).toBe(serialized);
+    expect((await lstat(journal)).mtimeMs).toBe(timestamp);
+    expect(await readdir(recovery)).toEqual([`${id}.json`]);
+    await expect(lstat(join(recovery, id))).rejects.toMatchObject({ code: "ENOENT" });
+    expect(await readFile(join(original, "note.txt"), "utf8")).toBe("original uncommitted content remains");
+  });
+  it.each(["linked", "not-directory"])("isolates an unsafe %s Worktree recovery root from normal inventory", async (kind) => {
+    if (kind === "linked" && process.platform === "win32") return;
+    root = await mkdtemp(join(tmpdir(), "agentenv-backup-maintenance-"));
+    const paths = createPaths({ appDataRoot: join(root, "data"), homeDir: join(root, "home") });
+    const backupStore = createBackupStore(paths);
+    const ordinary = await backupStore.createBackup([], { operation: "data-import" });
+    const recovery = join(paths.appDataRoot, "worktree-recovery");
+    if (kind === "linked") {
+      await mkdir(join(root, "outside"));
+      await writeFile(join(root, "outside", "secret"), "must not inspect this");
+      await symlink(join(root, "outside"), recovery);
+    } else await writeFile(recovery, "not a directory");
+    const service = createBackupMaintenanceService(paths, backupStore, {
+      listCleanupBackups: vi.fn().mockResolvedValue([]), previewCleanupBackup: vi.fn(), deleteCleanupBackup: vi.fn()
+    }, { readSettings: vi.fn().mockResolvedValue({ backupRetentionDays: 7 }) });
+    const inventory = await service.listInventory();
+    expect(inventory.items).toEqual([expect.objectContaining({ id: ordinary.id, kind: "target-recovery" })]);
+    expect(inventory.issues).toEqual([expect.stringContaining("not a regular directory")]);
+    expect(await service.previewBackup({ id: ordinary.id, kind: "target-recovery" })).toMatchObject({ files: [] });
+    await expect(service.previewBackup({ id: randomUUID(), kind: "worktree-recovery" })).rejects.toThrow("not a regular directory");
+    expect(await backupStore.readBackup(ordinary.id)).toBeTruthy();
+  });
+  it("includes existing Worktree copies but never deletes them through retention or direct requests", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-backup-maintenance-"));
+    const paths = createPaths({ appDataRoot: join(root, "data"), homeDir: join(root, "home") });
+    const id = randomUUID();
+    const recovery = join(paths.appDataRoot, "worktree-recovery");
+    const files = join(recovery, id, "files");
+    await mkdir(files, { recursive: true });
+    await writeFile(join(files, "sole-note"), "not committed anywhere");
+    await writeFile(join(recovery, `${id}.json`), JSON.stringify({
+      id, path: join(root, "removed"), repositoryPath: join(root, "offline-repo"),
+      createdAt: "2000-01-01T00:00:00.000Z", status: "removed", backupHash: "a".repeat(64)
+    }));
+    const backupStore = createBackupStore(paths);
+    const deleteCleanupBackup = vi.fn();
+    const service = createBackupMaintenanceService(paths, backupStore, {
+      listCleanupBackups: vi.fn().mockResolvedValue([]), previewCleanupBackup: vi.fn(), deleteCleanupBackup
+    }, { readSettings: vi.fn().mockResolvedValue({ backupRetentionDays: 7 }) });
+    const inventory = await service.listInventory();
+    expect(inventory.items).toEqual([expect.objectContaining({
+      id, kind: "worktree-recovery", cleanupStatus: "required", deletable: false
+    })]);
+    expect(inventory.totalBytes).toBeGreaterThan(21);
+    expect(inventory.eligibleBytes).toBe(0);
+    expect(inventory.eligibleCount).toBe(0);
+    await expect(service.previewBackup({ id, kind: "worktree-recovery" })).resolves.toMatchObject({
+      files: expect.arrayContaining([{ path: join(files, "sole-note"), kind: "file", state: "saved" }])
+    });
+    for (const scope of [undefined, "recovery", "deleted"] as const) {
+      expect(await service.cleanup(scope)).toMatchObject({ deletedCount: 0, freedBytes: 0, failures: [] });
+    }
+    await expect(service.deleteBackup({ id, kind: "worktree-recovery" })).rejects.toThrow("whole-transaction");
+    await expect(service.deleteBackup({ id, kind: "target-recovery" })).rejects.toThrow("does not exist");
+    expect(await readFile(join(files, "sole-note"), "utf8")).toBe("not committed anywhere");
+    expect(deleteCleanupBackup).not.toHaveBeenCalled();
+  });
   it("protects required Target backups and cleans only expired eligible backups", async () => {
     root = await mkdtemp(join(tmpdir(), "agentenv-backup-maintenance-"));
     const paths = createPaths({ appDataRoot: join(root, "app-data"), homeDir: join(root, "home") });

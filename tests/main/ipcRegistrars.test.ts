@@ -36,6 +36,18 @@ const collectChannels = () => {
 const event = { sender: {} } as Electron.IpcMainInvokeEvent;
 
 describe("domain IPC registrars", () => {
+  it("accepts Worktree recovery previews through the existing validated backup IPC", async () => {
+    const { handles, handlers } = collectChannels();
+    const previewBackup = vi.fn().mockResolvedValue({ files: [] });
+    registerRecoveryIpc(handles, {
+      activationService: service(), backupStore: service(), mutationCoordinator: service(), paths: service(),
+      backupMaintenanceService: { previewBackup } as any
+    });
+    const selection = { id: "3a157fa2-e3a0-4691-9532-471e71a18227", kind: "worktree-recovery" };
+    await handlers.get("backups:preview-managed")!(event, selection);
+    expect(previewBackup).toHaveBeenCalledWith(selection);
+    expect(() => handlers.get("backups:preview-managed")!(event, { ...selection, id: "../escape" })).toThrow();
+  });
   it("keeps clipboard, conversation, and context-menu channels behind the diagnostic handle", () => {
     const { handles, registrations } = collectChannels();
     registerConversationIpc(handles, { conversationService: service() });

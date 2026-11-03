@@ -100,14 +100,60 @@ describe("worktree inventory and cleanup", () => {
     expect(prepared[1].preview?.backupRequired).toBe(true);
     expect(prepared[2].error).toContain("Review this worktree");
     expect(progress.mock.calls.map(([count]) => count)).toEqual([1, 2, 3]);
+    for (const [, path, result] of progress.mock.calls) {
+      expect(result).toEqual(prepared.find((item) => item.path === path));
+      expect(result).not.toBe(prepared.find((item) => item.path === path));
+    }
     await writeFile(join(second, "note"), "changed after preview\n");
     await expect(service.remove(prepared[1].preview!)).rejects.toThrow("changed after review");
     const fresh = await service.preview(entry.commonDir, second, true);
     const stages: string[] = [];
-    const removed = await service.remove(fresh, (phase) => stages.push(phase));
+    const updates: import("../../src/shared/worktrees").WorktreeFileProgress[] = [];
+    const removed = await service.remove(fresh, (phase, fileProgress) => {
+      if (!fileProgress) stages.push(phase);
+      else updates.push(fileProgress);
+      throw new Error("observer failed");
+    });
     expect(stages).toEqual(["preparing", "backing-up", "removing", "verifying"]);
+    expect(new Set(updates.map((value) => value.step))).toEqual(new Set(["fingerprinting", "copying", "verifying-source", "verifying-backup"]));
     await service.restore(removed.id);
     expect(await readFile(join(second, "note"), "utf8")).toBe("changed after preview\n");
+  });
+
+  it("streams only completed previews, isolates hostile observers and preserves final request order", async () => {
+    const { repo, linked, service } = await fixture();
+    const entry = (await service.inventory()).entries.find((item) => item.path === linked)!;
+    const fingerprint = snapshot.fingerprintWorktreeTree;
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const held = vi.spyOn(snapshot, "fingerprintWorktreeTree").mockImplementation(async (path, options) => {
+      if (path === linked) await gate;
+      return fingerprint(path, options);
+    });
+    const observations: Array<{ completed: number; path: string; result: import("../../src/shared/worktrees").WorktreeCleanupPreparation }> = [];
+    let finished = false;
+    const pending = service.previewBatch([
+      { commonDir: entry.commonDir, path: linked, allowDirty: false },
+      { commonDir: entry.commonDir, path: repo, allowDirty: true }
+    ], (completed, path, result) => {
+      expect(result?.path).toBe(path);
+      observations.push({ completed, path, result: structuredClone(result!) });
+      result!.path = "/observer-tampered";
+      if (result!.preview) result!.preview.fingerprint = "invalid";
+      if (completed === 1) return Promise.reject(new Error("async hostile callback"));
+      throw new Error("hostile callback");
+    }).then((results) => { finished = true; return results; });
+    let results: Awaited<typeof pending>;
+    try {
+      await vi.waitFor(() => expect(observations).toHaveLength(1));
+      expect(observations[0]).toMatchObject({ completed: 1, path: repo, result: { path: repo, error: expect.any(String) } });
+      expect(finished).toBe(false);
+    } finally { release(); results = await pending; held.mockRestore(); }
+    expect(observations.map((value) => value.completed)).toEqual([1, 2]);
+    expect(observations[1].result.preview?.fingerprint).toMatch(/^[0-9a-f]{64}$/);
+    expect(results.map((result) => result.path)).toEqual([linked, repo]);
+    expect(results[0].preview).toEqual(observations[1].result.preview);
+    expect((await service.remove(results[0].preview!, async () => { throw new Error("async hostile callback"); })).status).toBe("removed");
   });
   it("keeps a repository across restart and new worktrees without erasing individual decisions", async () => {
     const { root, repo, linked, service, runner } = await fixture();

@@ -1,65 +1,65 @@
 {
   "formatVersion": 1,
-  "reviewedAt": "2026-10-31T08:15:20Z",
+  "reviewedAt": "2026-11-03T08:20:58.287Z",
   "applicationVersion": "0.2.5",
-  "baseCommit": "f1342a90",
+  "baseCommit": "c894d488",
   "build": {
-    "sourceFingerprint": "2c0570c25f607ae9510181fa2acd25c662e6c2c5f64677ecfe64db0c45872d04",
-    "artifactFingerprint": "05abb72caf28dcdabe29049d805aec0de66ed55a09849cda7594c32cd8bca1a8",
-    "generatedAt": "2026-10-31T08:00:16.049Z"
+    "sourceFingerprint": "64427d492d91f338ae274ede10788fc3e9542c2fe4b64f79208f3d41860b8d0a",
+    "artifactFingerprint": "cd353d7c783300315e3edd104d469247993b9fd5a65d95edff1ab621e3026285",
+    "generatedAt": "2026-11-03T08:15:34.352Z"
   },
   "review": {
-    "scenarios": 126,
-    "method": "Two obsolete conversation captures reviewed at native size against the current Largest conversation view and continuation menu; neutral Continue controls, persistent file sizes, row geometry and menu containment checked. The other 124 reviewed baselines are retained.",
-    "scope": "Mock Electron workflows on macOS; no real Agent resources or model requests",
+    "scenarios": 127,
+    "method": "Inspected nine Worktree AI/review captures at native sizes across three locales plus the protected backup list. Checked concrete states, collapsed Git details, on-demand AI, footer containment and recovery disclosure. Other reviewed baselines retained.",
+    "scope": "Mock Electron on macOS with isolated Home and temporary Git repositories; no user resources or paid model requests",
     "thresholdsChanged": false,
-    "updatedScenarios": 2
+    "updatedScenarios": 10
   },
   "files": [
     {
       "file": "worktree-analysis-en-1180x728.png",
-      "sha256": "f351e3aa7954a61c08aece7f7c9461d2749ab9b28b736b97c79be0f3d1802a40",
-      "reviewReason": "Reviewed 2026-11-03: saved AI snapshot disclosure, main-checkout removal from inventory and shared repository action menu; inspected all three locales and sizes, fixed footer and evidence hierarchy. Manual AI boundary, verified backups and original pixel thresholds retained."
+      "sha256": "be9f34c838fce310a8f50cc01a17783cc75c65aeb820876b92bee23ee84719c3",
+      "reviewReason": "Reviewed 2026-11-03: concrete Worktree states, contextual removal, collapsed Git details and protected recovery inventory. Inspected native pixels and minimum-size controls; original thresholds retained."
     },
     {
       "file": "worktree-analysis-en-1440x900.png",
-      "sha256": "2ef74fdbb02dd19be785d46595285f87d188d73cc9d795cb759ff03385b3363e",
-      "reviewReason": "Reviewed 2026-11-03: saved AI snapshot disclosure, main-checkout removal from inventory and shared repository action menu; inspected all three locales and sizes, fixed footer and evidence hierarchy. Manual AI boundary, verified backups and original pixel thresholds retained."
+      "sha256": "e5eb184b93540bb8ad0264acddc0fd480e1ad83be557b531ae83e053e1c4fd7f",
+      "reviewReason": "Reviewed 2026-11-03: concrete Worktree states, contextual removal, collapsed Git details and protected recovery inventory. Inspected native pixels and minimum-size controls; original thresholds retained."
     },
     {
       "file": "worktree-analysis-en-920x620.png",
-      "sha256": "7856405bfe7f972d7269f74cb0f917ae9a45b4c1812321cb63c2ffa4a70e26e4",
-      "reviewReason": "Reviewed 2026-11-03: saved AI snapshot disclosure, main-checkout removal from inventory and shared repository action menu; inspected all three locales and sizes, fixed footer and evidence hierarchy. Manual AI boundary, verified backups and original pixel thresholds retained."
+      "sha256": "7d231ad0262bcfcd305b2cf46fcc82f6dc722a36b5df2a70415eb264b3bf4f3f",
+      "reviewReason": "Reviewed 2026-11-03: concrete Worktree states, contextual removal, collapsed Git details and protected recovery inventory. Inspected native pixels and minimum-size controls; original thresholds retained."
     },
     {
       "file": "worktree-analysis-zh_CN-1180x728.png",
-      "sha256": "2829e55e7bd8b7ec8eaf540373f9e2852230a2fd5de82394748a465090cb0a70",
-      "reviewReason": "Reviewed 2026-11-03: saved AI snapshot disclosure, main-checkout removal from inventory and shared repository action menu; inspected all three locales and sizes, fixed footer and evidence hierarchy. Manual AI boundary, verified backups and original pixel thresholds retained."
+      "sha256": "077c77399f46bbe05ddbf4a1231129aacc9c7e5fe0aac74b82dc71faec56205e",
+      "reviewReason": "Reviewed 2026-11-03: concrete Worktree states, contextual removal, collapsed Git details and protected recovery inventory. Inspected native pixels and minimum-size controls; original thresholds retained."
     },
     {
       "file": "worktree-analysis-zh_CN-1440x900.png",
-      "sha256": "1c55163a482eb4fd72c90ce7d71aeec5dc6d614ac0bb597c653ad4b2e73d1b3c",
-      "reviewReason": "Reviewed 2026-11-03: saved AI snapshot disclosure, main-checkout removal from inventory and shared repository action menu; inspected all three locales and sizes, fixed footer and evidence hierarchy. Manual AI boundary, verified backups and original pixel thresholds retained."
+      "sha256": "8f85f939e86ecdc37756616bfb9109285c463c18a9a7519f5febde99792c86ed",
+      "reviewReason": "Reviewed 2026-11-03: concrete Worktree states, contextual removal, collapsed Git details and protected recovery inventory. Inspected native pixels and minimum-size controls; original thresholds retained."
     },
     {
       "file": "worktree-analysis-zh_CN-920x620.png",
-      "sha256": "c74f7fc3729220e4c44b55d65ea86b43ef71fcfcfb4805e484ce4ca20cbf52d1",
-      "reviewReason": "Reviewed 2026-11-03: saved AI snapshot disclosure, main-checkout removal from inventory and shared repository action menu; inspected all three locales and sizes, fixed footer and evidence hierarchy. Manual AI boundary, verified backups and original pixel thresholds retained."
+      "sha256": "4722ca49f6862a7f8eb135eecb91864c86e4244a28ba1e014b1e19b7391195ad",
+      "reviewReason": "Reviewed 2026-11-03: concrete Worktree states, contextual removal, collapsed Git details and protected recovery inventory. Inspected native pixels and minimum-size controls; original thresholds retained."
     },
     {
       "file": "worktree-analysis-zh_TW-1180x728.png",
-      "sha256": "1764f4208c5e752ef4d5fdbf681d97d5f1a58bdb46686eca797b571e6d0527ef",
-      "reviewReason": "Reviewed 2026-11-03: saved AI snapshot disclosure, main-checkout removal from inventory and shared repository action menu; inspected all three locales and sizes, fixed footer and evidence hierarchy. Manual AI boundary, verified backups and original pixel thresholds retained."
+      "sha256": "c7a0ba9c163be4f3cf2ac9127641e0458089bd93a64fe31261fc2ce16d2557b3",
+      "reviewReason": "Reviewed 2026-11-03: concrete Worktree states, contextual removal, collapsed Git details and protected recovery inventory. Inspected native pixels and minimum-size controls; original thresholds retained."
     },
     {
       "file": "worktree-analysis-zh_TW-1440x900.png",
-      "sha256": "87dc7300243711b68e2ec4fcddfef77a44d742c329568eac717c46fbf44784f2",
-      "reviewReason": "Reviewed 2026-11-03: saved AI snapshot disclosure, main-checkout removal from inventory and shared repository action menu; inspected all three locales and sizes, fixed footer and evidence hierarchy. Manual AI boundary, verified backups and original pixel thresholds retained."
+      "sha256": "f9b069dca0c0a7ae9df69cdf6f738025fb803fa74f25e2c9e4960d78784f43e1",
+      "reviewReason": "Reviewed 2026-11-03: concrete Worktree states, contextual removal, collapsed Git details and protected recovery inventory. Inspected native pixels and minimum-size controls; original thresholds retained."
     },
     {
       "file": "worktree-analysis-zh_TW-920x620.png",
-      "sha256": "bad3e2571222b23c29e6541b3f6eea8084ee9175832b39863f20cac95171d2fa",
-      "reviewReason": "Reviewed 2026-11-03: saved AI snapshot disclosure, main-checkout removal from inventory and shared repository action menu; inspected all three locales and sizes, fixed footer and evidence hierarchy. Manual AI boundary, verified backups and original pixel thresholds retained."
+      "sha256": "981a2bec9702c1d999e716f08a83727c6ff371970db0fe1ea456aa62ca502b2e",
+      "reviewReason": "Reviewed 2026-11-03: concrete Worktree states, contextual removal, collapsed Git details and protected recovery inventory. Inspected native pixels and minimum-size controls; original thresholds retained."
     },
     {
       "file": "skill-invocation-920.png",
@@ -645,6 +645,11 @@
       "file": "ai-reliability-partial-zh_TW-1440.png",
       "sha256": "df1360f1b343b4111f88149bc4e92aa597c67965ba4afa9d7465e142347cd8f3",
       "reviewReason": "Reviewed 2026-10-29: isolated current-build Electron captures at 920/1180/1440 and en/zh_CN/zh_TW; one combined recovery notice, valid findings, unclassified warning, save-only retry and readable maximized original response. No threshold changes."
+    },
+    {
+      "file": "worktree-recovery-backups-en-920.png",
+      "sha256": "5787cca91f695b00082a1fe29e0b350b5f40e306d9e140f54f44ea5e21e308a7",
+      "reviewReason": "Reviewed 2026-11-03: concrete Worktree states, contextual removal, collapsed Git details and protected recovery inventory. Inspected native pixels and minimum-size controls; original thresholds retained."
     }
   ],
   "incrementalReviews": [

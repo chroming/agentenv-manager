@@ -68,7 +68,22 @@ export type WorktreeScanResult = WorktreeInventory | { cancelled: true };
 export interface WorktreeCleanupRequest { commonDir: string; path: string; allowDirty: boolean }
 export type WorktreeCleanupPreparation = { path: string; preview: WorktreeCleanupPreview; error?: never } | { path: string; error: string; preview?: never };
 export type WorktreeOperationPhase = "preparing" | "backing-up" | "removing" | "verifying";
-export interface WorktreeOperationProgress { requestId: string; phase: WorktreeOperationPhase; path: string; completed: number; total: number }
+export interface WorktreeFileProgress {
+  step: "fingerprinting" | "copying" | "verifying-source" | "verifying-backup";
+  // Per-pass observed counts, not totals or a percentage. Copying counts source
+  // entries enumerated by cp, not bytes durably written; verification counts reads.
+  filesCounted: number;
+  bytesCounted: number;
+}
+export interface WorktreeOperationProgress {
+  requestId: string;
+  phase: WorktreeOperationPhase;
+  path: string;
+  completed: number;
+  total: number;
+  fileProgress?: WorktreeFileProgress;
+  preparation?: WorktreeCleanupPreparation;
+}
 
 export interface WorktreeCleanupPreview {
   previewId: string;

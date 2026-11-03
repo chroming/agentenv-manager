@@ -57,7 +57,8 @@ interface BackupManagerDialogProps {
 }
 
 const managedBackupTitle = (item: ManagedBackupItem, t: Translate, targetNames: TargetNameIndex): string =>
-  item.kind === "conversation-delete" ? item.conversationTitle ?? t("Conversation") : item.kind === "skill-cleanup"
+  item.kind === "worktree-recovery" ? t("Worktree recovery · {{name}}", { name: item.worktreePath ?? item.id })
+  : item.kind === "conversation-delete" ? item.conversationTitle ?? t("Conversation") : item.kind === "skill-cleanup"
     ? t(item.restored ? "Restored skill cleanup · {{name}}" : "Skill cleanup · {{name}}", {
         name: item.libraryId ?? item.id
       })
@@ -73,6 +74,11 @@ const managedBackupTitle = (item: ManagedBackupItem, t: Translate, targetNames: 
           });
 
 const managedBackupStatusLabel = (item: ManagedBackupItem, t: Translate, localeTag: string): string => {
+  if (item.kind === "worktree-recovery") {
+    const label = item.requiredReason === "worktree-recovery-incomplete"
+      ? "Incomplete Worktree recovery" : "Protected Worktree recovery";
+    return t(label);
+  }
   if (item.kind === "conversation-delete" && item.restored) return t("Restored");
   if (item.kind === "conversation-delete" && item.cleanupStatus !== "required") return item.expiresAt
     ? t("Expires {{date}}", { date: new Date(item.expiresAt).toLocaleDateString(localeTag) }) : t("Kept until deleted");
@@ -115,13 +121,15 @@ export const BackupManagerDialog = ({
   const { t, localeTag } = useI18n();
   const titleFor = (item: ManagedBackupItem) => managedBackupTitle(item, t, targetNames);
   const statusFor = (item: ManagedBackupItem) => managedBackupStatusLabel(item, t, localeTag);
+  const sizeFor = (item: ManagedBackupItem) => item.sizeIncomplete
+    ? t("At least {{size}}", { size: formatBytes(item.sizeBytes) }) : formatBytes(item.sizeBytes);
   const [section, setSection] = useState(initialSection);
   const [view, updateView] = useCatalogView("backups", {
     sort: "newest", kindFilter: "all", statusFilter: "all", targetFilter: "all"
   });
   const sectionItems = (inventory?.items ?? []).filter((item) => (item.kind === "conversation-delete") === (section === "deleted"));
   const visibleItems = projectBackups(sectionItems, section === "deleted" ? { ...view, kindFilter: "all" } : view);
-  const eligibleItems = sectionItems.filter((item) => item.cleanupStatus === "eligible");
+  const eligibleItems = sectionItems.filter((item) => item.kind !== "worktree-recovery" && item.deletable && item.cleanupStatus === "eligible");
   const eligibleBytes = eligibleItems.reduce((sum, item) => sum + item.sizeBytes, 0);
   const countLabel = section === "deleted"
     ? sectionItems.length === 1 ? "1 conversation · {{size}}" : "{{count}} conversations · {{size}}"
@@ -130,6 +138,9 @@ export const BackupManagerDialog = ({
     : eligibleItems.length === 1 ? "Delete 1 backup and free approximately {{size}}." : "Delete {{count}} backups and free approximately {{size}}.";
   const deleteDescription = deleteCandidate?.kind === "conversation-delete" ? "The saved conversation files will be permanently deleted. This cannot be undone." : "This recovery point cannot be restored after deletion. Profiles, Library resources, and current Agent files are unchanged.";
   const cleanupDescription = section === "deleted" ? "Expired deleted conversations will be permanently removed. Incomplete recovery records stay available." : "Only recovery points outside the retention period are removed. Required recovery and takeover backups stay available.";
+  const emptyPreviewDescription = previewCandidate?.kind === "worktree-recovery"
+    ? "No saved file paths are available for this Worktree recovery record."
+    : "This recovery point did not need to save an existing file.";
   const targetIds = [...new Set(inventory?.items.flatMap((item) => item.targetId ? [item.targetId] : []) ?? [])]
     .sort(compareCatalogNames);
   const filterCount = [section === "deleted" ? "all" : view.kindFilter, view.statusFilter, view.targetFilter].filter((value) => value !== "all").length;
@@ -148,6 +159,12 @@ export const BackupManagerDialog = ({
         onClick={(event) => event.stopPropagation()}
       >
         {notice ? <div className={`backup-manager-notice is-${notice.kind}`} role={notice.kind === "error" ? "alert" : "status"}>{notice.kind === "error" ? <DiagnosticMessage message={notice.message} /> : notice.message}</div> : null}
+        {!previewCandidate && !deleteCandidate && !cleanupConfirm && inventory?.issues?.length ? (
+          <div className="backup-manager-notice is-error" role="alert">
+            <p>{t("Worktree recovery backups could not be listed.")}</p>
+            <DiagnosticMessage message={inventory.issues.join("\n")} />
+          </div>
+        ) : null}
         {previewCandidate ? (
           <>
             <header className="profile-dialog-header backup-preview-header">
@@ -161,6 +178,17 @@ export const BackupManagerDialog = ({
                 {previewCandidate.fileCount === 1 ? t("1 file") : t("{{count}} files", { count: previewCandidate.fileCount })}
               </span>
             </header>
+            {previewCandidate.kind === "worktree-recovery" ? (
+              <div className="backup-manager-notice" role="status">
+                {t("Worktree recovery may hold the only copy of uncommitted files. Retention cleanup and manual deletion are disabled. Git recovery references are preserved.")}
+                {previewCandidate.requiredReason === "worktree-recovery-incomplete" ? <p>{t("This recovery record is incomplete or unavailable. Keep all saved files and Git recovery references for inspection.")}</p> : null}
+              </div>
+            ) : null}
+            {preview?.truncated && !previewLoading ? (
+              <div className="backup-manager-notice" role="status">
+                {t("Only part of the saved file list is shown. No saved files were changed.")}
+              </div>
+            ) : null}
             <div className="backup-preview-list" aria-busy={previewLoading}>
               {previewLoading ? (
                 <div className="backup-manager-empty" role="status">
@@ -181,13 +209,13 @@ export const BackupManagerDialog = ({
                 <div className="backup-manager-empty">
                   <FileText size={22} aria-hidden="true" />
                   <strong>{t("No file entries")}</strong>
-                  <span>{t("This recovery point did not need to save an existing file.")}</span>
+                  <span>{t(emptyPreviewDescription)}</span>
                 </div>
               )}
             </div>
             <footer className="preview-actions backup-manager-actions">
               <span>
-                {formatDate(previewCandidate.createdAt)} · {formatBytes(previewCandidate.sizeBytes)}
+                {formatDate(previewCandidate.createdAt)} · {sizeFor(previewCandidate)}
               </span>
               <Button
                 ref={initialFocusRef}
@@ -225,7 +253,7 @@ export const BackupManagerDialog = ({
               >
                 {t("Cancel")}
               </Button>
-              <Button variant="danger" busy={busy} disabled={busy || inventoryLoading} onClick={onDelete}>
+              <Button variant="danger" busy={busy} disabled={busy || inventoryLoading || !deleteCandidate.deletable || deleteCandidate.kind === "worktree-recovery"} onClick={onDelete}>
                 {deleteCandidate.kind === "conversation-delete" ? t("Delete permanently") : t("Delete backup")}
               </Button>
             </footer>
@@ -279,7 +307,9 @@ export const BackupManagerDialog = ({
                     countLabel,
                     {
                       count: sectionItems.length,
-                      size: formatBytes(sectionItems.reduce((sum, item) => sum + item.sizeBytes, 0))
+                      size: sectionItems.some((item) => item.sizeIncomplete)
+                        ? t("At least {{size}}", { size: formatBytes(sectionItems.reduce((sum, item) => sum + item.sizeBytes, 0)) })
+                        : formatBytes(sectionItems.reduce((sum, item) => sum + item.sizeBytes, 0))
                     }
                   )}
                 </p>
@@ -296,6 +326,7 @@ export const BackupManagerDialog = ({
                       onChange={(event) => updateView({ kindFilter: event.currentTarget.value as typeof view.kindFilter })}>
                       <option value="all">{t("All types")}</option><option value="target-recovery">{t("Agent recovery")}</option>
                       <option value="skill-cleanup">{t("Skill cleanup")}</option><option value="workspace-sync">{t("Device Sync")}</option>
+                      <option value="worktree-recovery">{t("Worktree recovery")}</option>
                     </SelectControl></label>}
                   <label><span>{t("Status")}</span>
                     <SelectControl controlWidth="fill" aria-label={t("Backup status filter")} value={view.statusFilter}
@@ -332,7 +363,7 @@ export const BackupManagerDialog = ({
                       <span className={`backup-kind-icon is-${item.kind}`} aria-hidden="true">
                         {item.kind === "skill-cleanup" ? (
                           <Database size={17} />
-                        ) : item.kind === "workspace-sync" ? (
+                        ) : item.kind === "workspace-sync" || item.kind === "worktree-recovery" ? (
                           <GitFork size={17} />
                         ) : (
                           <History size={17} />
@@ -345,7 +376,7 @@ export const BackupManagerDialog = ({
                         <small>
                           {formatDate(item.createdAt)} ·{" "}
                           {item.fileCount === 1 ? t("1 file") : t("{{count}} files", { count: item.fileCount })} ·{" "}
-                          {formatBytes(item.sizeBytes)}
+                          {sizeFor(item)}
                         </small>
                       </span>
                       <span
@@ -361,7 +392,7 @@ export const BackupManagerDialog = ({
                         aria-hidden="true"
                       />
                     </button>
-                    {item.deletable ? (
+                    {item.deletable && item.kind !== "worktree-recovery" ? (
                       <ToolbarOverflowMenu
                         disabled={busy || inventoryLoading}
                         label={t("More actions for {{name}}", {

@@ -16,6 +16,7 @@ import type { AgentEnvPaths } from "./paths";
 import type { SkillLibraryStore } from "./skillLibraryStore";
 import { SafeIdSchema } from "../shared/schemas";
 import { readConversationDeletionPhase } from "./conversations/conversationDeletion";
+import { listWorktreeRecoveryBackups, previewWorktreeRecoveryBackup } from "./worktrees/worktreeRecoveryBackup";
 
 export interface BackupMaintenanceServiceOptions {
   now?: () => Date;
@@ -192,7 +193,8 @@ export const createBackupMaintenanceService = (
       settings,
       targetStates,
       workspaceRecoveryBackupIds,
-      skillSourceMergeRecovery
+      skillSourceMergeRecovery,
+      worktreeRecovery
     ] = await Promise.all([
       backupStore.listBackups(),
       skillLibraryStore.listCleanupBackups(),
@@ -200,7 +202,14 @@ export const createBackupMaintenanceService = (
       settingsStore.readSettings(),
       readTargetStates(paths),
       readWorkspaceSyncRecoveryBackupIds(paths),
-      readSkillSourceMergeRecoveryBackupIds(paths)
+      readSkillSourceMergeRecoveryBackupIds(paths),
+      listWorktreeRecoveryBackups(paths.appDataRoot).then(
+        (items) => ({ items, issues: [] as string[] }),
+        (error: unknown) => ({
+          items: [] as ManagedBackupItem[],
+          issues: [error instanceof Error ? error.message : String(error)]
+        })
+      )
     ]);
     const required = new Map<string, ManagedBackupRequiredReason>();
     for (const { state } of targetStates) {
@@ -317,11 +326,12 @@ export const createBackupMaintenanceService = (
         deletable: true
       };
     }));
-    const items = [...targetItems, ...cleanupItems, ...restoredCleanupItems].sort((left, right) =>
+    const items = [...targetItems, ...cleanupItems, ...restoredCleanupItems, ...worktreeRecovery.items].sort((left, right) =>
       right.createdAt.localeCompare(left.createdAt)
     );
     return {
       items,
+      ...(worktreeRecovery.issues.length ? { issues: worktreeRecovery.issues } : {}),
       totalBytes: items.reduce((total, item) => total + item.sizeBytes, 0),
       eligibleBytes: items.filter((item) => item.cleanupStatus === "eligible")
         .reduce((total, item) => total + item.sizeBytes, 0),
@@ -331,6 +341,7 @@ export const createBackupMaintenanceService = (
   };
 
   const removeItem = async (item: ManagedBackupItem) => {
+    if (item.kind === "worktree-recovery") throw new Error("Worktree recovery backups are protected; disposal requires a whole-transaction recovery protocol");
     if (!item.deletable) throw new Error("This backup is required for recovery and cannot be deleted");
     if (item.kind === "target-recovery" || item.kind === "workspace-sync" || item.kind === "conversation-delete") await backupStore.deleteBackup(item.id);
     else if (item.restored) {
@@ -345,6 +356,7 @@ export const createBackupMaintenanceService = (
   const previewBackup = async (
     input: DeleteManagedBackupInput
   ): Promise<ManagedBackupPreview> => {
+    if (input.kind === "worktree-recovery") return previewWorktreeRecoveryBackup(paths.appDataRoot, input.id);
     const inventory = await listInventory();
     const item = inventory.items.find(
       (candidate) => candidate.id === input.id && candidate.kind === input.kind
@@ -372,6 +384,7 @@ export const createBackupMaintenanceService = (
   };
 
   const deleteBackup = async (input: DeleteManagedBackupInput) => {
+    if (input.kind === "worktree-recovery") throw new Error("Worktree recovery backups are protected; disposal requires a whole-transaction recovery protocol");
     if (activeMutation) throw new Error("Backup cleanup is already running");
     activeMutation = true;
     try {
@@ -390,7 +403,7 @@ export const createBackupMaintenanceService = (
     activeMutation = true;
     try {
       const inventory = await listInventory();
-      const eligible = inventory.items.filter((item) => item.cleanupStatus === "eligible" && (!scope || (item.kind === "conversation-delete") === (scope === "deleted")));
+      const eligible = inventory.items.filter((item) => item.kind !== "worktree-recovery" && item.deletable && item.cleanupStatus === "eligible" && (!scope || (item.kind === "conversation-delete") === (scope === "deleted")));
       let freedBytes = 0;
       let deletedCount = 0;
       const failures: ManagedBackupCleanupResult["failures"] = [];

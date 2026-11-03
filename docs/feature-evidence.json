@@ -2,6 +2,31 @@
   "formatVersion": 1,
   "features": [
     {
+      "id": "protected-worktree-recovery-backups",
+      "summary": "Inspect Worktree recovery storage in the existing Backup manager without making unique local content disposable.",
+      "contract": { "path": "docs/product-audit/2026-11-03-worktree-recovery-backups.md", "anchor": "## Feature Admission: Protected Worktree Recovery Backups" },
+      "support": { "opencode": "not-applicable", "claude-code": "not-applicable", "codex": "not-applicable", "antigravity": "not-applicable", "antigravity-app": "not-applicable", "trae-cli": "not-applicable", "pi": "not-applicable", "workbuddy": "not-applicable" },
+      "states": {
+        "idle": "Existing recovery journals and directories project into Backup manager without writes.",
+        "working": "Bounded file accounting and preview preserve existing dialog progress.",
+        "success": "Saved paths and protected logical size are visible; Git recovery remains owned by Worktree service.",
+        "error": "Unreadable recovery storage reports a scoped issue and preserves unrelated backups.",
+        "cancelled": "Closing previews does not modify saved files or Git references.",
+        "noOp": "Listing and previewing are read-only and create no new manifest.",
+        "stale": "Listing rereads storage; inventory is not an integrity or restore certification.",
+        "partial": "Bounded file lists and unknown size are explicit lower bounds, not missing files.",
+        "persisted": "Original journals, copied content, staged index and recovery refs remain unchanged.",
+        "rollback": "No mutations; incomplete journals and unique contents are protected from all ordinary deletion scopes."
+      },
+      "evidence": {
+        "domain": ["tests/main/worktreeRecoveryBackup.test.ts", "tests/main/backupMaintenanceService.test.ts"],
+        "renderer": ["tests/renderer/BackupManagerDialog.test.tsx"],
+        "desktop": ["tests/e2e/worktreeRecoveryBackups.e2e.test.ts"],
+        "persistence": ["tests/main/worktreeRecoveryBackup.test.ts", "tests/e2e/worktreeRecoveryBackups.e2e.test.ts"],
+        "visual": ["worktree-recovery-backups-en-920.png"]
+      }
+    },
+    {
       "id": "recoverable-conversation-deletion",
       "summary": "Explicit local history deletion with verified backups, recently-deleted retention and non-overwriting recovery.",
       "contract": { "path": "docs/product-audit/2026-10-17-conversation-deletion.md", "anchor": "## Feature Admission: Recoverable Conversation Deletion" },
