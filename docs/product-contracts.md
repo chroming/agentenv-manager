@@ -407,11 +407,14 @@ optional capability: when its inode, `.git` pointer and backlink are still valid
 cleanup may update/remove only that registration. Missing or malformed Git metadata
 does not block the explicitly selected directory's removal or move to Trash; unverified
 registration files are left untouched. A later metadata change removes that optional
-permission, never expands it. A redirected pointer or standalone main `.git` directory
-is still rejected, and a replaced directory cannot inherit an older confirmation.
+permission, never expands it. A redirected Git pointer disables metadata writes, not
+explicit cleanup of the same directory. A standalone main `.git` directory is still
+rejected, and a replaced directory cannot inherit an older confirmation.
 Redirected or replaced targets, a directory containing the owning Git database/main tree,
 AgentEnv storage or the running process directory are rejected. Real index/HEAD writer
-locks remain execution safety conditions; AgentEnv never kills Git or deletes lock files.
+locks disable optional Git metadata writes, never explicit directory cleanup. Preview
+warns without adding a confirmation step or disabling the command. AgentEnv never kills
+Git, deletes lock files, or repairs unavailable registration to make cleanup possible.
 Paused merge/rebase/cherry-pick state, unresolved conflicts, detached HEAD, stale missing
 operation objects, worktree lock markers, submodules and unavailable cached health
 classifications are not manual-selection barriers. Main trees, absent directories and user
@@ -425,7 +428,7 @@ backlink is changed to the retained path; the worktree stays registered there an
 current HEAD is detached when resolvable, releasing the original branch without moving
 that branch. Optional branch-release failure is reported, not treated as a failed move.
 Only verified Trash locations are excluded from ordinary inventory. When Git metadata
-was already unusable, Trash retains/restores the directory without repairing or
+was already unusable or cannot safely be changed while Git is writing, Trash retains/restores the directory without repairing or
 rewriting that metadata. Restore refuses an
 occupied source path and returns the same directory. It reattaches the old branch only
 if that ref still points at the retained HEAD and is unused elsewhere; otherwise the
@@ -441,8 +444,8 @@ the private directory identity between outer attempts. There is no broad chmod, 
 killing, content hash scan or unbounded retry. Permission or persistent-writer failures
 remain per-item failures with recoverable residual paths. Partial
 filesystem deletion remains visible and retryable in Trash. If files are deleted but
-registration cleanup fails, the result says Registration cleanup pending, not total
-failure. Retry targets only the surviving registration after identity validation. A
+registration cleanup fails, the primary result still says Deleted, with a separate
+optional registration-cleanup warning and retry. Retry targets only the surviving registration after identity validation. A
 completed permanent deletion has no Restore action and does not retain the directory.
 Prepared, moved and deleting phases remain recoverable/retryable after interruption.
 One item's ordinary failure does not block the rest of the selected queue. Navigation or
@@ -498,7 +501,9 @@ it is not automatic selection and does not include protected rows or authorize r
 These actions work while the repository is collapsed and never run AI or Preview.
 Multi-tree Preview uses at most two workers, retains request order and reports per-item
 errors with individual retry. Saved Workspace roots supply a warning, not an ownership
-grant. No whole-repository listing or analysis is a new disposal prerequisite.
+grant. Their read/canonicalization has one shared 500 ms bound per request; unavailable
+advice is disclosed without blocking preview or removal. No whole-repository listing or
+analysis is a new disposal prerequisite.
 Selection and cleanup never trigger AI analysis; retention analysis remains an
 explicit single-worktree action.
 Automatic eligibility requires an unchanged clean tree whose HEAD is contained in a named

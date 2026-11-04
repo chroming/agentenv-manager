@@ -68,6 +68,7 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
   }, [open]);
   const [recovery, setRecovery] = useState<WorktreeRecoveryRecord[]>([]);
   const [recoveryIssues, setRecoveryIssues] = useState<string[]>([]);
+  const [restoreWarnings, setRestoreWarnings] = useState<string[]>([]);
   const [recoveryScope, setRecoveryScope] = useState<"trash" | "all">("trash");
   const [view, setView] = useState<"list" | "locations" | "detail" | "confirm" | "results" | "recovery">("list");
   const [detail, setDetail] = useState<WorktreeEntry>();
@@ -335,6 +336,7 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
   const showRecovery = async (scope: "trash" | "all" = recoveryScope) => {
     setBusy("recovery");
     setError("");
+    setRestoreWarnings([]);
     try {
       const latest = await window.agentEnv.listWorktreeRecovery(scope);
       setRecoveryScope(scope);
@@ -350,8 +352,10 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
   const restore = async (id: string) => {
     setBusy(id);
     setError("");
+    setRestoreWarnings([]);
     try {
-      await window.agentEnv.restoreWorktree(id);
+      const restored = await window.agentEnv.restoreWorktree(id);
+      setRestoreWarnings(restored.verificationWarnings ?? []);
       const latest = await window.agentEnv.listWorktreeRecovery(recoveryScope);
       setRecovery(latest.records);
       setRecoveryIssues(latest.issues);
@@ -554,18 +558,19 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
               title={nameFromPath(result.path)} description={<span className="selectable">{result.path}</span>}
               metadata={<CatalogSortMetric kind="size" label={t("Size")} value={result.sizeBytes} />}
               state={<InteractiveStatus size="metadata" statusKind={result.error !== undefined ? "error" : result.skipped ? "neutral" : result.verificationWarnings?.length ? "warning" : "success"}
-                label={result.skipped ? t("Not run") : result.error !== undefined ? t("Failed") : result.pendingGitCleanup ? t("Registration cleanup pending") : result.mode === "trash" ? t("Moved to Trash") : result.mode === "permanent" ? t("Deleted") : result.verificationWarnings?.length ? t("Removed; needs review") : t("Removed")} />}
+                label={result.skipped ? t("Not run") : result.error !== undefined ? t("Failed") : result.mode === "trash" ? t("Moved to Trash") : result.mode === "permanent" ? t("Deleted") : result.pendingGitCleanup ? t("Registration cleanup pending") : result.verificationWarnings?.length ? t("Removed; needs review") : t("Removed")} />}
               actions={result.pendingGitCleanup && result.id ? <IconButton label={t("Retry cleanup")} disabled={Boolean(busy)} onClick={() => void prepareTrash([{ id: result.id!, path: result.path }])}><RotateCcw size={15} /></IconButton> : undefined} />)}
           </AlignedResourceList>
           {successful.some((result) => result.mode === "trash") ? <p>{t("Items in Trash still use disk space until permanently deleted.")}</p> : null}
           {previews.some((preview) => !preview.mode && preview.backupRequired && successful.some((result) => result.path === preview.entry.path)) ? <p>{t("Recovery copies are retained. Their size is excluded from estimated space freed.")}</p> : null}
           {results.filter((result) => result.error !== undefined).map((result) => <Notice key={result.path} tone="danger" icon={<AlertTriangle size={15} />}><span className="selectable">{result.path}</span><DiagnosticMessage message={result.error!} /></Notice>)}
-          {results.flatMap((result) => result.verificationWarnings?.map((warning) => <Notice key={`${result.path}:${warning}`} tone="warning" icon={<AlertTriangle size={15} />}><span className="selectable">{result.path}</span><DiagnosticMessage message={warning} /></Notice>) ?? [])}
+          {results.flatMap((result) => result.verificationWarnings?.map((warning) => <Notice key={`${result.path}:${warning}`} tone="warning" icon={<AlertTriangle size={15} />}><span className="selectable">{result.path}</span><DiagnosticMessage message={t(warning)} /></Notice>) ?? [])}
           {results.filter((result) => result.recoveryNote).map((result) => <Notice key={`recovery:${result.path}`} tone="info" icon={<Info size={15} />}><span className="selectable">{result.path}</span>{t(result.recoveryNote!)}</Notice>)}
           {results.some((result) => result.skipped === "repository") ? <Notice tone="warning" icon={<AlertTriangle size={15} />}>{t("Remaining Worktrees in the affected repository were not removed. Refresh and review that repository before continuing.")}</Notice> : null}
           {results.some((result) => result.skipped === "stopped") ? <Notice tone="info">{t("Cleanup stopped. Remaining Worktrees were not changed.")}</Notice> : null}
         </> : null}
         {view === "recovery" ? <>
+          {restoreWarnings.map((warning) => <Notice key={warning} tone="warning" title={t("Restored")} icon={<AlertTriangle size={15} />}><DiagnosticMessage message={t(warning)} /></Notice>)}
           {recoveryIssues.length ? <Notice tone="warning" icon={<AlertTriangle size={15} />}>
             {t("Some recovery records need review")}
             <span className="selectable">{recoveryIssues.join("\n")}</span>

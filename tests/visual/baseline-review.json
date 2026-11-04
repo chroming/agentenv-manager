@@ -1,19 +1,19 @@
 {
   "formatVersion": 1,
-  "reviewedAt": "2026-11-04T05:09:50.595Z",
+  "reviewedAt": "2026-11-04T06:57:55.228Z",
   "applicationVersion": "0.2.5",
-  "baseCommit": "c523774c",
+  "baseCommit": "804656d2",
   "build": {
-    "sourceFingerprint": "10ffaa6b68bbbf6325e2a7d65d7c85047e016a8c1c252ba0efc5843513f2907d",
-    "artifactFingerprint": "090c432ff1a79f466822ad1e77728c739fdd58c1da93653c700f33b1779d1838",
-    "generatedAt": "2026-11-04T05:03:13.033Z"
+    "sourceFingerprint": "1d447e30cd5a826383305ded1b561beaa044e64382412acd62e3aff34b9b89f7",
+    "artifactFingerprint": "f76392d70ef8a1ff57ff888ea234ca4ca77dc81da7f2c3a290f6333e4754e880",
+    "generatedAt": "2026-11-04T06:54:26.449Z"
   },
   "review": {
-    "scenarios": 136,
-    "method": "Inspected 18 native captures: nine analysis dialogs at three sizes and languages, three unknown-size paused-operation confirmations, three permanent confirmations and three Trash inventories. Existing other 118 baselines retained.",
+    "scenarios": 139,
+    "method": "Inspected three new minimum-size native Git-writing confirmations in en/zh_CN/zh_TW. Existing 136 baselines retained byte-for-byte.",
     "scope": "macOS Electron with isolated Home and temporary real Git repositories; no user Worktrees or paid model requests",
     "thresholdsChanged": false,
-    "updatedScenarios": 18
+    "updatedScenarios": 3
   },
   "files": [
     {
@@ -695,6 +695,21 @@
       "file": "worktree-trash-zh_TW-920.png",
       "sha256": "dc87ad229b7b6268c000a91390060d97dc3d1a5f9849d3de7cf0b2b2bda005a2",
       "reviewReason": "Reviewed 2026-11-04: explicit Trash/permanent commands, same shared controls, visible confirmation at minimum size and translated layouts; original thresholds retained."
+    },
+    {
+      "file": "worktree-git-writing-en-920.png",
+      "sha256": "629fac963a97d0f267dd49acf906fd90347e0d01463ede162fa538fea9eff2d9",
+      "reviewReason": "Reviewed 2026-11-04: Git-writing warning does not gate confirmation; shared Notice/Button, visible footer and no horizontal overlap at 920x620 in this locale. Existing thresholds retained."
+    },
+    {
+      "file": "worktree-git-writing-zh_CN-920.png",
+      "sha256": "ee4cab8f4969052d8286d0c19d9f1001f0f6f10546017d808fab1a3055a5a1a8",
+      "reviewReason": "Reviewed 2026-11-04: Git-writing warning does not gate confirmation; shared Notice/Button, visible footer and no horizontal overlap at 920x620 in this locale. Existing thresholds retained."
+    },
+    {
+      "file": "worktree-git-writing-zh_TW-920.png",
+      "sha256": "a53459e7c519ae20b1ad4740d6af214562bd881f901e1fe6179ce690daefbe5c",
+      "reviewReason": "Reviewed 2026-11-04: Git-writing warning does not gate confirmation; shared Notice/Button, visible footer and no horizontal overlap at 920x620 in this locale. Existing thresholds retained."
     }
   ],
   "incrementalReviews": [
@@ -781,10 +796,10 @@
     "reportSha256": "99b7ffb64ce84eda595b70a48e88901db8338a3854387428fe518547ab53b7be"
   },
   "verification": {
-    "verifiedAt": "2026-11-04T05:19:16.940Z",
-    "sourceFingerprint": "f1365a65b7b89af5d1369b0455c008f77bfcd18737f9b971ddcdfa604d70e4e4",
-    "artifactFingerprint": "9446ce2b6e6acad8f591e7fda23279f152f0c05c002dc9184d1da638a36691d6",
-    "scenarios": 18,
-    "method": "Independent rebuilt Electron run; all 18 affected captures passed against reviewed golden images at unchanged thresholds; max 0.769%. Other 118 scenarios were not recaptured for this scoped change."
+    "verifiedAt": "2026-11-04T07:01:05.659Z",
+    "sourceFingerprint": "1d447e30cd5a826383305ded1b561beaa044e64382412acd62e3aff34b9b89f7",
+    "artifactFingerprint": "f76392d70ef8a1ff57ff888ea234ca4ca77dc81da7f2c3a290f6333e4754e880",
+    "scenarios": 21,
+    "method": "Independent native Electron recapture in en/zh_CN/zh_TW; all 21 affected images passed at unchanged thresholds (maximum 0.640%). Three new minimum-size warnings reviewed; existing 136 baselines untouched. Other 118 scenarios were not recaptured for this scoped change."
   }
 }

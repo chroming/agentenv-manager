@@ -5,7 +5,7 @@ import { z } from "zod";
 import type { WorktreeCleanupPreview, WorktreeDisposalMode, WorktreeEntry, WorktreeRecoveryRecord, WorktreeRestoreRegistration } from "../../shared/worktrees";
 import { isMissingFileError, writeAtomic } from "../fileUtils";
 import { hashFileContent, hashPathEntry, hashRequiredPathEntry } from "../filesystemIntegrity";
-import { assertNoWorktreeWriter } from "./worktreeGitState";
+import { assertNoWorktreeWriter, findWorktreeWriterLock } from "./worktreeGitState";
 import { assertRestoreRegistration, readLinkedRegistrationIdentity } from "./worktreeOperationRecovery";
 
 const missing = async (path: string) => lstat(path).then(() => false, (error) => {
@@ -35,7 +35,7 @@ export const createWorktreeDisposal = ({ appDataRoot, lookup, branchAvailable, r
   resolveHead(path: string): Promise<string>;
 }) => {
   const root = join(appDataRoot, "worktree-trash");
-  const issued = new Map<string, { entry: WorktreeEntry; identity?: WorktreeRestoreRegistration; directoryIdentity?: DirectoryIdentity; mode: WorktreeDisposalMode; at: number; journalId?: string }>();
+  const issued = new Map<string, { entry: WorktreeEntry; identity?: WorktreeRestoreRegistration; directoryIdentity?: DirectoryIdentity; gitWriteInProgress?: boolean; mode: WorktreeDisposalMode; at: number; journalId?: string }>();
   const journalPath = (id: string) => join(root, `${z.string().uuid().parse(id)}.json`);
   const save = async (item: Journal) => writeAtomic(journalPath(item.id), `${JSON.stringify(journalSchema.parse(item), null, 2)}\n`);
   const read = async (id: string): Promise<Journal> => {
@@ -55,7 +55,7 @@ export const createWorktreeDisposal = ({ appDataRoot, lookup, branchAvailable, r
     sourceSizeBytes: item.entry.sizeBytes, reclaimedSizeBytes: item.mode === "trash" ? 0 : item.phase === "removed" ? item.entry.sizeBytes : undefined,
     pendingGitCleanup: item.pendingGitCleanup, disposalIncomplete: item.phase === "deleting" || item.phase === "prepared" || item.mode === "permanent" && item.phase === "moved",
     ...(item.mode === "trash" || !["removed", "restored"].includes(item.phase) ? { retainedPath: item.storage } : {}),
-    ...(item.pendingGitCleanup ? { verificationWarnings: [`Folder deleted; Git registration cleanup is pending. ${item.registrationError ?? "Retry cleanup from Worktree recovery."}`] } : item.notes?.length ? { verificationWarnings: item.notes } : {})
+    ...(item.pendingGitCleanup ? { verificationWarnings: [`Folder deleted. Git metadata was left unchanged; retrying metadata cleanup is optional. ${item.registrationError ?? ""}`.trim()] } : item.notes?.length ? { verificationWarnings: item.notes } : {})
   });
   const capture = async (entry: WorktreeEntry) => {
     const gitFile = join(entry.path, ".git"), info = await lstat(gitFile);
@@ -67,26 +67,31 @@ export const createWorktreeDisposal = ({ appDataRoot, lookup, branchAvailable, r
   const captureDirectory = async (path: string): Promise<DirectoryIdentity> => {
     const info = await lstat(path, { bigint: true });
     if (!info.isDirectory() || info.isSymbolicLink() || await realpath(path) !== path) throw new Error("Worktree directory identity changed; nothing was removed");
-    const gitInfo = await lstat(join(path, ".git")).catch((error) => { if (isMissingFileError(error)) return undefined; throw error; });
-    if (gitInfo && (!gitInfo.isFile() || gitInfo.isSymbolicLink())) throw new Error("This directory is not a linked Worktree; nothing was removed");
+    const gitInfo = await lstat(join(path, ".git")).catch(() => undefined);
+    if (gitInfo?.isDirectory()) throw new Error("This directory is not a linked Worktree; nothing was removed");
     return { worktreeDevice: String(info.dev), worktreeInode: String(info.ino) };
   };
-  const checkKnownPointer = async (entry: Pick<WorktreeEntry, "path" | "commonDir">) => {
-    const file = join(entry.path, ".git"), info = await lstat(file).catch((error) => { if (isMissingFileError(error)) return undefined; throw error; });
-    if (!info || !info.isFile() || info.isSymbolicLink() || info.size > 4096) return;
-    const text = await readFile(file, "utf8");
-    if (!text.startsWith("gitdir: ")) return;
-    const admin = resolve(entry.path, text.slice(8).trim());
-    if (dirname(admin) !== join(entry.commonDir, "worktrees")) throw new Error("Worktree Git pointer was redirected; nothing was removed");
-    await assertNoWorktreeWriter(admin);
+  const gitPermission = async (entry: WorktreeEntry) => {
+    const identity = await capture(entry).catch(() => undefined);
+    if (!identity) return { identity, gitWriteInProgress: false };
+    try {
+      const gitWriteInProgress = Boolean(await findWorktreeWriterLock(identity.gitDir));
+      return { identity: gitWriteInProgress ? undefined : identity, gitWriteInProgress };
+    } catch { return { identity: undefined, gitWriteInProgress: false }; }
+  };
+  const preserveGit = (item: Journal, writing = false) => {
+    item.directoryIdentity ??= item.identity && { worktreeDevice: item.identity.worktreeDevice, worktreeInode: item.identity.worktreeInode };
+    item.identity = undefined; item.originalGitFile = undefined;
+    const note = writing ? "Only the folder was changed. Git metadata was left unchanged because Git may still be writing."
+      : "Git metadata could not be verified and was left unchanged. Only the selected directory is managed by this cleanup.";
+    item.notes = [...new Set([...(item.notes ?? []), note])];
   };
   const prepare = async (entry: WorktreeEntry, mode: WorktreeDisposalMode, journalId?: string): Promise<WorktreeCleanupPreview> => {
     const directoryIdentity = await captureDirectory(entry.path);
-    await checkKnownPointer(entry);
-    const identity = await capture(entry).catch(() => undefined), previewId = randomUUID();
-    issued.set(previewId, { entry, identity, directoryIdentity, mode, at: Date.now(), journalId });
+    const permission = await gitPermission(entry), previewId = randomUUID();
+    issued.set(previewId, { entry, ...permission, directoryIdentity, mode, at: Date.now(), journalId });
     return { mode, previewId, entry, fingerprint: previewId, checkedAt: new Date().toISOString(),
-      backupRequired: false, forceRequired: false, savedWorkspace: false };
+      backupRequired: false, forceRequired: false, savedWorkspace: false, gitWriteInProgress: permission.gitWriteInProgress };
   };
   const retainedEntry = (item: Journal): WorktreeEntry => ({ ...item.entry, path: item.storage,
     main: false, exists: true, detached: true, state: "review", changes: [], ignored: [], reasons: [],
@@ -122,19 +127,23 @@ export const createWorktreeDisposal = ({ appDataRoot, lookup, branchAvailable, r
   };
   const resumeMove = async (item: Journal) => {
     if (item.phase !== "prepared") return;
-    if (!item.identity) { await validateStorage(item); item.phase = "moved"; await save(item); return; }
-    const info = await lstat(item.storage, { bigint: true }), admin = await lstat(item.identity.gitDir, { bigint: true });
-    const backlink = (await readFile(join(item.identity.gitDir, "gitdir"), "utf8")).trim();
-    const pointerHash = await hashRequiredPathEntry(join(item.storage, ".git"));
-    if (!info.isDirectory() || info.isSymbolicLink() || String(info.dev) !== item.identity.worktreeDevice || String(info.ino) !== item.identity.worktreeInode ||
-        !admin.isDirectory() || admin.isSymbolicLink() || String(admin.dev) !== item.identity.adminDevice || String(admin.ino) !== item.identity.adminInode ||
-        (pointerHash !== item.identity.gitFileHash && (!item.originalGitFile || pointerHash !== hashFileContent(retainedPointer(item)))) ||
-        await hashRequiredPathEntry(join(item.identity.gitDir, "commondir")) !== item.identity.commonLinkHash ||
-        ![join(item.entry.path, ".git"), join(item.storage, ".git")].includes(resolve(item.identity.gitDir, backlink))) throw new Error("Interrupted Trash move changed; nothing was overwritten");
-    await assertNoWorktreeWriter(item.identity.gitDir);
-    if (item.originalGitFile && !isAbsolute(item.originalGitFile.slice(8).trim())) await writePointer(item.storage, retainedPointer(item));
-    await writeAtomic(join(item.identity.gitDir, "gitdir"), `${join(item.storage, ".git")}\n`);
-    item.identity = await capture(retainedEntry(item)); item.phase = "moved"; await save(item);
+    await validateStorage(item);
+    if (!item.identity) { item.phase = "moved"; await save(item); return; }
+    try {
+      const admin = await lstat(item.identity.gitDir, { bigint: true });
+      const backlink = (await readFile(join(item.identity.gitDir, "gitdir"), "utf8")).trim();
+      const pointerHash = await hashRequiredPathEntry(join(item.storage, ".git"));
+      if (!admin.isDirectory() || admin.isSymbolicLink() || String(admin.dev) !== item.identity.adminDevice || String(admin.ino) !== item.identity.adminInode ||
+          (pointerHash !== item.identity.gitFileHash && (!item.originalGitFile || pointerHash !== hashFileContent(retainedPointer(item)))) ||
+          await hashRequiredPathEntry(join(item.identity.gitDir, "commondir")) !== item.identity.commonLinkHash ||
+          ![join(item.entry.path, ".git"), join(item.storage, ".git")].includes(resolve(item.identity.gitDir, backlink))) throw new Error("Interrupted Trash move changed; nothing was overwritten");
+      await assertNoWorktreeWriter(item.identity.gitDir);
+      if (item.originalGitFile && !isAbsolute(item.originalGitFile.slice(8).trim())) await writePointer(item.storage, retainedPointer(item));
+      await assertNoWorktreeWriter(item.identity.gitDir);
+      await writeAtomic(join(item.identity.gitDir, "gitdir"), `${join(item.storage, ".git")}\n`);
+      item.identity = await capture(retainedEntry(item));
+    } catch { preserveGit(item); }
+    item.phase = "moved"; await save(item);
   };
   const clearRegistration = async (item: Journal) => {
     if (!item.identity) return;
@@ -155,7 +164,6 @@ export const createWorktreeDisposal = ({ appDataRoot, lookup, branchAvailable, r
   const purge = async (item: Journal, progress?: (phase: "preparing" | "removing" | "verifying") => void) => {
     if (!await missing(item.storage)) {
       await validateStorage(item);
-      if (item.identity) await assertNoWorktreeWriter(item.identity.gitDir);
       item.phase = "deleting"; item.mode = "permanent"; await save(item);
       progress?.("removing");
       try {
@@ -184,60 +192,39 @@ export const createWorktreeDisposal = ({ appDataRoot, lookup, branchAvailable, r
     previewTrash: async (id: string) => {
       const item = await read(id);
       if (item.phase === "restored" || item.mode !== "trash" && !item.pendingGitCleanup && !["prepared", "moved", "deleting"].includes(item.phase)) throw new Error("This Worktree is not in Trash");
-      if (await missing(item.storage) && item.pendingGitCleanup) {
-        const entry = retainedEntry(item), previewId = randomUUID();
-        issued.set(previewId, { entry, identity: item.identity, mode: "permanent", at: Date.now(), journalId: id });
-        return { mode: "permanent" as const, previewId, entry, fingerprint: previewId, checkedAt: new Date().toISOString(), backupRequired: false, forceRequired: false, savedWorkspace: false };
-      }
-      if (item.phase === "deleting" || item.phase === "prepared") {
-        const previewId = randomUUID(), entry = retainedEntry(item);
-        issued.set(previewId, { entry, identity: item.identity, mode: "permanent", at: Date.now(), journalId: id });
-        return { mode: "permanent" as const, previewId, entry, fingerprint: previewId, checkedAt: new Date().toISOString(), backupRequired: false, forceRequired: false, savedWorkspace: false };
-      }
-      await validateStorage(item);
+      if (!(await missing(item.storage) && item.pendingGitCleanup)) await validateStorage(item);
       const previewId = randomUUID(), entry = retainedEntry(item);
       issued.set(previewId, { entry, identity: item.identity, mode: "permanent", at: Date.now(), journalId: id });
-      return { mode: "permanent" as const, previewId, entry, fingerprint: previewId, checkedAt: new Date().toISOString(), backupRequired: false, forceRequired: false, savedWorkspace: false };
+      const gitWriteInProgress = item.identity ? Boolean(await findWorktreeWriterLock(item.identity.gitDir).catch(() => undefined)) : false;
+      return { mode: "permanent" as const, previewId, entry, fingerprint: previewId, checkedAt: new Date().toISOString(), backupRequired: false, forceRequired: false, savedWorkspace: false, gitWriteInProgress };
     },
     remove: async (preview: WorktreeCleanupPreview, progress?: (phase: "preparing" | "removing" | "verifying") => void) => {
       const request = issued.get(preview.previewId); issued.delete(preview.previewId);
       if (!request || request.mode !== preview.mode || Date.now() - request.at > 10 * 60_000) throw new Error("Cleanup review expired. Review this Worktree again.");
       progress?.("preparing");
-      if (request.journalId) { const item = await read(request.journalId); await resumeMove(item); return purge(item, progress); }
+      if (request.journalId) return purge(await read(request.journalId), progress);
       const entry = request.entry;
       if (request.directoryIdentity && JSON.stringify(await captureDirectory(entry.path)) !== JSON.stringify(request.directoryIdentity)) throw new Error("Worktree directory identity changed; nothing was removed");
-      await checkKnownPointer(entry);
-      if (request.identity) {
-        try { await assertRestoreRegistration(request.identity, entry.commonDir, entry.path); }
-        catch { request.identity = undefined; }
+      const current = await gitPermission(entry);
+      if (!current.identity || JSON.stringify(current.identity) !== JSON.stringify(request.identity)) request.identity = undefined;
+      let originalGitFile = request.identity ? await readFile(join(entry.path, ".git"), "utf8").catch(() => undefined) : undefined;
+      if (request.identity && (originalGitFile === undefined || hashFileContent(originalGitFile) !== request.identity.gitFileHash)) {
+        request.identity = undefined; originalGitFile = undefined;
       }
-      const originalGitFile = request.identity ? await readFile(join(entry.path, ".git"), "utf8") : undefined;
-      if (request.identity && hashFileContent(originalGitFile!) !== request.identity.gitFileHash) throw new Error("Worktree Git pointer changed; nothing was removed");
       const id = randomUUID(), storage = await slots(entry, id);
       const item: Journal = { id, mode: request.mode, phase: "prepared", entry,
-        createdAt: new Date().toISOString(), storage, identity: request.identity, directoryIdentity: request.directoryIdentity, originalGitFile,
-        ...(!request.identity ? { notes: ["Git metadata could not be verified and was left unchanged. Only the selected directory is managed by this cleanup."] } : {}) };
+        createdAt: new Date().toISOString(), storage, identity: request.identity, directoryIdentity: request.directoryIdentity, originalGitFile };
+      if (!item.identity) preserveGit(item, request.gitWriteInProgress || current.gitWriteInProgress);
       await save(item);
       progress?.("removing");
       await rename(entry.path, storage);
-      try {
-        if (item.identity) {
-          if (!isAbsolute(originalGitFile!.slice(8).trim())) await writePointer(storage, retainedPointer(item));
-          await writeAtomic(join(item.identity.gitDir, "gitdir"), `${join(storage, ".git")}\n`);
-          item.identity = await capture(retainedEntry(item));
-        }
-        item.phase = "moved"; await save(item);
-      } catch (error) {
-        if (await missing(entry.path)) {
-          await rename(storage, entry.path);
-          if (originalGitFile) await writePointer(entry.path, originalGitFile);
-          if (item.identity) await writeAtomic(join(item.identity.gitDir, "gitdir"), `${join(entry.path, ".git")}\n`);
-        }
-        throw error;
-      }
+      try { await validateStorage(item); }
+      catch (error) { if (await missing(entry.path)) await rename(storage, entry.path); throw error; }
+      await resumeMove(item);
       if (item.mode === "permanent") return purge(item, progress);
       if (!item.identity) { progress?.("verifying"); return projection(item); }
       try {
+        await assertNoWorktreeWriter(item.identity.gitDir);
         item.originalHead = await readFile(join(item.identity.gitDir, "HEAD"), "utf8");
         const branch = /^ref: refs\/heads\/(.+)$/.exec(item.originalHead.trim());
         if (branch) {
@@ -245,6 +232,7 @@ export const createWorktreeDisposal = ({ appDataRoot, lookup, branchAvailable, r
           if (!/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(head)) throw new Error("HEAD is unavailable");
           item.entry = { ...item.entry, branch: branch[1], head };
           item.detached = true; await save(item);
+          await assertNoWorktreeWriter(item.identity.gitDir);
           await writeAtomic(join(item.identity.gitDir, "HEAD"), `${head}\n`);
         }
       } catch {
@@ -275,12 +263,17 @@ export const createWorktreeDisposal = ({ appDataRoot, lookup, branchAvailable, r
       if (item.phase === "restored") return projection(item);
       if (item.mode !== "trash" || !["moved", "restoring"].includes(item.phase)) throw new Error("This Worktree cannot be restored; deletion already started");
       if (item.phase === "restoring" && await missing(item.entry.path) && !await missing(item.storage)) {
-        await validateMoved(item);
+        await validateStorage(item);
+        try { if (item.identity) { await validateMoved(item); await assertNoWorktreeWriter(item.identity.gitDir); } }
+        catch { preserveGit(item); }
+        if (await realpath(dirname(item.entry.path)) !== dirname(item.entry.path)) throw new Error("The original parent path changed; nothing was overwritten");
         await rename(item.storage, item.entry.path);
       }
       if (item.phase === "moved") {
         if (!await missing(item.entry.path)) throw new Error("The original path is occupied; nothing was overwritten");
-        await validateMoved(item); if (item.identity) await assertNoWorktreeWriter(item.identity.gitDir);
+        await validateStorage(item);
+        try { if (item.identity) { await validateMoved(item); await assertNoWorktreeWriter(item.identity.gitDir); } }
+        catch { preserveGit(item); }
         await mkdir(dirname(item.entry.path), { recursive: true });
         if (await realpath(dirname(item.entry.path)) !== dirname(item.entry.path)) throw new Error("The original parent path changed; nothing was overwritten");
         item.phase = "restoring"; await save(item);
@@ -290,16 +283,21 @@ export const createWorktreeDisposal = ({ appDataRoot, lookup, branchAvailable, r
       const identity = item.directoryIdentity ?? item.identity!;
       if (!info.isDirectory() || info.isSymbolicLink() || String(info.dev) !== identity.worktreeDevice || String(info.ino) !== identity.worktreeInode) throw new Error("Restore target changed; nothing was overwritten");
       if (item.identity) {
-        const admin = await lstat(item.identity.gitDir, { bigint: true });
-        if (!admin.isDirectory() || admin.isSymbolicLink() || String(admin.dev) !== item.identity.adminDevice || String(admin.ino) !== item.identity.adminInode) throw new Error("Restore target changed; nothing was overwritten");
-        await assertNoWorktreeWriter(item.identity.gitDir);
+        try {
+          const admin = await lstat(item.identity.gitDir, { bigint: true });
+          if (!admin.isDirectory() || admin.isSymbolicLink() || String(admin.dev) !== item.identity.adminDevice || String(admin.ino) !== item.identity.adminInode) throw new Error("Restore target changed; nothing was overwritten");
+          await assertNoWorktreeWriter(item.identity.gitDir);
+        } catch { preserveGit(item); }
       }
-      if (item.originalGitFile) await writePointer(item.entry.path, item.originalGitFile);
-      if (item.identity) await writeAtomic(join(item.identity.gitDir, "gitdir"), `${join(item.entry.path, ".git")}\n`);
-      if (item.identity && item.detached && item.originalHead && item.entry.branch && item.entry.head &&
-        await branchAvailable(item.entry.commonDir, item.entry.branch, item.entry.head).catch(() => false)) {
-        await writeAtomic(join(item.identity.gitDir, "HEAD"), item.originalHead);
-      }
+      try {
+        if (item.originalGitFile) await writePointer(item.entry.path, item.originalGitFile);
+        if (item.identity) await writeAtomic(join(item.identity.gitDir, "gitdir"), `${join(item.entry.path, ".git")}\n`);
+        if (item.identity && item.detached && item.originalHead && item.entry.branch && item.entry.head &&
+          await branchAvailable(item.entry.commonDir, item.entry.branch, item.entry.head).catch(() => false)) {
+          await assertNoWorktreeWriter(item.identity.gitDir);
+          await writeAtomic(join(item.identity.gitDir, "HEAD"), item.originalHead);
+        }
+      } catch { preserveGit(item); }
       item.phase = "restored"; await save(item);
       return projection(item);
     }

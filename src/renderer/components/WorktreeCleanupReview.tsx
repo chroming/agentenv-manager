@@ -42,6 +42,12 @@ export function WorktreeCleanupReview({ items, mode, busy, onRetry }: {
     {previews.some((preview) => preview.savedWorkspace) ? <Notice tone="warning" icon={<AlertTriangle size={15} />}>
       {t("A saved Workspace is inside a selected Worktree. Its shortcut will remain, but the folder will be unavailable after removal.")}
     </Notice> : null}
+    {mode && previews.some((preview) => preview.gitWriteInProgress) ? <Notice tone="warning" icon={<AlertTriangle size={15} />}>
+      {t("Git may still be writing. Cleanup can continue; Git metadata will be left unchanged.")}
+    </Notice> : null}
+    {mode && previews.some((preview) => preview.workspaceImpactUnknown) ? <Notice tone="info">
+      {t("Workspace references could not be checked. Cleanup can continue; saved references will not be changed.")}
+    </Notice> : null}
     {failures.length ? <p>{failureMessage}</p> : null}
     <AlignedResourceList actionTrack="compact" className="worktree-dialog__entries">
       {items.map((item) => <Fragment key={item.trashId ?? `${item.entry.commonDir}\0${item.entry.path}`}>

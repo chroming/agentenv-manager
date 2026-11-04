@@ -7,7 +7,9 @@ not freed space; permanent deletion explicitly discards local contents without a
 full backup. Neither command requires integration analysis, fsck, AI, source hashes
 or complete size measurements. Preview verifies the selected known directory's identity;
 verified Git registration is optional permission, not a cleanup prerequisite.
-Main trees, redirected paths and known real write locks remain protected.
+Main trees and substituted directories remain protected. Known real write locks
+prevent Git metadata writes, not explicitly confirmed folder cleanup. See the
+nonblocking-intent follow-up for the revised execution boundary.
 
 Product read: a local-first desktop environment manager whose cleanup task is to
 release directory space deliberately, not certify code integration. Risk 9/10,
@@ -79,6 +81,7 @@ native Electron cover both commands and minimum-window/localization stress.
   audits passed. Feature registry covers the new states and existing eight Targets.
 - Limits: this is macOS source-built Electron and temporary-fixture evidence, not
   packaged Windows/Linux approval or proof for every filesystem. Filesystem permission
-  errors and genuine active writer locks can still fail an item. Permanent deletion
+  errors and replaced directory identities can still fail an item. Genuine active
+  writer locks leave Git metadata unchanged instead. Permanent deletion
   intentionally has no content recovery. No real credentials, user directories or
   paid models were used, and no push/release is part of this change.

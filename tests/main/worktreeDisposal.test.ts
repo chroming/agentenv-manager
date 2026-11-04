@@ -24,13 +24,14 @@ const fixture = async () => {
   await git(repo, "worktree", "add", "-b", "task", tree);
   const binary = await findExecutable("git", { environment: process.env, homeDir: homedir(), platform: process.platform }); if (!binary) throw new Error("Git required");
   const runner = createGitCommandRunner({ executablePath: binary });
+  const projectStore = { listLocalRootPaths: vi.fn<() => Promise<string[]>>().mockResolvedValue([]) };
   const service = createWorktreeService({ appDataRoot: data, homeDir: join(root, "home"),
-    projectStore: { listLocalRootPaths: async () => [] } as unknown as ProjectStore, resolveRunner: async () => runner });
+    projectStore: projectStore as unknown as ProjectStore, resolveRunner: async () => runner });
   services.push(service); await service.addScanRoot(root);
   const inventory = await service.inventory(), entry = inventory.entries.find((item) => item.path === tree)!;
   const common = entry.commonDir;
   const admin = resolve(tree, (await git(tree, "rev-parse", "--git-dir")).trim());
-  return { root, repo, tree, data, git, runner, service, common, admin };
+  return { root, repo, tree, data, git, runner, service, common, admin, projectStore };
 };
 
 it("permanently deletes dirty/ignored/stale-operation contents without backups, full hashes or history analysis", async () => {
@@ -94,12 +95,105 @@ it("never overwrites a newly occupied original path during restore", async () =>
   expect(await fs.readFile(join(tree, "new.txt"), "utf8")).toBe("new original content");
 });
 
-it("keeps the exact source when a real index lock appears after preview", async () => {
+it("deletes the selected directory without touching a Git lock that appears after preview", async () => {
   const { tree, service, common, admin } = await fixture();
   const preview = await service.preview(common, tree, true, "permanent");
   await fs.writeFile(join(admin, "index.lock"), "writer");
-  await expect(service.remove(preview)).rejects.toThrow("write lock");
+  expect((await service.remove(preview)).status).toBe("removed");
+  await expect(fs.lstat(tree)).rejects.toMatchObject({ code: "ENOENT" });
+  expect(await fs.readFile(join(admin, "index.lock"), "utf8")).toBe("writer");
+});
+
+it.each(["trash", "permanent"] as const)("completes explicit %s with an existing Git writer lock without altering Git metadata", async (mode) => {
+  const { tree, service, common, admin, repo } = await fixture();
+  await fs.writeFile(join(admin, "index.lock"), "active writer");
+  const head = await fs.readFile(join(admin, "HEAD"), "utf8"), backlink = await fs.readFile(join(admin, "gitdir"), "utf8");
+  const preview = await service.preview(common, tree, true, mode);
+  expect(preview.gitWriteInProgress).toBe(true);
+  const result = await service.remove(preview);
+  expect(result).toMatchObject({ mode, status: "removed" });
+  await expect(fs.lstat(tree)).rejects.toMatchObject({ code: "ENOENT" });
+  expect(await fs.readFile(join(admin, "index.lock"), "utf8")).toBe("active writer");
+  expect(await fs.readFile(join(admin, "HEAD"), "utf8")).toBe(head);
+  expect(await fs.readFile(join(admin, "gitdir"), "utf8")).toBe(backlink);
+  expect(await fs.readFile(join(repo, "file.txt"), "utf8")).toBe("base\n");
+  if (mode === "trash") {
+    await service.restore(result.id);
+    expect(await fs.readFile(join(tree, "file.txt"), "utf8")).toBe("base\n");
+    expect(await fs.readFile(join(admin, "index.lock"), "utf8")).toBe("active writer");
+  }
+});
+
+it("deletes retained contents while leaving a newly busy Git registration for optional cleanup", async () => {
+  const { tree, service, common, admin } = await fixture();
+  const moved = await service.remove(await service.preview(common, tree, true, "trash"));
+  await fs.writeFile(join(admin, "HEAD.lock"), "active writer");
+  const result = await service.remove(await service.previewTrashDeletion(moved.id));
+  expect(result).toMatchObject({ mode: "permanent", status: "removed", pendingGitCleanup: true });
+  await expect(fs.lstat(moved.retainedPath!)).rejects.toMatchObject({ code: "ENOENT" });
+  expect(await fs.readFile(join(admin, "HEAD.lock"), "utf8")).toBe("active writer");
+  await fs.rm(join(admin, "HEAD.lock"));
+  expect((await service.remove(await service.previewTrashDeletion(moved.id))).pendingGitCleanup).toBe(false);
+});
+
+it.each(["trash", "permanent"] as const)("prepares %s even when optional Workspace metadata is unreadable", async (mode) => {
+  const { tree, service, common, projectStore } = await fixture();
+  projectStore.listLocalRootPaths.mockRejectedValue(new Error("unreadable Workspace metadata"));
+  const preview = await service.preview(common, tree, true, mode);
+  expect(preview.workspaceImpactUnknown).toBe(true);
+  expect((await service.remove(preview)).mode).toBe(mode);
+});
+
+it("prepares a batch once with bounded, unavailable Workspace information instead of stalling cleanup", async () => {
+  const { tree, repo, root, service, common, projectStore, git } = await fixture();
+  const second = join(root, "second");
+  await git(repo, "worktree", "add", "-b", "second", second); await service.inventory();
+  projectStore.listLocalRootPaths.mockClear().mockImplementation(() => new Promise(() => {}));
+  const started = Date.now();
+  const batch = await service.previewBatch([tree, second].map((path) => ({ commonDir: common, path, mode: "permanent", allowDirty: true })));
+  expect(Date.now() - started).toBeLessThan(2000);
+  expect(projectStore.listLocalRootPaths).toHaveBeenCalledTimes(1);
+  for (const item of batch) {
+    expect(item.preview?.workspaceImpactUnknown).toBe(true);
+    expect((await service.remove(item.preview!)).mode).toBe("permanent");
+  }
+});
+
+it("does not wait for an unresponsive preparation observer", async () => {
+  const { tree, service, common } = await fixture();
+  const batch = await service.previewBatch([{ commonDir: common, path: tree, mode: "permanent", allowDirty: true }], () => new Promise(() => {}));
+  expect(batch[0].preview?.mode).toBe("permanent");
+});
+
+it("skips optional Git writes if a writer starts after the selected directory is moved", async () => {
+  const { tree, service, common, admin } = await fixture();
+  const preview = await service.preview(common, tree, true, "trash");
+  const backlink = await fs.readFile(join(admin, "gitdir"), "utf8"), original = fs.rename.bind(fs);
+  vi.spyOn(fs, "rename").mockImplementation(async (from, to) => {
+    await original(from, to);
+    if (String(from) === tree) await fs.writeFile(join(admin, "HEAD.lock"), "writer after move");
+  });
+  const result = await service.remove(preview);
+  expect(result.status).toBe("removed");
+  expect(await fs.readFile(join(admin, "gitdir"), "utf8")).toBe(backlink);
+  expect(await fs.readFile(join(admin, "HEAD.lock"), "utf8")).toBe("writer after move");
+  expect(await fs.readFile(join(result.retainedPath!, "file.txt"), "utf8")).toBe("base\n");
+});
+
+it.each(["prepared", "restoring"] as const)("restores raw contents of an interrupted %s move without waiting for Git", async (phase) => {
+  const { tree, data, service, common, admin } = await fixture();
+  const moved = await service.remove(await service.preview(common, tree, true, "trash"));
+  const path = join(data, "worktree-trash", `${moved.id}.json`);
+  const journal = JSON.parse(await fs.readFile(path, "utf8")); journal.phase = phase;
+  await fs.writeFile(path, JSON.stringify(journal));
+  await fs.writeFile(join(admin, "index.lock"), "busy repository");
+  const head = await fs.readFile(join(admin, "HEAD"), "utf8");
+  const result = await service.restore(moved.id);
+  expect(result.status).toBe("restored");
+  expect(result.verificationWarnings).not.toHaveLength(0);
   expect(await fs.readFile(join(tree, "file.txt"), "utf8")).toBe("base\n");
+  expect(await fs.readFile(join(admin, "HEAD"), "utf8")).toBe(head);
+  expect(await fs.readFile(join(admin, "index.lock"), "utf8")).toBe("busy repository");
 });
 
 it("reports a deleted folder separately from failed registration cleanup and retries only the latter", async () => {
@@ -216,6 +310,26 @@ it.each(["prepared", "moved"] as const)("exposes a permanent deletion interrupte
   expect((await service.listRecovery("trash")).records[0]).toMatchObject({ mode: "permanent", disposalIncomplete: true });
   expect((await service.remove(await service.previewTrashDeletion(moved.id))).pendingGitCleanup).toBe(false);
   expect((await service.listRecovery("trash")).records).toEqual([]);
+});
+
+it("empties an interrupted prepared item without repairing its busy Git registration", async () => {
+  const { tree, data, service, common, admin } = await fixture();
+  const moved = await service.remove(await service.preview(common, tree, true, "trash"));
+  const path = join(data, "worktree-trash", `${moved.id}.json`);
+  const journal = JSON.parse(await fs.readFile(path, "utf8")); journal.phase = "prepared";
+  await fs.writeFile(path, JSON.stringify(journal));
+  await fs.writeFile(join(admin, "index.lock"), "active writer");
+  const backlink = await fs.readFile(join(admin, "gitdir"), "utf8");
+  expect((await service.remove(await service.previewTrashDeletion(moved.id))).status).toBe("removed");
+  await expect(fs.lstat(moved.retainedPath!)).rejects.toMatchObject({ code: "ENOENT" });
+  expect(await fs.readFile(join(admin, "gitdir"), "utf8")).toBe(backlink);
+  expect(await fs.readFile(join(admin, "index.lock"), "utf8")).toBe("active writer");
+});
+
+it("still rejects the actual main repository, regardless of a requested disposal mode", async () => {
+  const { service, common, repo } = await fixture();
+  for (const mode of ["trash", "permanent"] as const) await expect(service.preview(common, repo, true, mode)).rejects.toThrow();
+  expect(await fs.readFile(join(repo, "file.txt"), "utf8")).toBe("base\n");
 });
 
 it("retries partial Git metadata deletion without requiring already removed identity files", async () => {
@@ -347,11 +461,16 @@ it("permits explicit deletion of a known directory with a missing .git file or o
   await expect(fs.lstat(tree)).rejects.toMatchObject({ code: "ENOENT" });
 });
 
-it.each(["trash", "permanent"] as const)("still refuses a pointer redirected to the main repository for %s", async (mode) => {
-  const { tree, service, common } = await fixture();
+it.each(["trash", "permanent"] as const)("cleans only the selected directory with a redirected Git pointer for %s", async (mode) => {
+  const { tree, repo, service, common, admin } = await fixture();
+  const mainHead = await fs.readFile(join(common, "HEAD"), "utf8");
+  const backlink = await fs.readFile(join(admin, "gitdir"), "utf8");
   await fs.writeFile(join(tree, ".git"), `gitdir: ${common}\n`);
-  await expect(service.preview(common, tree, true, mode)).rejects.toThrow("redirected");
-  expect(await fs.readFile(join(tree, "file.txt"), "utf8")).toBe("base\n");
+  expect((await service.remove(await service.preview(common, tree, true, mode))).status).toBe("removed");
+  expect(await fs.readFile(join(common, "HEAD"), "utf8")).toBe(mainHead);
+  expect(await fs.readFile(join(admin, "gitdir"), "utf8")).toBe(backlink);
+  expect(await fs.readFile(join(repo, "file.txt"), "utf8")).toBe("base\n");
+  await expect(fs.lstat(tree)).rejects.toMatchObject({ code: "ENOENT" });
 });
 
 it("refuses a standalone repository created at the selected path after a directory-only preview", async () => {

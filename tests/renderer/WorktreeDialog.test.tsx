@@ -75,6 +75,42 @@ afterEach(() => {
 });
 
 describe("WorktreeDialog", () => {
+  it.each(["trash", "permanent"] as const)("allows confirmed %s despite Git writing and unavailable Workspace advice", async (mode) => {
+    const api = installApi();
+    api.previewWorktreeCleanup.mockResolvedValue({ ...preparedPreview(dirty), mode, gitWriteInProgress: true, workspaceImpactUnknown: true });
+    api.removeWorktree.mockResolvedValue({ id: "done", mode, path: dirty.path, status: "removed", pendingGitCleanup: true,
+      verificationWarnings: ["The folder is gone; optional Git cleanup remains."], sourceSizeBytes: 1024, reclaimedSizeBytes: mode === "permanent" ? 1024 : 0 });
+    render(<WorktreeWorkspace />);
+    const row = (await screen.findByText(dirty.path)).closest(".ui-resource-row")! as HTMLElement;
+    fireEvent.click(within(row).getByRole("checkbox"));
+    fireEvent.click(screen.getByRole("button", { name: mode === "trash" ? "Move to Trash... (1)" : "Delete permanently..." }));
+    const dialog = await screen.findByRole("dialog", { name: mode === "trash" ? "Move Worktrees to Trash?" : "Permanently delete Worktrees?" });
+    await within(dialog).findByText("Git may still be writing. Cleanup can continue; Git metadata will be left unchanged.");
+    expect(within(dialog).getByText("Workspace references could not be checked. Cleanup can continue; saved references will not be changed.")).toBeInTheDocument();
+    const confirm = within(dialog).getByRole("button", { name: mode === "trash" ? "Move 1 to Trash" : "Permanently delete 1" });
+    expect(confirm).toBeEnabled();
+    expect(within(dialog).queryByRole("checkbox")).not.toBeInTheDocument();
+    fireEvent.click(confirm);
+    const results = await screen.findByRole("dialog", { name: "Cleanup results" });
+    await within(results).findByText(mode === "trash" ? "Moved to Trash" : "Deleted", { exact: true });
+    expect(within(results).queryByText("Registration cleanup pending", { exact: true })).not.toBeInTheDocument();
+    expect(within(results).getByRole("button", { name: "Retry cleanup" })).toBeEnabled();
+  });
+
+  it("shows optional restore limitations inside recovery instead of hiding the completed result", async () => {
+    const api = installApi();
+    api.listWorktreeRecovery.mockResolvedValue({ records: [{ id: "raw", mode: "trash", path: clean.path, status: "removed", createdAt: inventory.scannedAt }], issues: [] });
+    const restoreWorktree = vi.fn().mockResolvedValue({ id: "raw", mode: "trash", path: clean.path, status: "restored", verificationWarnings: ["Folder restored; Git metadata was left unchanged."] });
+    Object.assign(api, { restoreWorktree });
+    render(<WorktreeWorkspace />);
+    await screen.findByText(clean.path);
+    fireEvent.click(screen.getByRole("button", { name: "Worktree Trash" }));
+    const recovery = await screen.findByRole("dialog", { name: "Trash and recovery" });
+    fireEvent.click(within(recovery).getByRole("button", { name: "Restore" }));
+    await within(recovery).findByText("Folder restored; Git metadata was left unchanged.");
+    expect(restoreWorktree).toHaveBeenCalledWith("raw");
+  });
+
   it("offers permanent deletion explicitly and does not mutate until the destructive confirmation", async () => {
     const api = installApi();
     api.previewWorktreeCleanup.mockImplementation(async (_common, _path, _allowDirty, mode) => ({ ...preparedPreview(dirty), mode }));

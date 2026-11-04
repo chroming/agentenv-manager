@@ -12,13 +12,18 @@ export const PAUSED_WORKTREE_MARKERS = [
 ];
 export const ACTIVE_WORKTREE_LOCKS = ["index.lock", "HEAD.lock"];
 
-export const assertNoWorktreeWriter = async (gitDir: string) => {
+export const findWorktreeWriterLock = async (gitDir: string): Promise<string | undefined> => {
   for (const marker of ACTIVE_WORKTREE_LOCKS) {
     try {
       await lstat(join(gitDir, marker));
-      throw new Error(`Git write lock is present (${marker}). Nothing was removed; inspect this lock and retry when safe.`);
+      return marker;
     } catch (error) { if (!isMissingFileError(error)) throw error; }
   }
+};
+
+export const assertNoWorktreeWriter = async (gitDir: string) => {
+  const marker = await findWorktreeWriterLock(gitDir);
+  if (marker) throw new Error(`Git write lock is present (${marker}). Nothing was removed; inspect this lock and retry when safe.`);
 };
 
 const pausedState = async (gitDir: string) => {

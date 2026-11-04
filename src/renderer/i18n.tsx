@@ -5955,6 +5955,10 @@ Object.assign(zhTW, {
 
 Object.assign(zhCN, {
   "Selected Worktrees": "所选工作树",
+  "Only the folder was changed. Git metadata was left unchanged because Git may still be writing.": "目录处理已完成。Git 可能仍在写入，因此登记信息保持不变。",
+  "Git metadata could not be verified and was left unchanged. Only the selected directory is managed by this cleanup.": "目录处理已完成。无法验证的 Git 登记信息保持不变，此次只处理了所选目录。",
+  "Git may still be writing. Cleanup can continue; Git metadata will be left unchanged.": "Git 可能仍在写入。可继续清理目录，Git 登记信息将保持不变。",
+  "Workspace references could not be checked. Cleanup can continue; saved references will not be changed.": "暂时无法检查工作区引用。可继续清理，已保存的工作区引用不会更改。",
   "Space retained in Trash": "回收站仍占用",
   "Local and remote branches are not deleted.": "不删除本地分支或远程分支。",
   "The owning repository's branches and remote refs are not deleted.": "不删除所属仓库的分支或远程引用。",
@@ -5991,6 +5995,10 @@ Object.assign(zhCN, {
 });
 Object.assign(zhTW, {
   "Selected Worktrees": "所選工作樹",
+  "Only the folder was changed. Git metadata was left unchanged because Git may still be writing.": "目錄處理已完成。Git 可能仍在寫入，因此登記資訊保持不變。",
+  "Git metadata could not be verified and was left unchanged. Only the selected directory is managed by this cleanup.": "目錄處理已完成。無法驗證的 Git 登記資訊保持不變，此次僅處理了所選目錄。",
+  "Git may still be writing. Cleanup can continue; Git metadata will be left unchanged.": "Git 可能仍在寫入。可繼續清理目錄，Git 登記資訊將保持不變。",
+  "Workspace references could not be checked. Cleanup can continue; saved references will not be changed.": "暫時無法檢查工作區引用。可繼續清理，已儲存的工作區引用不會更改。",
   "Space retained in Trash": "資源回收筒仍佔用",
   "Local and remote branches are not deleted.": "不刪除本機分支或遠端分支。",
   "The owning repository's branches and remote refs are not deleted.": "不刪除所屬倉庫的分支或遠端引用。",

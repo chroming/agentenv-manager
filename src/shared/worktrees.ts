@@ -102,6 +102,8 @@ export interface WorktreeCleanupPreview {
   backupRequired: boolean;
   forceRequired: boolean;
   savedWorkspace: boolean;
+  gitWriteInProgress?: boolean;
+  workspaceImpactUnknown?: boolean;
   gitFingerprint?: string;
 }
 

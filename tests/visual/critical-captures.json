@@ -4,6 +4,9 @@
   "pixelShiftTolerance": 1,
   "maxChangedPixelRatio": 0.012,
   "captures": [
+    { "file": "worktree-git-writing-en-920.png" },
+    { "file": "worktree-git-writing-zh_CN-920.png" },
+    { "file": "worktree-git-writing-zh_TW-920.png" },
     { "file": "worktree-permanent-en-920.png" },
     { "file": "worktree-permanent-zh_CN-920.png" },
     { "file": "worktree-permanent-zh_TW-920.png" },

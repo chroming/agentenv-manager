@@ -9,10 +9,10 @@
       "states": {
         "idle": "Manual selection includes dirty, detached and paused trees; automatic selection stays strict.",
         "working": "Shared confirmation and scoped progress distinguish Trash from irreversible deletion.",
-        "success": "Trash retains content at a valid Git registration; permanent deletion removes only the exact owned directory and administration.",
-        "error": "Changed path identity, real writer locks and filesystem errors have per-item diagnostics and retry.",
+        "success": "Trash retains the exact directory; permanent deletion removes it. Git administration is modified only when independently verified and not busy.",
+        "error": "Changed directory identity, protected roots and filesystem errors have per-item diagnostics and retry. Git writing disables optional metadata writes, not folder cleanup.",
         "cancelled": "Cancelling Preview writes nothing; Stop and navigation finish the current item then stop the queue.",
-        "noOp": "Missing size, integration evidence and optional branch-release failure do not block an explicit command.",
+        "noOp": "Unknown size, Git locks, unavailable metadata or bounded Workspace advice and optional branch-release failure do not block an explicit command.",
         "stale": "Execution rechecks the exact directory identity. Git registration is updated only when verified; otherwise it stays unchanged, without blocking physical cleanup.",
         "partial": "Deleted files with pending registration cleanup are separate from unfinished folder deletion; independent items continue.",
         "persisted": "Device-local journals expose interrupted moves/deletions after restart and never target reused original paths.",
@@ -23,7 +23,7 @@
         "renderer": ["tests/renderer/WorktreeDialog.test.tsx", "tests/renderer/worktreeSelection.test.ts"],
         "desktop": ["tests/e2e/worktrees.e2e.test.ts", "tests/e2e/worktreeRecoveryBackups.e2e.test.ts"],
         "persistence": ["tests/main/worktreeDisposal.test.ts", "tests/e2e/worktrees.e2e.test.ts"],
-        "visual": ["worktree-permanent-en-920.png", "worktree-permanent-zh_CN-920.png", "worktree-permanent-zh_TW-920.png", "worktree-trash-en-920.png", "worktree-trash-zh_CN-920.png", "worktree-trash-zh_TW-920.png"]
+        "visual": ["worktree-permanent-en-920.png", "worktree-permanent-zh_CN-920.png", "worktree-permanent-zh_TW-920.png", "worktree-trash-en-920.png", "worktree-trash-zh_CN-920.png", "worktree-trash-zh_TW-920.png", "worktree-git-writing-en-920.png", "worktree-git-writing-zh_CN-920.png", "worktree-git-writing-zh_TW-920.png"]
       }
     },
     {

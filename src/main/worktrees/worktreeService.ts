@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { clearTimeout, setTimeout } from "node:timers";
 import { lstat, mkdir, readFile, readdir, realpath, rm, stat } from "node:fs/promises";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { homedir } from "node:os";
@@ -386,6 +387,23 @@ export const createWorktreeService = ({
     return isWithin(path, canonical);
   }))).some(Boolean);
 
+  const workspaceImpactRoots = async (): Promise<string[] | undefined> => {
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        projectStore.listLocalRootPaths().then((roots) => Promise.all(roots.map((root) => realpath(root).catch((error) => {
+          if (isMissingFileError(error)) return resolve(root);
+          throw error;
+        })))).catch(() => undefined),
+        new Promise<undefined>((done) => { timeout = setTimeout(() => done(undefined), 500); })
+      ]);
+    } finally { clearTimeout(timeout); }
+  };
+  const workspaceImpact = (path: string, roots: string[] | undefined) => ({
+    savedWorkspace: Boolean(roots?.some((root) => isWithin(path, root))),
+    workspaceImpactUnknown: roots === undefined
+  });
+
   const disposal = createWorktreeDisposal({ appDataRoot,
     lookup: async (commonDir, path) => {
       const cachedInventory = (await inventoryCache.read()).inventory;
@@ -393,7 +411,7 @@ export const createWorktreeService = ({
       const cached = disposalEntries.get(discoveredKey(commonDir, path));
       if (!cached || cached.main || isWithin(path, commonDir) || isWithin(path, cached.repositoryPath) ||
         isWithin(path, appDataRoot) || isWithin(path, process.cwd())) throw new Error("This directory is not a removable linked Worktree");
-      return { ...cached, path: resolve(path), commonDir: await realpath(commonDir).catch((error) => { if (isMissingFileError(error)) return resolve(commonDir); throw error; }),
+      return { ...cached, path: resolve(path), commonDir: await realpath(commonDir).catch(() => resolve(commonDir)),
         main: false, exists: true, state: "review",
         manualReviewAvailable: true, cleanupReviewAvailable: false, headNeedsProtection: false };
     },
@@ -709,13 +727,15 @@ export const createWorktreeService = ({
     preview: async (commonDir, path, allowDirty, mode) => {
       if (!mode) return preview(commonDir, path, allowDirty);
       if (!await isKnownCandidate(commonDir, path)) throw new Error("Refresh Worktrees before cleanup");
-      return { ...await disposal.preview(commonDir, path, mode), savedWorkspace: await containsSavedWorkspace(path, await projectStore.listLocalRootPaths()) };
+      const impact = workspaceImpactRoots();
+      return { ...await disposal.preview(commonDir, path, mode), ...workspaceImpact(path, await impact) };
     },
     previewTrashDeletion: disposal.previewTrash,
     previewBatch: async (items, progress) => {
       if (items.length > 1000) throw new Error("Too many Worktrees selected");
       const contexts = new Map<string, ReturnType<typeof readRepository>>();
-      const savedRoots = await projectStore.listLocalRootPaths();
+      const impact = items.some((item) => item.mode) ? workspaceImpactRoots() : undefined;
+      let savedRoots: Promise<string[]> | undefined;
       const results: WorktreeCleanupPreparation[] = new Array(items.length);
       let cursor = 0, completed = 0;
       await Promise.all(Array.from({ length: Math.min(2, items.length) }, async () => {
@@ -724,14 +744,13 @@ export const createWorktreeService = ({
           try {
             if (!await isKnownCandidate(item.commonDir, item.path)) throw new Error("Refresh Worktrees before cleanup");
             if (item.mode) {
-              results[index] = { path: item.path, preview: { ...await disposal.preview(item.commonDir, item.path, item.mode), savedWorkspace: await containsSavedWorkspace(item.path, savedRoots) } };
-              ++completed;
-              try { await progress?.(completed, item.path, structuredClone(results[index])); } catch { /* Feedback is best effort. */ }
-              continue;
+              results[index] = { path: item.path, preview: { ...await disposal.preview(item.commonDir, item.path, item.mode), ...workspaceImpact(item.path, await impact) } };
+            } else {
+              let context = contexts.get(item.commonDir);
+              if (!context) { context = readRepository(item.commonDir); contexts.set(item.commonDir, context); }
+              savedRoots ??= projectStore.listLocalRootPaths();
+              results[index] = { path: item.path, preview: await preview(item.commonDir, item.path, item.allowDirty, await context, await savedRoots) };
             }
-            let context = contexts.get(item.commonDir);
-            if (!context) { context = readRepository(item.commonDir); contexts.set(item.commonDir, context); }
-            results[index] = { path: item.path, preview: await preview(item.commonDir, item.path, item.allowDirty, await context, savedRoots) };
           } catch (cause) { results[index] = { path: item.path, error: cause instanceof Error ? cause.message : String(cause) }; }
           ++completed;
           try { Promise.resolve(progress?.(completed, item.path, structuredClone(results[index]))).catch(() => undefined); }
