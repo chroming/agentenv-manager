@@ -4,7 +4,7 @@ import { join, resolve } from "node:path";
 import type { WorktreeEntry, WorktreeIntegration } from "../../shared/worktrees";
 import { hashPathEntry, hashRequiredPathEntry } from "../filesystemIntegrity";
 import { isMissingFileError } from "../fileUtils";
-import { GitCommandError, type GitCommandRunner } from "../skillSources/gitCommandRunner";
+import { GitCommandError, type GitCommandRunner, type GitCommandRunOptions } from "../skillSources/gitCommandRunner";
 
 export const PAUSED_WORKTREE_MARKERS = [
   "MERGE_HEAD", "CHERRY_PICK_HEAD", "REVERT_HEAD", "REBASE_HEAD", "BISECT_LOG",
@@ -52,10 +52,23 @@ const selectedPathSignatures = async (cwd: string, status: string) => {
   }));
 };
 
-const read = (runner: GitCommandRunner, cwd: string, args: string[], signal?: AbortSignal) =>
-  runner.run(["-c", "core.fsmonitor=false", ...args], {
-    cwd, env: { GIT_OPTIONAL_LOCKS: "0" }, timeoutMs: 8_000, maxOutputBytes: 4_000_000, signal
+export const readWorktreeGit = async (runner: GitCommandRunner, args: string[], options: GitCommandRunOptions) => {
+  const run = (bypassGraph = false) => runner.run(["-c", "core.fsmonitor=false",
+    ...(bypassGraph ? ["-c", "core.commitGraph=false"] : []), ...args], {
+    ...options, env: { ...options.env, GIT_OPTIONAL_LOCKS: "0" }
   });
+  // Keep healthy history acceleration; retry only a read affected by that cache.
+  try {
+    const result = await run();
+    return /commit-graph/i.test(result.stderr) ? run(true) : result;
+  } catch (error) {
+    if (error instanceof GitCommandError && /commit-graph/i.test(error.stderr)) return run(true);
+    throw error;
+  }
+};
+
+const read = (runner: GitCommandRunner, cwd: string, args: string[], signal?: AbortSignal) =>
+  readWorktreeGit(runner, args, { cwd, timeoutMs: 8_000, maxOutputBytes: 4_000_000, signal });
 
 export const readIntegration = async (runner: GitCommandRunner, cwd: string, selected?: string, signal?: AbortSignal): Promise<WorktreeIntegration> => {
   const output = (await read(runner, cwd,

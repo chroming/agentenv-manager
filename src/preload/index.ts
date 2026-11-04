@@ -103,7 +103,8 @@ const api: AgentEnvApi = {
   setWorktreeKeep: (commonDir, path, reason) => ipcRenderer.invoke("worktrees:set-keep", commonDir, path, reason),
   setWorktreeRepositoryKeep: (commonDir, reason) => ipcRenderer.invoke("worktrees:set-repository-keep", commonDir, reason),
   setWorktreeIntegrationRef: (commonDir, ref) => ipcRenderer.invoke("worktrees:set-integration-ref", commonDir, ref),
-  previewWorktreeCleanup: (commonDir, path, allowDirty) => ipcRenderer.invoke("worktrees:preview", commonDir, path, allowDirty),
+  previewWorktreeCleanup: (commonDir, path, allowDirty, mode) => ipcRenderer.invoke("worktrees:preview", commonDir, path, allowDirty, mode),
+  previewWorktreeTrashDeletion: (id) => ipcRenderer.invoke("worktrees:preview-trash-deletion", id),
   previewWorktreeCleanupBatch: (items, requestId) => ipcRenderer.invoke("worktrees:preview-batch", items, requestId),
   onWorktreeInventoryChanged: (callback) => {
     const listener = (_event: Electron.IpcRendererEvent, inventory: import("../shared/worktrees").WorktreeInventory) => callback(inventory);
@@ -116,7 +117,7 @@ const api: AgentEnvApi = {
     return () => { ipcRenderer.removeListener("worktrees:progress", listener); };
   },
   removeWorktree: (preview, requestId) => ipcRenderer.invoke("worktrees:remove", preview, requestId),
-  listWorktreeRecovery: () => ipcRenderer.invoke("worktrees:list-recovery"),
+  listWorktreeRecovery: (scope) => ipcRenderer.invoke("worktrees:list-recovery", scope),
   restoreWorktree: (id) => ipcRenderer.invoke("worktrees:restore", id),
   selectConversationWorkspace: () =>
     ipcRenderer.invoke("dialog:select-conversation-workspace"),

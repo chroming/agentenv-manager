@@ -92,7 +92,7 @@ Recent scan results appear immediately when you return to the page or restart th
 
 ![Git worktrees](docs/images/worktrees.png)
 
-Select all eligible clean worktrees in the current view or repository. You can also check worktrees with uncommitted files individually and confirm them together. The preview shows paths, sizes, required recovery copies, and estimated freed space. Local changes are backed up and verified before Git removes the directories; branches and remote history stay intact. You can stop after the current item finishes. Main, locked, and other protected directories cannot be removed. Retained backups do not count as freed space and can be restored from Worktrees.
+Select eligible clean worktrees in the current view or repository, or manually select several with uncommitted files. **Move to Trash** keeps the complete directories for restoration and only frees space when emptied. **Delete permanently** removes all selected directory contents without a file backup and cannot be undone. Confirmation shows paths and known sizes without waiting for space accounting or Git history analysis. Stop finishes the current item and skips the rest. Main directories, changed path identities and actual Git write locks remain protected; the owning repository's branches and remote refs are not deleted. Older recovery copies remain separately available.
 
 The repository menu can also select all removable worktrees, including those with uncommitted files. When unsure what to keep, request an AI analysis from the review dialog. Scanning, size accounting and cleanup never call AI. Suggestions do not replace confirmation or relax deletion safeguards.
 

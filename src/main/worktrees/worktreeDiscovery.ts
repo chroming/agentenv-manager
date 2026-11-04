@@ -4,6 +4,7 @@ import { isMissingFileError } from "../fileUtils";
 import { GitCommandError, type GitCommandRunner } from "../skillSources/gitCommandRunner";
 
 export const WORKTREE_SCAN_SKIP_DIRECTORIES = new Set([
+  ".agentenv-worktree-trash",
   ".git", ".cache", ".config", ".venv", "node_modules", "vendor", "dist", "build", "target"
 ]);
 const REPOSITORY_WORKTREE_CONTAINERS = ["_worktrees", ".worktrees", "worktrees", "Worktrees"];

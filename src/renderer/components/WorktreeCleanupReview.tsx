@@ -3,14 +3,15 @@ import { Fragment } from "react";
 import { formatBytes } from "../formatBytes";
 import { useI18n } from "../i18n";
 import type { WorktreeReviewItem } from "../worktreePreparation";
+import type { WorktreeDisposalMode } from "../../shared/worktrees";
 import { worktreeName } from "../worktreeSort";
 import { AlignedResourceList, CatalogSortMetric, DetailList, DiagnosticMessage, IconButton, InteractiveStatus, Notice, ResourceRow } from "./ui";
 
 const sumSizes = (values: Array<number | undefined>) => values.some((value) => value === undefined)
   ? undefined : values.reduce<number>((sum, value) => sum + value!, 0);
 
-export function WorktreeCleanupReview({ items, busy, onRetry }: {
-  items: WorktreeReviewItem[]; busy: boolean; onRetry(item: WorktreeReviewItem): void;
+export function WorktreeCleanupReview({ items, mode, busy, onRetry }: {
+  items: WorktreeReviewItem[]; mode?: WorktreeDisposalMode; busy: boolean; onRetry(item: WorktreeReviewItem): void;
 }) {
   const { t } = useI18n();
   const previews = items.flatMap((item) => item.preview ? [item.preview] : []);
@@ -21,13 +22,20 @@ export function WorktreeCleanupReview({ items, busy, onRetry }: {
     : t("{{count}} items could not be prepared and will not be removed.", { count: failures.length });
   const size = (bytes: number | undefined) => pending ? "…" : bytes === undefined ? t("Not measured") : formatBytes(bytes);
   return <>
-    <DetailList items={[
+    <DetailList items={mode ? [
+      { label: t("Selected Worktrees"), value: String(items.length) },
+      { label: mode === "permanent" ? t("Estimated space freed") : t("Space retained in Trash"), value: size(sumSizes(previews.map((preview) => preview.entry.sizeBytes))) }
+    ] : [
       { label: t("Estimated space freed"), value: size(sumSizes(previews.map((preview) => preview.backupRequired ? 0 : preview.entry.sizeBytes))) },
       { label: t("Recovery copies retained"), value: size(sumSizes(backups.map((preview) => preview.entry.sizeBytes))) },
       { label: t("Local recovery copies"), value: pending ? "…" : String(backups.length) }
     ]} />
-    <p>{t("Local branches and commits are kept. Remote branches are not changed.")}</p>
-    {backups.length ? <Notice tone="warning" icon={<AlertTriangle size={15} />}>
+    <p>{t("The owning repository's branches and remote refs are not deleted.")}</p>
+    {mode ? <Notice tone={mode === "permanent" ? "warning" : "info"} icon={mode === "permanent" ? <AlertTriangle size={15} /> : undefined}>
+      {mode === "permanent" ? t("The entire folder, including uncommitted, untracked and ignored files and nested repositories, will be permanently deleted without a backup. This cannot be undone.")
+        : t("The folder is moved, not copied. It still uses disk space until Trash is emptied. You can restore it from Worktree recovery.")}
+    </Notice> : null}
+    {!mode && backups.length ? <Notice tone="warning" icon={<AlertTriangle size={15} />}>
       {t("Local content is backed up in full before removal. Its recovery copy still uses disk space.")}
       {backups.some((preview) => preview.entry.pausedOperations?.length) ? <><br />{t("Unfinished Git state will also be saved and can be restored.")}</> : null}
     </Notice> : null}
@@ -36,7 +44,7 @@ export function WorktreeCleanupReview({ items, busy, onRetry }: {
     </Notice> : null}
     {failures.length ? <p>{failureMessage}</p> : null}
     <AlignedResourceList actionTrack="compact" className="worktree-dialog__entries">
-      {items.map((item) => <Fragment key={`${item.entry.commonDir}\0${item.entry.path}`}>
+      {items.map((item) => <Fragment key={item.trashId ?? `${item.entry.commonDir}\0${item.entry.path}`}>
         <ResourceRow density="compact" appearance="plain" icon={<FolderGit2 size={16} />}
           title={worktreeName(item.entry.path)} description={<span className="selectable" title={item.entry.path}>{item.entry.path}</span>}
           metadata={item.preview ? <span className="worktree-dialog__metrics">
@@ -47,7 +55,7 @@ export function WorktreeCleanupReview({ items, busy, onRetry }: {
           state={<InteractiveStatus size="metadata" busy={!item.preview && !item.error}
             statusKind={item.error ? "error" : "neutral"}
             label={item.error ? t("Could not prepare") : !item.preview ? t("Checking...")
-              : t(item.preview.backupRequired ? "Recovery copy required" : "No local changes")} />}
+              : mode ? t("Ready") : t(item.preview.backupRequired ? "Recovery copy required" : "No local changes")} />}
           actions={item.error ? <IconButton label={t("Retry review of {{name}}", { name: worktreeName(item.entry.path) })}
             variant="ghost" disabled={busy} onClick={() => onRetry(item)}><RotateCcw size={15} /></IconButton> : undefined} />
         {item.error ? <Notice tone="danger" icon={<AlertTriangle size={15} />} role="alert">

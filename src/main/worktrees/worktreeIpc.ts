@@ -40,11 +40,12 @@ export const registerWorktreeIpc = (
     }
   });
   diagnosticHandle("worktrees:cancel-scan", () => service.cancelScan());
-  diagnosticHandle("worktrees:preview", (_event, commonDir: unknown, path: unknown, allowDirty: unknown) =>
-    service.preview(String(commonDir), String(path), allowDirty === true));
+  diagnosticHandle("worktrees:preview", (_event, commonDir: unknown, path: unknown, allowDirty: unknown, mode: unknown) =>
+    service.preview(String(commonDir), String(path), allowDirty === true, z.enum(["trash", "permanent"]).default("trash").parse(mode)));
+  diagnosticHandle("worktrees:preview-trash-deletion", (_event, id: unknown) => service.previewTrashDeletion(z.string().uuid().parse(id)));
   diagnosticHandle("worktrees:preview-batch", async (event, raw, id) => {
     const requestId = z.string().uuid().parse(id);
-    const items = z.array(z.object({ commonDir: z.string().min(1), path: z.string().min(1), allowDirty: z.boolean() })).max(1000).parse(raw);
+    const items = z.array(z.object({ commonDir: z.string().min(1), path: z.string().min(1), allowDirty: z.boolean(), mode: z.enum(["trash", "permanent"]).default("trash") })).max(1000).parse(raw);
     const results = await service.previewBatch(items, (completed, path, preparation) => {
       sendProgress(event, { requestId, phase: "preparing", path, completed, total: items.length,
         ...(preparation ? { preparation } : {}) });
@@ -59,7 +60,7 @@ export const registerWorktreeIpc = (
     } }).catch(() => undefined);
     return results.map((item) => item.error !== undefined && reference ? { ...item, error: `${item.error}\nDiagnostic reference: ${reference}` } : item);
   });
-  diagnosticHandle("worktrees:list-recovery", () => service.listRecovery());
+  diagnosticHandle("worktrees:list-recovery", (_event, scope: unknown) => service.listRecovery(z.enum(["trash", "all"]).optional().parse(scope)));
   handleMutation("worktrees:add-root", (_event, path: unknown) => service.addScanRoot(String(path)));
   handleMutation("worktrees:remove-root", (_event, path: unknown) => service.removeScanRoot(String(path)));
   handleMutation("worktrees:set-keep", (_event, commonDir: unknown, path: unknown, reason: unknown) =>
@@ -78,11 +79,19 @@ export const registerWorktreeIpc = (
       }).catch(() => undefined));
     };
     try {
-      return await service.remove(preview, (phase, fileProgress) => {
+      const result = await service.remove(preview, (phase, fileProgress) => {
         if (previous !== phase) { finishStage(); previous = phase; started = performance.now(); }
         if (requestId) sendProgress(event, { requestId, phase, path: preview.entry.path, completed: 0, total: 1,
           ...(fileProgress ? { fileProgress } : {}) });
       });
+      if (result.verificationWarnings?.length && diagnostics) {
+        const reference = await diagnostics.record("worktrees:remove", "cleanup-completed-with-notes", {
+          outcome: "partial", error: new Error(result.verificationWarnings.join("\n")),
+          context: { path: result.path, mode: result.mode, disposalId: result.id, pendingGitCleanup: result.pendingGitCleanup }
+        }).catch(() => undefined);
+        if (reference) return { ...result, verificationWarnings: result.verificationWarnings.map((warning) => `${warning}\nDiagnostic reference: ${reference}`) };
+      }
+      return result;
     } finally { finishStage(); await Promise.allSettled(logs); }
   });
   handleMutation("worktrees:restore", (_event, id: unknown) => service.restore(String(id)));

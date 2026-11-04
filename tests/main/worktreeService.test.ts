@@ -52,6 +52,42 @@ const fixture = async () => {
 };
 
 describe("worktree inventory and cleanup", () => {
+  it("removes and restores local content even when REBASE_HEAD already points to missing history", async () => {
+    const { linked, service } = await fixture();
+    const gitDir = resolve(linked, (await run("git", ["-C", linked, "rev-parse", "--git-dir"])).stdout.trim());
+    const object = "f".repeat(40);
+    await writeFile(join(gitDir, "REBASE_HEAD"), `${object}\n`);
+    await writeFile(join(linked, "local.txt"), "retain local work\n");
+    const entry = (await service.inventory()).entries.find((item) => item.path === linked)!;
+    const removed = await service.remove(await service.preview(entry.commonDir, linked, true));
+    expect(removed.status).toBe("removed");
+    expect(removed.unavailableOperationObjects).toEqual([{ field: "REBASE_HEAD", object }]);
+    expect(removed.verificationWarnings).toBeUndefined();
+    expect((await service.listRecovery()).records[0].unavailableOperationObjects).toEqual(removed.unavailableOperationObjects);
+    await expect(lstat(linked)).rejects.toMatchObject({ code: "ENOENT" });
+    expect((await service.restore(removed.id)).status).toBe("restored");
+    const restoredGitDir = resolve(linked, (await run("git", ["-C", linked, "rev-parse", "--git-dir"])).stdout.trim());
+    expect(await readFile(join(restoredGitDir, "REBASE_HEAD"), "utf8")).toBe(`${object}\n`);
+    expect(await readFile(join(linked, "local.txt"), "utf8")).toBe("retain local work\n");
+  });
+
+  it("cleans a staged worktree without repairing or checking an unrelated broken commit-graph", async () => {
+    const { repo, linked, service, runner } = await fixture();
+    await writeFile(join(linked, "README.md"), "recover this staged value\n");
+    await run("git", ["-C", linked, "add", "README.md"]);
+    const graph = join(repo, ".git", "objects", "info", "commit-graph");
+    await mkdir(join(graph, ".."), { recursive: true });
+    await writeFile(graph, "invalid unrelated commit-graph cache\n");
+    const entry = (await service.inventory()).entries.find((item) => item.path === linked)!;
+    const calls = vi.spyOn(runner, "run");
+    const removed = await service.remove(await service.preview(entry.commonDir, linked, true));
+    expect(removed.status).toBe("removed");
+    expect(calls.mock.calls.some(([args]) => args.includes("fsck"))).toBe(false);
+    expect((await service.restore(removed.id)).status).toBe("restored");
+    expect((await run("git", ["-C", linked, "show", ":README.md"])).stdout).toBe("recover this staged value\n");
+    expect(await readFile(graph, "utf8")).toBe("invalid unrelated commit-graph cache\n");
+  });
+
   it.each(["unchanged", "working files", "index", "operation metadata"])("migrates a verified legacy full checkout but refuses changed %s", async (change) => {
     const { root, repo, linked, service } = await fixture();
     await writeFile(join(linked, "README.md"), "staged recovery payload\n");
@@ -244,7 +280,7 @@ describe("worktree inventory and cleanup", () => {
     expect(types.filter((type) => type === "tree")).toHaveLength(1);
     expect(types.every((type) => type === "tree" || type === "commit")).toBe(true);
     expect(spy.mock.calls.filter(([args]) => args[0] === "update-ref").length).toBeLessThanOrEqual(3);
-    expect(spy.mock.calls.filter(([args]) => args[0] === "ls-tree")).toHaveLength(1);
+    expect(spy.mock.calls.filter(([args]) => args.includes("ls-tree"))).toHaveLength(1);
     await run("git", ["-C", repo, "reflog", "expire", "--expire=now", "--all"]);
     await run("git", ["-C", repo, "gc", "--prune=now"]);
     await service.restore(removed.id);

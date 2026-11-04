@@ -1,65 +1,65 @@
 {
   "formatVersion": 1,
-  "reviewedAt": "2026-11-03T14:01:53.344Z",
+  "reviewedAt": "2026-11-04T05:09:50.595Z",
   "applicationVersion": "0.2.5",
-  "baseCommit": "65a7d197",
+  "baseCommit": "c523774c",
   "build": {
-    "sourceFingerprint": "b7436fd58c0a7cf0c44266bd7aeca0282154f8f46f8c40e62c1f9a570addb4b0",
-    "artifactFingerprint": "5b1842908b0011b3fbfbd528a1f94acdf6db28631fb891dacd71f01195f94699",
-    "generatedAt": "2026-11-03T13:59:23.726Z"
+    "sourceFingerprint": "10ffaa6b68bbbf6325e2a7d65d7c85047e016a8c1c252ba0efc5843513f2907d",
+    "artifactFingerprint": "090c432ff1a79f466822ad1e77728c739fdd58c1da93653c700f33b1779d1838",
+    "generatedAt": "2026-11-04T05:03:13.033Z"
   },
   "review": {
-    "scenarios": 130,
-    "method": "Inspected three native minimum-window paused-operation confirmations in en, zh_CN and zh_TW with optional size intentionally unknown. Verified recovery disclosure, aligned actions and enabled final confirmation. Other 127 reviewed baselines retained.",
-    "scope": "Mock Electron on macOS with isolated Home and real temporary Git repositories; paused merge removal and exact restoration verified; no paid model requests",
+    "scenarios": 136,
+    "method": "Inspected 18 native captures: nine analysis dialogs at three sizes and languages, three unknown-size paused-operation confirmations, three permanent confirmations and three Trash inventories. Existing other 118 baselines retained.",
+    "scope": "macOS Electron with isolated Home and temporary real Git repositories; no user Worktrees or paid model requests",
     "thresholdsChanged": false,
-    "updatedScenarios": 3
+    "updatedScenarios": 18
   },
   "files": [
     {
       "file": "worktree-analysis-en-1180x728.png",
-      "sha256": "be9f34c838fce310a8f50cc01a17783cc75c65aeb820876b92bee23ee84719c3",
-      "reviewReason": "Reviewed 2026-11-03: concrete Worktree states, contextual removal, collapsed Git details and protected recovery inventory. Inspected native pixels and minimum-size controls; original thresholds retained."
+      "sha256": "a862404f89a2eaa29fd22d61f883d0a801b47f807b9e1a6a6b3c29420f0648e5",
+      "reviewReason": "Reviewed 2026-11-04: explicit Trash/permanent commands, same shared controls, visible confirmation at minimum size and translated layouts; original thresholds retained."
     },
     {
       "file": "worktree-analysis-en-1440x900.png",
-      "sha256": "e5eb184b93540bb8ad0264acddc0fd480e1ad83be557b531ae83e053e1c4fd7f",
-      "reviewReason": "Reviewed 2026-11-03: concrete Worktree states, contextual removal, collapsed Git details and protected recovery inventory. Inspected native pixels and minimum-size controls; original thresholds retained."
+      "sha256": "518d589fc1bd0d5deb18c34711bcd73d23ff2919bd38acb7dd6ed35689a461d8",
+      "reviewReason": "Reviewed 2026-11-04: explicit Trash/permanent commands, same shared controls, visible confirmation at minimum size and translated layouts; original thresholds retained."
     },
     {
       "file": "worktree-analysis-en-920x620.png",
-      "sha256": "7d231ad0262bcfcd305b2cf46fcc82f6dc722a36b5df2a70415eb264b3bf4f3f",
-      "reviewReason": "Reviewed 2026-11-03: concrete Worktree states, contextual removal, collapsed Git details and protected recovery inventory. Inspected native pixels and minimum-size controls; original thresholds retained."
+      "sha256": "0006ebf65bedc80421c87e412829802beaf44e9ad50aa6ff2d98a0d32be96614",
+      "reviewReason": "Reviewed 2026-11-04: explicit Trash/permanent commands, same shared controls, visible confirmation at minimum size and translated layouts; original thresholds retained."
     },
     {
       "file": "worktree-analysis-zh_CN-1180x728.png",
-      "sha256": "077c77399f46bbe05ddbf4a1231129aacc9c7e5fe0aac74b82dc71faec56205e",
-      "reviewReason": "Reviewed 2026-11-03: concrete Worktree states, contextual removal, collapsed Git details and protected recovery inventory. Inspected native pixels and minimum-size controls; original thresholds retained."
+      "sha256": "c751a547f77ab28b425900fcd0f4fb940b0a2f7ff99c444fa673c2524bd23d18",
+      "reviewReason": "Reviewed 2026-11-04: explicit Trash/permanent commands, same shared controls, visible confirmation at minimum size and translated layouts; original thresholds retained."
     },
     {
       "file": "worktree-analysis-zh_CN-1440x900.png",
-      "sha256": "8f85f939e86ecdc37756616bfb9109285c463c18a9a7519f5febde99792c86ed",
-      "reviewReason": "Reviewed 2026-11-03: concrete Worktree states, contextual removal, collapsed Git details and protected recovery inventory. Inspected native pixels and minimum-size controls; original thresholds retained."
+      "sha256": "1363bcf3e469aca7768242298eace3c342f3af2f587c2d8678ae97548fbf4fbf",
+      "reviewReason": "Reviewed 2026-11-04: explicit Trash/permanent commands, same shared controls, visible confirmation at minimum size and translated layouts; original thresholds retained."
     },
     {
       "file": "worktree-analysis-zh_CN-920x620.png",
-      "sha256": "4722ca49f6862a7f8eb135eecb91864c86e4244a28ba1e014b1e19b7391195ad",
-      "reviewReason": "Reviewed 2026-11-03: concrete Worktree states, contextual removal, collapsed Git details and protected recovery inventory. Inspected native pixels and minimum-size controls; original thresholds retained."
+      "sha256": "ad377401e63ab5850ed9ac1599b6be5552d9291cd26bd98c9103cd35b88478bb",
+      "reviewReason": "Reviewed 2026-11-04: explicit Trash/permanent commands, same shared controls, visible confirmation at minimum size and translated layouts; original thresholds retained."
     },
     {
       "file": "worktree-analysis-zh_TW-1180x728.png",
-      "sha256": "c7a0ba9c163be4f3cf2ac9127641e0458089bd93a64fe31261fc2ce16d2557b3",
-      "reviewReason": "Reviewed 2026-11-03: concrete Worktree states, contextual removal, collapsed Git details and protected recovery inventory. Inspected native pixels and minimum-size controls; original thresholds retained."
+      "sha256": "eeae7022f27853d9408528a9b325d54351583a34a5528b3cd0c87e97dc3be8e6",
+      "reviewReason": "Reviewed 2026-11-04: explicit Trash/permanent commands, same shared controls, visible confirmation at minimum size and translated layouts; original thresholds retained."
     },
     {
       "file": "worktree-analysis-zh_TW-1440x900.png",
-      "sha256": "f9b069dca0c0a7ae9df69cdf6f738025fb803fa74f25e2c9e4960d78784f43e1",
-      "reviewReason": "Reviewed 2026-11-03: concrete Worktree states, contextual removal, collapsed Git details and protected recovery inventory. Inspected native pixels and minimum-size controls; original thresholds retained."
+      "sha256": "c7bc6e7a943e1e838d1a74a050839af4d0b755e8de0d2c6697bade48efb94e2f",
+      "reviewReason": "Reviewed 2026-11-04: explicit Trash/permanent commands, same shared controls, visible confirmation at minimum size and translated layouts; original thresholds retained."
     },
     {
       "file": "worktree-analysis-zh_TW-920x620.png",
-      "sha256": "981a2bec9702c1d999e716f08a83727c6ff371970db0fe1ea456aa62ca502b2e",
-      "reviewReason": "Reviewed 2026-11-03: concrete Worktree states, contextual removal, collapsed Git details and protected recovery inventory. Inspected native pixels and minimum-size controls; original thresholds retained."
+      "sha256": "3192b10dbee808cbf178e6ce0700863088cd5cab5e443fe2de85d27ee44d6a01",
+      "reviewReason": "Reviewed 2026-11-04: explicit Trash/permanent commands, same shared controls, visible confirmation at minimum size and translated layouts; original thresholds retained."
     },
     {
       "file": "skill-invocation-920.png",
@@ -653,18 +653,48 @@
     },
     {
       "file": "worktree-paused-operation-en-920.png",
-      "sha256": "9d0c06e4ac8dcc7ec5f524fe9d4f00ff4e1f9f45b79a5051da5c8b02557347a0",
-      "reviewReason": "Reviewed 2026-11-03 at native 920x620: unfinished Git state is recoverable, unknown size does not gate removal, warning and fixed-footer actions remain legible. Original comparison thresholds retained."
+      "sha256": "5eac9d15ac9eec2a2439fb8b9981801d476af26109d4f96667a64c61dea26fb9",
+      "reviewReason": "Reviewed 2026-11-04: explicit Trash/permanent commands, same shared controls, visible confirmation at minimum size and translated layouts; original thresholds retained."
     },
     {
       "file": "worktree-paused-operation-zh_CN-920.png",
-      "sha256": "8f498035e9e99c262ac067facc880e6f8d46abfd4f4813def73e7393aa69a608",
-      "reviewReason": "Reviewed 2026-11-03 at native 920x620: unfinished Git state is recoverable, unknown size does not gate removal, warning and fixed-footer actions remain legible. Original comparison thresholds retained."
+      "sha256": "f145b90fdb95c142dbd3e00897b18135dabb5fa4f48a9c386b1479d32777d74c",
+      "reviewReason": "Reviewed 2026-11-04: explicit Trash/permanent commands, same shared controls, visible confirmation at minimum size and translated layouts; original thresholds retained."
     },
     {
       "file": "worktree-paused-operation-zh_TW-920.png",
-      "sha256": "fa798f4ad1b1cd45d7f30ff36b803c836f5b59d2d0ad4dabe1e581a57247681e",
-      "reviewReason": "Reviewed 2026-11-03 at native 920x620: unfinished Git state is recoverable, unknown size does not gate removal, warning and fixed-footer actions remain legible. Original comparison thresholds retained."
+      "sha256": "9c25bcb577487873639515a1c89e1c8b9fc7c5e1f6889e2c4fd5709253327603",
+      "reviewReason": "Reviewed 2026-11-04: explicit Trash/permanent commands, same shared controls, visible confirmation at minimum size and translated layouts; original thresholds retained."
+    },
+    {
+      "file": "worktree-permanent-en-920.png",
+      "sha256": "54cf9d3d6fd49a4f58049bb97d3a539f8729c5ae51e2bc19088cc29724667cfb",
+      "reviewReason": "Reviewed 2026-11-04: explicit Trash/permanent commands, same shared controls, visible confirmation at minimum size and translated layouts; original thresholds retained."
+    },
+    {
+      "file": "worktree-trash-en-920.png",
+      "sha256": "2067c4c70d0e9409184482e3fadfc88d912dc9e10692435d8acf3b8bc1bca183",
+      "reviewReason": "Reviewed 2026-11-04: explicit Trash/permanent commands, same shared controls, visible confirmation at minimum size and translated layouts; original thresholds retained."
+    },
+    {
+      "file": "worktree-permanent-zh_CN-920.png",
+      "sha256": "13145e4fa9b69af1a0a8e3796e40c98fcf5a152763a0abd986a34abd35c98210",
+      "reviewReason": "Reviewed 2026-11-04: explicit Trash/permanent commands, same shared controls, visible confirmation at minimum size and translated layouts; original thresholds retained."
+    },
+    {
+      "file": "worktree-trash-zh_CN-920.png",
+      "sha256": "881b48d17dd696e5b79a1f66936dcdbd89124d06e4c5aa9997172ceaf8cb8e2c",
+      "reviewReason": "Reviewed 2026-11-04: explicit Trash/permanent commands, same shared controls, visible confirmation at minimum size and translated layouts; original thresholds retained."
+    },
+    {
+      "file": "worktree-permanent-zh_TW-920.png",
+      "sha256": "fd0517c71e9f0c8dae4948bfcd8acaa17223a2399a757183a386e3da717026ac",
+      "reviewReason": "Reviewed 2026-11-04: explicit Trash/permanent commands, same shared controls, visible confirmation at minimum size and translated layouts; original thresholds retained."
+    },
+    {
+      "file": "worktree-trash-zh_TW-920.png",
+      "sha256": "dc87ad229b7b6268c000a91390060d97dc3d1a5f9849d3de7cf0b2b2bda005a2",
+      "reviewReason": "Reviewed 2026-11-04: explicit Trash/permanent commands, same shared controls, visible confirmation at minimum size and translated layouts; original thresholds retained."
     }
   ],
   "incrementalReviews": [
@@ -749,5 +779,12 @@
     "passedScenarios": 91,
     "totalScenarios": 91,
     "reportSha256": "99b7ffb64ce84eda595b70a48e88901db8338a3854387428fe518547ab53b7be"
+  },
+  "verification": {
+    "verifiedAt": "2026-11-04T05:19:16.940Z",
+    "sourceFingerprint": "f1365a65b7b89af5d1369b0455c008f77bfcd18737f9b971ddcdfa604d70e4e4",
+    "artifactFingerprint": "9446ce2b6e6acad8f591e7fda23279f152f0c05c002dc9184d1da638a36691d6",
+    "scenarios": 18,
+    "method": "Independent rebuilt Electron run; all 18 affected captures passed against reviewed golden images at unchanged thresholds; max 0.769%. Other 118 scenarios were not recaptured for this scoped change."
   }
 }

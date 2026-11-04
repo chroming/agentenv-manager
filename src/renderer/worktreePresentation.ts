@@ -1,4 +1,9 @@
-import type { WorktreeEntry } from "../shared/worktrees";
+import type { WorktreeEntry, WorktreeRecoveryRecord } from "../shared/worktrees";
+
+export const worktreeRecoveryNote = (record: Pick<WorktreeRecoveryRecord, "unavailableOperationObjects">) =>
+  record.unavailableOperationObjects?.length
+    ? "Some Git operation history was already unavailable locally. Local files and Git metadata are backed up; restoring will not repair that history."
+    : undefined;
 
 export const worktreeStatus = (entry: WorktreeEntry): {
   message: string; values?: Record<string, string | number>; tone: "neutral" | "warning";

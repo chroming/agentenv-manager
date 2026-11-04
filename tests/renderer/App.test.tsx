@@ -320,6 +320,7 @@ const managedState = (overrides: Partial<TargetManagementState> = {}): TargetMan
 
 const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
   const api: AgentEnvApi = {
+    previewWorktreeTrashDeletion: vi.fn(),
     previewWorktreeCleanupBatch: vi.fn(),
     onWorktreeProgress: vi.fn(() => () => undefined),
     onWorktreeInventoryChanged: vi.fn(() => () => undefined),

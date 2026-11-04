@@ -4,7 +4,7 @@ import { copyFile, lstat, mkdir, readFile, readdir, readlink, realpath, symlink 
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { copyPathVerified, hashRequiredPathEntry } from "../filesystemIntegrity";
 import { writeAtomic } from "../fileUtils";
-import type { GitCommandRunner } from "../skillSources/gitCommandRunner";
+import { GitCommandError, type GitCommandRunner, type GitCommandRunOptions } from "../skillSources/gitCommandRunner";
 import { assertNoWorktreeWriter } from "./worktreeGitState";
 import type { WorktreeRestoreRegistration } from "../../shared/worktrees";
 
@@ -159,7 +159,11 @@ export const copyRecoveryPathExclusive = async (source: string, destination: str
 
 // Preserve operation commits (including ORIG_HEAD and abbreviated rebase todo
 // commits), index blobs, and per-worktree refs across reflog expiry / git gc.
-export const operationRecoveryObjects = async (runner: GitCommandRunner, cwd: string, metadata: string, head: string) => {
+export const operationRecoveryObjects = async (runner: GitCommandRunner, cwd: string, metadata: string, head: string,
+  onUnavailable?: (reference: { field: string; object: string }) => void) => {
+  const run = (args: string[], options: GitCommandRunOptions) => runner.run(["-c", "core.commitGraph=false", ...args], {
+    ...options, env: { ...options.env, GIT_NO_LAZY_FETCH: "1" }
+  });
   const candidates = new Map<string, { field: string; type: "commit" | "object" }>();
   const required = (token: string | undefined, field: string, type: "commit" | "object" = "commit", named = false) => {
     if (!token || (!named && !/^[0-9a-f]{4,64}$/.test(token))) {
@@ -209,9 +213,9 @@ export const operationRecoveryObjects = async (runner: GitCommandRunner, cwd: st
   await walk(metadata);
   const options = { cwd, timeoutMs: 8_000, maxOutputBytes: 4_000_000,
     env: { GIT_OPTIONAL_LOCKS: "0", GIT_INDEX_FILE: join(metadata, "..", "index") } };
-  const headTree = await runner.run(["ls-tree", "-r", "-z", head], options);
+  const headTree = await run(["ls-tree", "-r", "-z", head], options);
   const reachable = new Set([...headTree.stdout.matchAll(/(?:^|\0)\d+ \w+ ([0-9a-f]{40,64})\t/g)].map((match) => match[1]));
-  const index = await runner.run(["ls-files", "--stage", "-z"], options);
+  const index = await run(["ls-files", "--stage", "-z"], options);
   const blobs = new Set([...index.stdout.matchAll(/(?:^|\0)\d+ ([0-9a-f]{40,64}) /g)]
     .map((match) => match[1]).filter((object) => !reachable.has(object)));
   const objects = new Set<string>();
@@ -222,18 +226,34 @@ export const operationRecoveryObjects = async (runner: GitCommandRunner, cwd: st
       Buffer.concat([Buffer.from(`100644 index-${String(i).padStart(10, "0")}\0`), Buffer.from(object, "hex")])));
     const treePath = join(metadata, "..", "index-objects.tree");
     await writeAtomic(treePath, tree);
-    const saved = await runner.run(["hash-object", "-t", "tree", "-w", treePath], options);
+    const saved = await run(["hash-object", "-t", "tree", "-w", treePath], options);
     const object = saved.stdout.trim();
-    await runner.run(["fsck", "--connectivity-only", "--no-dangling", object], { ...options, timeoutMs: 60_000 });
+    // Check this recovery tree only, not unrelated refs, reflogs or cached graphs.
+    const reachable = await run(["rev-list", "--objects", "--no-object-names", "--missing=print", object], options);
+    const listed = new Set(reachable.stdout.trim().split("\n"));
+    if (!/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(object) || reachable.stderr.trim() ||
+        listed.size !== blobs.size + 1 || !listed.has(object) || [...blobs].some((blob) => !listed.has(blob))) {
+      throw new Error("Staged recovery content is missing or unreadable; nothing was removed");
+    }
     objects.add(object);
   }
   for (const [candidate, { field, type }] of candidates) {
     let object: string;
     try {
-      object = (await runner.run(["rev-parse", "--verify", "--end-of-options", `${candidate}^{${type}}`], {
+      object = (await run(["rev-parse", "--verify", "--end-of-options", `${candidate}^{${type}}`], {
         cwd, timeoutMs: 8_000, maxOutputBytes: 32_000
       })).stdout.trim();
     } catch (error) {
+      const exitCode = error instanceof GitCommandError ? error.exitCode : (error as { code?: number })?.code;
+      // Only an independently confirmed absent full object ID is pre-existing
+      // damage. Timeouts, ambiguous IDs and unreadable existing objects still fail.
+      if (onUnavailable && exitCode === 128 && /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(candidate)) {
+        const probe = await run(["rev-parse", `--disambiguate=${candidate}`], { cwd, timeoutMs: 8_000, maxOutputBytes: 32_000 });
+        if (probe.exitCode === 0 && !probe.stdout.trim() && !probe.stderr.trim()) {
+          onUnavailable({ field, object: candidate });
+          continue;
+        }
+      }
       throw new Error(`Required Git recovery object ${candidate} (${field}) could not be resolved: ${error instanceof Error ? error.message : String(error)}`, { cause: error });
     }
     if (!/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/.test(object)) {

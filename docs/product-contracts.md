@@ -392,36 +392,49 @@ Removing a Workspace reference never removes a worktree. A worktree cleanup prev
 identifies the exact directory and retains its branch, repository, and Conversations.
 It warns when any saved local Workspace is inside the directory being removed, including
 a Workspace rooted in a subdirectory; the Workspace shortcut itself is preserved.
-Cleanup requires a fresh Git check before invoking `git worktree remove`. Clean trees
-retain their exact commit through a recovery ref without duplicating their files. Dirty
-or ignored-content trees require a verified full recovery copy and explicit user
-selection/confirmation before Git's force option can be used. They may be selected
-individually for a combined preview, but automatic selection never includes them.
-Paused merge/rebase/cherry-pick/bisect state and unresolved conflicts are not an
-active writer and remain manually selectable, including older cached classifications.
-Their working contents, conflict/staged index, operation metadata and otherwise
-unreachable operation/index objects are preserved and verified before removal.
-Restoration verifies those saved payloads and never overwrites a newly occupied
-path or changed Git state. Real index/HEAD writer locks remain an execution safety
-condition; AgentEnv never kills Git processes or deletes their lock files.
-Normal clean trees retain the refs-only path and free space immediately; index
-flags that may hide changes require full recovery instead of claiming no local value.
-Leaving the owning cleanup surface stops the remaining queue after the current
-transaction completes its backup/removal/verification; navigation never cancels a
-destructive filesystem step midway or silently continues later selected removals.
-Main, locked, missing, and submodule worktrees are not cleanup candidates.
-Individual review is not a mandatory navigation step. A reviewable tree
-has a compact Remove Worktree... secondary row action that prepares the same fresh preview
-as the detail footer, then requires one final destructive confirmation. The detail
-does not require a separate acknowledgment checkbox before opening confirmation.
-Preview is read-only: cancellation writes nothing. Dirty/ignored content still
-requires a full verified recovery copy and staged-index protection before removal;
-the final confirmation explains that consequence. Main, locked, missing, repository-ignored,
-kept, submodule and otherwise unsafe trees do not acquire selection or this shortcut. Preparing
-one row shows progress on that initiating action, not on the batch command.
-Detached commits without another ref receive a recovery ref before removal.
-An operation cannot claim success until the directory and Git registration are both
-verified absent. Recovery must not overwrite a path created after cleanup.
+Cleanup exposes two explicit commands through shared confirmation, progress and results:
+Move to Trash and Delete permanently. Both support manual multi-selection and repository
+selection; neither requires opening each tree's detail. The former is reversible storage,
+not released space. The latter discards all selected directory contents, including dirty,
+untracked, ignored and nested-repository files, without a full backup. Its confirmation
+states that it cannot be undone. Owning-repository branches and remote refs are not deleted;
+this is not a promise to preserve unreferenced commits or nested-repository histories.
+Neither command runs integration analysis, fsck, required-object certification, full-tree
+hashing, backup copying or AI. Size measurement is optional, not an action prerequisite.
+Preview checks the selected linked-directory identity; execution rechecks the directory
+and exact Git administration inode, `.git` pointer and backlink, not the whole repository.
+Redirected or replaced targets, a directory containing the owning Git database/main tree,
+AgentEnv storage or the running process directory are rejected. Real index/HEAD writer
+locks remain execution safety conditions; AgentEnv never kills Git or deletes lock files.
+Paused merge/rebase/cherry-pick state, unresolved conflicts, detached HEAD, stale missing
+operation objects, worktree lock markers, submodules and unavailable cached health
+classifications are not manual-selection barriers. Main trees, absent directories and user
+or repository exclusions remain unselectable. Selection is not deletion authorization.
+
+Trash uses a same-volume rename, never a cross-device copy fallback. It normally resides
+under the device-local data root; other volumes use a marked private sibling container.
+Every item has a private journal binding exact source, retained path and registration
+identity. All contents, index and unfinished-operation metadata remain in place. The Git
+backlink is changed to the retained path; the worktree stays registered there and its
+current HEAD is detached when resolvable, releasing the original branch without moving
+that branch. Optional branch-release failure is reported, not treated as a failed move.
+Only verified Trash locations are excluded from ordinary inventory. Restore refuses an
+occupied source path and returns the same directory. It reattaches the old branch only
+if that ref still points at the retained HEAD and is unused elsewhere; otherwise the
+restored tree remains detached. It does not repair existing damaged repository history.
+Trash can be permanently deleted individually or with Empty Trash. Existing historical
+recovery points are separate and never included in Empty Trash or ordinary retention.
+
+Permanent deletion first moves the exact authorized directory into a private same-volume
+slot to prevent later retries from touching a reused original path. It deletes only that
+slot, then its exact pinned Git registration; there is no repository-wide prune. Partial
+filesystem deletion remains visible and retryable in Trash. If files are deleted but
+registration cleanup fails, the result says Registration cleanup pending, not total
+failure. Retry targets only the surviving registration after identity validation. A
+completed permanent deletion has no Restore action and does not retain the directory.
+Prepared, moved and deleting phases remain recoverable/retryable after interruption.
+One item's ordinary failure does not block the rest of the selected queue. Navigation or
+Stop finishes the current operation, then marks the remaining items Not run.
 The list and each repository offer Select integrated, unchanged Worktrees within
 the current search/filter scope, including collapsed groups. The command requires
 the existing strict automatic-candidate predicate, including no ignored local
@@ -436,26 +449,25 @@ its origin. Row checkboxes may explicitly select reviewable dirty, ignored-conte
 detached or unconfirmed trees. Automatic repository/global controls only add clean
 integrated trees and never downgrade an existing manual selection. Clearing automatic
 selection removes only that control's clean scope and preserves manual dirty choices.
-Main, locked, kept, repository-ignored, missing, submodule and unsafe trees stay excluded.
-Automatically selected trees that become dirty fail preview rather than silently
-obtaining force permission; the user must select that tree individually. A manual
-selection may include multiple trees without opening their details one by one.
-One combined confirmation identifies which trees need full local recovery copies,
-the total copy count, sizes and estimated freed space. Each resource's original
-backup, freshness and transaction rules still apply; Preview alone changes no files.
+Main, kept, repository-ignored and missing trees stay excluded from manual selection.
+Automatic selection remains stricter: Git-locked, submodule, dirty, uncertain or
+non-integrated trees are excluded. Explicit confirmation authorizes the entire selected
+directory's current contents, rather than certifying a cached clean classification.
+One combined confirmation shows paths, count and optional size. Preview changes no files.
 Confirmation opens immediately during preparation. Request-scoped per-item results
-are advisory until the final batch response arrives; Remove remains disabled while
+are advisory until the final batch response arrives; confirmation remains disabled while
 any preparation is pending. Failed items retain inline diagnostics and an individual
 retry with the original selection origin. Partial failures are explicitly excluded
 from the final destructive count, not silently treated as successful previews.
-The UI can never grant a changed automatic pick manual force permission on retry.
+Neither selection origin nor retry silently changes Trash into permanent deletion.
 Git metadata and integration-target configuration are collapsed in ordinary review;
 local content and explicit AI analysis remain available without configuring Git.
-Confirmation distinguishes estimated freed logical bytes from bytes retained as
-full local recovery copies. Counts and per-pass read/enumeration progress are best
-effort, throttled and not percentages or a durability guarantee. Callback failure
-and a closing renderer cannot fail backup/hash verification or Git removal.
-Results provide a direct recovery entry. Existing Backup manager exposes Worktree
+Confirmation and results distinguish estimated freed logical bytes from bytes retained
+in Trash. Missing measurements remain unknown, never zero. No size scan runs before a
+cleanup button becomes enabled. Progress is scoped to the initiating command; callback
+failure or a closing renderer cannot abort an in-progress filesystem step. Results
+provide a direct Trash entry with Restore, permanent deletion and registration retry.
+Existing Backup manager exposes legacy Worktree
 recovery journals, saved paths and bounded size accounting as a protected projection.
 Neither normal retention nor manual ordinary-backup deletion can discard Worktree
 recovery content or Git recovery refs. The Worktree transaction remains their owner;
@@ -467,19 +479,9 @@ of its selection menu. Select all removable is an explicit
 manual selection of every reviewable row in the current scope, including dirty trees;
 it is not automatic selection and does not include protected rows or authorize removal.
 These actions work while the repository is collapsed and never run AI or Preview.
-Multi-tree Preview is coordinated in main with at most two workers. Registration,
-integration choices, management settings and saved Workspace roots are shared within
-that request, not trusted across requests or at Remove. Results retain request order,
-report independent failures, and bind a separate fresh Git/path-metadata intent
-fingerprint per tree. Full file snapshot/hash/copy verification runs after Remove,
-not as a hidden precondition for enabling the confirmation button. Local contents
-outside bounded preview metadata may be newer at execution; required recovery
-captures those newest authorized bytes, and unstable copies are never removed.
-Selection is not removal authorization or proof of code integration. Each tree is
-revalidated during Preview and again during Remove.
-Batch cleanup can stop after the current tree finishes its transaction. Remaining
-trees are marked Not run, without interrupting an active backup or Git removal.
-User-requested stops are distinguished from repository-level failure skips.
+Multi-tree Preview uses at most two workers, retains request order and reports per-item
+errors with individual retry. Saved Workspace roots supply a warning, not an ownership
+grant. No whole-repository listing or analysis is a new disposal prerequisite.
 Selection and cleanup never trigger AI analysis; retention analysis remains an
 explicit single-worktree action.
 Automatic eligibility requires an unchanged clean tree whose HEAD is contained in a named
@@ -487,33 +489,23 @@ integration target. The device-local target defaults to origin/HEAD, then local 
 review can explicitly choose another local or remote branch. The Worktree's own branch,
 unrelated feature branches, tags and recovery refs never implicitly prove integration.
 Unknown, missing, unrelated-history and squash-equivalent targets require explicit selection;
-checks never fetch or mutate remote refs. Preview binds the target ref and revision, branch,
-HEAD, Git status, index bytes and working-content hash. These are revalidated after Backup,
-immediately before removal; active Git operations and lock files reject cleanup.
-One removal failure or post-removal verification warning stops remaining entries from that
-repository; independent repositories may continue. Not-run entries are not counted as removed.
-After removal, verify the main Git status/index/HEAD and local, remote and tag refs against
-their pre-removal state, excluding AgentEnv's intentional recovery ref. A detected concurrent
-change is reported without overwriting the other writer, and the recovery point is retained.
-Git prune is dry-run only. Existing unrelated dirty main-tree files do not themselves prevent
-cleanup. These checks narrow concurrent-write windows; they do not claim an atomic lock over
-arbitrary external filesystem writers. Users should not edit a directory being removed.
-Cleanup confirmation shows each directory's logical file size and selected total.
-Completion shows only verified removals in the removed total and estimated freed
-space; failures never contribute to reclaimed space. Full recovery copies are retained
-and excluded from freed estimates. Logical sizes exclude the root Git administration
-file and are not exact physical disk allocation or APFS shared-block measurements.
-Cleanup fingerprints measure size in the same verified traversal instead of repeating
-inventory-only size scans. Hash serialization remains compatible with existing recovery
-records. Final pre-remove hashing, recovery verification and Git registration checks
-remain mandatory. Git removal disables fsmonitor; verified results immediately reconcile
-the visible inventory without holding the cleanup UI open for an unrelated global scan.
-Failed rows lose batch selection eligibility until refreshed or individually reviewed.
-Copy verification may reuse the immediately preceding source fingerprint, but the
-post-copy source and backup must both equal it; the final source/Git check remains
-mandatory. Progress distinguishes checking, backing up, removing and verifying, scoped
-to the initiating window and request. Device-local runtime logs record stage durations
-and batch preparation failures without storing file bodies or sending telemetry.
+checks never fetch or mutate remote refs. These inventory classifications help users
+choose; they do not turn repository health into a cleanup gate. Only verified directory
+removals contribute to removed counts. Trash contributes zero freed bytes. Logical sizes
+are estimates, not physical disk allocation or APFS shared-block measurements. Completed
+items immediately reconcile the visible inventory without awaiting an unrelated scan.
+Device-local logs record stage durations, preparation failures and registration-only
+partial outcomes with copyable diagnostic references, never file bodies or telemetry.
+
+Legacy archive recovery remains readable and protected. Its old verified file/index/object
+backups and recovery refs are not silently discarded or converted to permanent deletion.
+Validation traverses only its exact recovery tree, not whole-repository fsck. Worktree Git
+reads retry derived commit-graph failures without writing config or the graph. A full OID
+independently confirmed already absent is recorded as a pre-existing limitation; ambiguous,
+unreadable, wrong-type or timed-out objects are not absence. Legacy restore checks payload
+integrity and never overwrites an occupied path. New UI commands do not create legacy
+full-copy archives. No cleanup mechanism claims atomic exclusion of arbitrary external
+writers; users should not edit a directory being removed.
 Worktree review offers manually requested AI retention analysis using the existing
 configured service, privacy switches and immutable analysis cache. Preparation only
 reads previously discovered, freshly registered local linked trees; Git commands have

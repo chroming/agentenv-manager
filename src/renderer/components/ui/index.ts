@@ -70,3 +70,4 @@ export { ToolbarOverflowMenu, type ToolbarOverflowMenuItem } from "./ToolbarOver
 export { focusInitialActionMenuItem, handleActionMenuKeyDown } from "./actionMenuKeyboard";
 export { useDisclosureSet } from "./useDisclosureSet";
 export { useExclusiveDisclosure } from "./useExclusiveDisclosure";
+export { ContextMenu, type ContextMenuAnchor } from "./ContextMenu";

@@ -13,13 +13,15 @@ describe("Worktree selection intent", () => {
   it("makes repository-wide choices explicit while preserving other repositories and hard protection", () => {
     const outside = { ...clean, path: "/other/tree" };
     const initial = selectWorktreeManually(toggleAutomaticWorktreeSelection([], [clean]), outside, true);
-    const selected = selectRepositoryWorktrees(initial, [clean, dirty, { ...dirty, path: "/locked", locked: "Keep" }], true);
+    const locked = { ...dirty, path: "/locked", locked: "Keep" };
+    const selected = selectRepositoryWorktrees(initial, [clean, dirty, locked], true);
     expect(selected).toEqual([
       { key: worktreeEntryKey(outside), origin: "manual" },
       { key: worktreeEntryKey(clean), origin: "manual" },
-      { key: worktreeEntryKey(dirty), origin: "manual" }
+      { key: worktreeEntryKey(dirty), origin: "manual" },
+      { key: worktreeEntryKey(locked), origin: "manual" }
     ]);
-    expect(selectRepositoryWorktrees(selected, [clean, dirty], false)).toEqual([{ key: worktreeEntryKey(outside), origin: "manual" }]);
+    expect(selectRepositoryWorktrees(selected, [clean, dirty, locked], false)).toEqual([{ key: worktreeEntryKey(outside), origin: "manual" }]);
   });
   it("separates manual cleanup permission from automatic selection", () => {
     expect(canSelectWorktreeForCleanup(dirty)).toBe(true);
@@ -54,13 +56,18 @@ describe("Worktree selection intent", () => {
   });
 
   it.each([
-    { main: true }, { locked: "Keep" }, { submodules: true }, { keptReason: "Keep" },
-    { repositoryKeptReason: "Keep" }, { exists: false }, { manualReviewAvailable: false },
-    { prunable: "Missing metadata" }, { head: undefined }, { state: "unavailable" as const }
+    { main: true }, { keptReason: "Keep" }, { repositoryKeptReason: "Keep" }, { exists: false }
   ])("does not manually select protected trees: %j", (flags) => {
     const entry = { ...dirty, ...flags };
     expect(canSelectWorktreeForCleanup(entry)).toBe(false);
     expect(isAutomaticCleanupCandidate(entry)).toBe(false);
     expect(selectWorktreeManually([], entry, true)).toEqual([]);
+  });
+  it.each([{ locked: "Keep" }, { submodules: true }, { manualReviewAvailable: false },
+    { prunable: "Missing metadata" }, { head: undefined }, { state: "unavailable" as const }])("allows manual intent despite cached Git state: %j", (flags) => {
+    const entry = { ...dirty, ...flags };
+    expect(canSelectWorktreeForCleanup(entry)).toBe(true);
+    expect(isAutomaticCleanupCandidate(entry)).toBe(false);
+    expect(selectWorktreeManually([], entry, true)).toEqual([{ key: worktreeEntryKey(entry), origin: "manual" }]);
   });
 });

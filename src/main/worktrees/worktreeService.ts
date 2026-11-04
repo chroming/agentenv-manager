@@ -11,10 +11,12 @@ import type {
   WorktreeRecoveryRecord,
   WorktreeRecoveryInventory
 } from "../../shared/worktrees";
+import type { WorktreeDisposalMode } from "../../shared/worktrees";
+import { createWorktreeDisposal } from "./worktreeDisposal";
 import { copyPathVerified, hashRequiredPathEntry } from "../filesystemIntegrity";
 import { isMissingFileError, writeAtomic } from "../fileUtils";
 import type { ProjectStore } from "../projects/projectStore";
-import type { GitCommandRunOptions, GitCommandRunner } from "../skillSources/gitCommandRunner";
+import type { GitCommandRunner } from "../skillSources/gitCommandRunner";
 import { copyWorktreeVerified, fingerprintWorktreeTree, hashWorktreeTree, measureWorktreeTree } from "./worktreeSnapshot";
 import { findRepositoryAncestor, repositoryDiscoveryDirectories, repositoryDiscoveryIssue, worktreeDiscoveryCandidates, WORKTREE_SCAN_SKIP_DIRECTORIES } from "./worktreeDiscovery";
 import { readWorktreeAnalysis } from "./worktreeAnalysis";
@@ -22,7 +24,7 @@ import { createWorktreeInventoryCache } from "./worktreeInventoryCache";
 import { createWorktreeMeasurements } from "./worktreeMeasurements";
 import {
   ACTIVE_WORKTREE_LOCKS, PAUSED_WORKTREE_MARKERS, assertNoWorktreeWriter, readIntegration, readMainGitState, readRepositoryRefs, readWorktreeGitState,
-  reviewFingerprint, withIntegrationEvidence
+  reviewFingerprint, withIntegrationEvidence, readWorktreeGit as readGit
 } from "./worktreeGitState";
 import type { WorktreeIntegration } from "../../shared/worktrees";
 import { assertLinkedGitDirectory, assertRestoreRegistration, backupOperationMetadata, copyRecoveryPathExclusive, operationMetadataHash, operationRecoveryObjects, pinRestoreRegistration, readLinkedRegistrationIdentity, recoveryGitStateHash, worktreeAdminIdentities } from "./worktreeOperationRecovery";
@@ -47,6 +49,7 @@ const RecoverySchema = z.object({
   indexHash: z.string().length(64).optional(),
   operationHash: z.string().length(64).optional(),
   protectedRefs: z.array(z.object({ ref: z.string(), object: z.string().regex(/^[0-9a-f]{40,64}$/) }).strict()).optional(),
+  unavailableOperationObjects: z.array(z.object({ field: z.string(), object: z.string().regex(/^[0-9a-f]{40,64}$/) }).strict()).optional(),
   restoreAttemptGitHash: z.string().length(64).optional(),
   restoreRegistration: z.object({
     gitDir: z.string(), commonDir: z.string(), adminDevice: z.string(), adminInode: z.string(),
@@ -99,11 +102,6 @@ const hasNestedRepository = async (root: string, signal?: AbortSignal): Promise<
 
 type GitWorktree = Pick<WorktreeEntry, "path" | "head" | "branch" | "detached" | "locked" | "prunable">;
 
-const readGit = (runner: GitCommandRunner, args: string[], options: GitCommandRunOptions) =>
-  runner.run(["-c", "core.fsmonitor=false", ...args], {
-    ...options, env: { ...options.env, GIT_OPTIONAL_LOCKS: "0" }
-  });
-
 export const parseWorktreeList = (output: string): GitWorktree[] => output
   .split("\0\0")
   .filter(Boolean)
@@ -147,10 +145,11 @@ export interface WorktreeService {
   setKeep(commonDir: string, path: string, reason?: string): Promise<void>;
   setRepositoryKeep(commonDir: string, reason?: string): Promise<void>;
   setIntegrationRef(commonDir: string, ref?: string): Promise<void>;
-  preview(commonDir: string, path: string, allowDirty?: boolean): Promise<WorktreeCleanupPreview>;
+  preview(commonDir: string, path: string, allowDirty?: boolean, mode?: WorktreeDisposalMode): Promise<WorktreeCleanupPreview>;
+  previewTrashDeletion(id: string): Promise<WorktreeCleanupPreview>;
   previewBatch(items: WorktreeCleanupRequest[], progress?: (completed: number, path: string, result?: WorktreeCleanupPreparation) => void): Promise<WorktreeCleanupPreparation[]>;
   remove(preview: WorktreeCleanupPreview, progress?: (phase: WorktreeOperationPhase, fileProgress?: WorktreeFileProgress) => void): Promise<WorktreeRecoveryRecord>;
-  listRecovery(): Promise<WorktreeRecoveryInventory>;
+  listRecovery(scope?: "trash" | "all"): Promise<WorktreeRecoveryInventory>;
   restore(id: string): Promise<WorktreeRecoveryRecord>;
   cancelScan(): void;
   readAnalysis(commonDir: string, path: string): Promise<Awaited<ReturnType<typeof readWorktreeAnalysis>>>;
@@ -192,6 +191,7 @@ export const createWorktreeService = ({
     manualAuthorized: boolean;
   }>();
   const discovered = new Set<string>();
+  const disposalEntries = new Map<string, WorktreeEntry>();
   const discoveredKey = (commonDir: string, path: string) => `${commonDir}\0${path}`;
   const builtinCandidates = worktreeDiscoveryCandidates(homeDir);
 
@@ -377,6 +377,32 @@ export const createWorktreeService = ({
     return Boolean(inventory?.entries.some((entry) => entry.commonDir === commonDir && (path === undefined || entry.path === path)));
   };
 
+  const containsSavedWorkspace = async (path: string, roots: string[]) => (await Promise.all(roots.map(async (root) => {
+    const canonical = await realpath(root).catch((error) => { if (isMissingFileError(error)) return resolve(root); throw error; });
+    return isWithin(path, canonical);
+  }))).some(Boolean);
+
+  const disposal = createWorktreeDisposal({ appDataRoot,
+    lookup: async (commonDir, path) => {
+      const cachedInventory = (await inventoryCache.read()).inventory;
+      for (const entry of cachedInventory?.entries ?? []) disposalEntries.set(discoveredKey(entry.commonDir, entry.path), entry);
+      const cached = disposalEntries.get(discoveredKey(commonDir, path));
+      if (!cached || cached.main || isWithin(path, commonDir) || isWithin(path, cached.repositoryPath) ||
+        isWithin(path, appDataRoot) || isWithin(path, process.cwd())) throw new Error("This directory is not a removable linked Worktree");
+      return { ...cached, path: resolve(path), commonDir: await realpath(commonDir),
+        main: false, exists: true, state: "review",
+        manualReviewAvailable: true, cleanupReviewAvailable: false, headNeedsProtection: false };
+    },
+    resolveHead: async (path) => (await readGit(await git(), ["rev-parse", "--verify", "HEAD"], { cwd: path, timeoutMs: 2_000, maxOutputBytes: 32_000 })).stdout,
+    branchAvailable: async (commonDir, branch, head) => {
+      const runner = await git();
+      const entries = await readRegistration(runner, commonDir);
+      if (entries.some((entry) => entry.branch === branch)) return false;
+      const current = await readGit(runner, ["rev-parse", "--verify", `refs/heads/${branch}`], { cwd: commonDir, timeoutMs: 8_000, maxOutputBytes: 32_000 });
+      return current.stdout.trim() === head;
+    }
+  });
+
   const preview = async (commonDir: string, path: string, allowDirty = false, context?: Awaited<ReturnType<typeof readRepository>>, savedRoots?: string[]): Promise<WorktreeCleanupPreview> => {
     if (!await isKnownCandidate(commonDir, path)) throw new Error("Refresh Worktrees before cleanup");
     const cached = (await inventoryCache.read()).inventory?.entries.find((item) => item.commonDir === commonDir && item.path === path);
@@ -399,10 +425,7 @@ export const createWorktreeService = ({
     await assertLinkedGitDirectory(entry.commonDir, entry.path, gitState.gitDir);
     if (gitState.head !== entry.head) throw new Error("Worktree changed after review. Refresh and review it again.");
     const roots = savedRoots ?? await projectStore.listLocalRootPaths();
-    const savedWorkspace = (await Promise.all(roots.map(async (root) => {
-      const canonical = await realpath(root).catch((error) => { if (isMissingFileError(error)) return resolve(root); throw error; });
-      return isWithin(entry.path, canonical);
-    }))).some(Boolean);
+    const savedWorkspace = await containsSavedWorkspace(entry.path, roots);
     const previewId = randomUUID();
     const fingerprint = reviewFingerprint(entry, gitState.fingerprint);
     issuedPreviews.set(previewId, { commonDir, path, fingerprint,
@@ -489,6 +512,7 @@ export const createWorktreeService = ({
         const projects = await projectStore.listLocalRootPaths();
         controller.signal.throwIfAborted();
         const issues: string[] = [];
+        const trashedPaths = (await disposal.list()).paths;
         const builtinRoots: string[] = [];
         const canonicalHome = await realpath(homeDir).catch(() => resolve(homeDir));
         for (const candidate of builtinCandidates) {
@@ -536,7 +560,7 @@ export const createWorktreeService = ({
             try {
               const registered = await readRegistration(runner, commonDir, controller.signal);
               repositories.add(commonDir);
-              for (const registration of registered) inspections.push({ commonDir, registration, mainPath: registered[0].path });
+              for (const registration of registered) if (!trashedPaths.has(resolve(registration.path))) inspections.push({ commonDir, registration, mainPath: registered[0].path });
             } catch (error) {
               controller.signal.throwIfAborted();
               issues.push(repositoryDiscoveryIssue(commonDir, error));
@@ -584,6 +608,7 @@ export const createWorktreeService = ({
                   const registered = await readRegistration(runner, commonDir, controller.signal);
                   repositories.add(commonDir);
                   for (const registration of registered) {
+                    if (trashedPaths.has(resolve(registration.path))) continue;
                     controller.signal.throwIfAborted();
                     inspections.push({ commonDir, registration, mainPath: registered[0].path });
                   }
@@ -647,7 +672,7 @@ export const createWorktreeService = ({
         // Retained rows are display-only and never enter `discovered` authorization.
         if (issues.length && previous && JSON.stringify([...scanRoots].sort()) === JSON.stringify([...previous.scanRoots].sort())) {
           for (const entry of previous.entries) {
-            if (!repositories.has(entry.commonDir) && !found.has(discoveredKey(entry.commonDir, entry.path))) {
+            if (!trashedPaths.has(entry.path) && !repositories.has(entry.commonDir) && !found.has(discoveredKey(entry.commonDir, entry.path))) {
               entries.push({ ...entry, state: "unavailable", cleanupReviewAvailable: false,
                 manualReviewAvailable: false,
                 reasonDetails: [...(entry.reasonDetails ?? entry.reasons.map((message) => ({ message }))), { message: "Could not refresh this repository; showing the last known state." }],
@@ -671,7 +696,12 @@ export const createWorktreeService = ({
       }
     },
     cancelScan: () => scanController?.abort(new WorktreeScanCancelledError()),
-    preview,
+    preview: async (commonDir, path, allowDirty, mode) => {
+      if (!mode) return preview(commonDir, path, allowDirty);
+      if (!await isKnownCandidate(commonDir, path)) throw new Error("Refresh Worktrees before cleanup");
+      return { ...await disposal.preview(commonDir, path, mode), savedWorkspace: await containsSavedWorkspace(path, await projectStore.listLocalRootPaths()) };
+    },
+    previewTrashDeletion: disposal.previewTrash,
     previewBatch: async (items, progress) => {
       if (items.length > 1000) throw new Error("Too many Worktrees selected");
       const contexts = new Map<string, ReturnType<typeof readRepository>>();
@@ -683,6 +713,12 @@ export const createWorktreeService = ({
           const index = cursor++, item = items[index];
           try {
             if (!await isKnownCandidate(item.commonDir, item.path)) throw new Error("Refresh Worktrees before cleanup");
+            if (item.mode) {
+              results[index] = { path: item.path, preview: { ...await disposal.preview(item.commonDir, item.path, item.mode), savedWorkspace: await containsSavedWorkspace(item.path, savedRoots) } };
+              ++completed;
+              try { await progress?.(completed, item.path, structuredClone(results[index])); } catch { /* Feedback is best effort. */ }
+              continue;
+            }
             let context = contexts.get(item.commonDir);
             if (!context) { context = readRepository(item.commonDir); contexts.set(item.commonDir, context); }
             results[index] = { path: item.path, preview: await preview(item.commonDir, item.path, item.allowDirty, await context, savedRoots) };
@@ -699,6 +735,7 @@ export const createWorktreeService = ({
         try { Promise.resolve(progress?.(phase, fileProgress)).catch(() => undefined); }
         catch { /* Feedback is best effort. */ }
       };
+      if (preview.mode) return disposal.remove(preview, report);
       report("preparing");
       const issued = issuedPreviews.get(preview.previewId);
       issuedPreviews.delete(preview.previewId);
@@ -764,7 +801,8 @@ export const createWorktreeService = ({
       });
       record.protectedRefs = [];
       const recoveryObjects = issued.backupRequired
-        ? await operationRecoveryObjects(runner, fresh.path, join(recoveryRoot, record.id, "operation"), record.head) : [];
+        ? await operationRecoveryObjects(runner, fresh.path, join(recoveryRoot, record.id, "operation"), record.head,
+          (reference) => (record.unavailableOperationObjects ??= []).push(reference)) : [];
       for (const [index, object] of recoveryObjects.entries()) {
         const ref = `refs/agentenv/worktree-recovery/${record.id}-objects/${index}`;
         await runner.run(["update-ref", ref, object], { cwd: fresh.repositoryPath, timeoutMs: 8_000, maxOutputBytes: 100_000 });
@@ -840,7 +878,9 @@ export const createWorktreeService = ({
       await saveRecovery(completed);
       return completed;
     },
-    listRecovery: async () => {
+    listRecovery: async (scope) => {
+      const trash = await disposal.list();
+      if (scope === "trash") return { records: trash.records, issues: trash.issues };
       try {
         const files = (await readdir(recoveryRoot)).filter((name) => /^[0-9a-f-]{36}\.json$/.test(name));
         const results = await Promise.allSettled(files.map((name) => readRecovery(name.slice(0, -5))));
@@ -874,15 +914,16 @@ export const createWorktreeService = ({
           records.push(record);
         }
         return {
-          records: records.sort((left, right) => right.createdAt.localeCompare(left.createdAt)),
-          issues
+          records: [...trash.records, ...records].sort((left, right) => right.createdAt.localeCompare(left.createdAt)),
+          issues: [...trash.issues, ...issues]
         };
       } catch (error) {
-        if (isMissingFileError(error)) return { records: [], issues: [] };
+        if (isMissingFileError(error)) return { records: trash.records, issues: trash.issues };
         throw error;
       }
     },
     restore: async (id) => {
+      if (await disposal.owns(id)) return disposal.restore(id);
       let record = await readRecovery(id);
       if (record.status === "restored") return record;
       if (record.status === "unchanged") throw new Error("This worktree was not removed; the original directory is still present");

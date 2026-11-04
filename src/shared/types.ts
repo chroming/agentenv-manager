@@ -154,12 +154,13 @@ export interface AgentEnvApi {
   setWorktreeKeep(commonDir: string, path: string, reason?: string): Promise<void>;
   setWorktreeRepositoryKeep(commonDir: string, reason?: string): Promise<void>;
   setWorktreeIntegrationRef(commonDir: string, ref?: string): Promise<void>;
-  previewWorktreeCleanup(commonDir: string, path: string, allowDirty?: boolean): Promise<import("./worktrees").WorktreeCleanupPreview>;
+  previewWorktreeCleanup(commonDir: string, path: string, allowDirty?: boolean, mode?: import("./worktrees").WorktreeDisposalMode): Promise<import("./worktrees").WorktreeCleanupPreview>;
+  previewWorktreeTrashDeletion(id: string): Promise<import("./worktrees").WorktreeCleanupPreview>;
   previewWorktreeCleanupBatch(items: import("./worktrees").WorktreeCleanupRequest[], requestId: string): Promise<import("./worktrees").WorktreeCleanupPreparation[]>;
   onWorktreeProgress(callback: (value: import("./worktrees").WorktreeOperationProgress) => void): () => void;
   onWorktreeInventoryChanged(callback: (inventory: import("./worktrees").WorktreeInventory) => void): () => void;
   removeWorktree(preview: import("./worktrees").WorktreeCleanupPreview, requestId?: string): Promise<import("./worktrees").WorktreeRecoveryRecord>;
-  listWorktreeRecovery(): Promise<import("./worktrees").WorktreeRecoveryInventory>;
+  listWorktreeRecovery(scope?: "trash" | "all"): Promise<import("./worktrees").WorktreeRecoveryInventory>;
   restoreWorktree(id: string): Promise<import("./worktrees").WorktreeRecoveryRecord>;
   selectConversationWorkspace(): Promise<string | undefined>;
   listProjects(): Promise<ProjectSummary[]>;
