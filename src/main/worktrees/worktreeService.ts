@@ -263,10 +263,14 @@ export const createWorktreeService = ({
     const pausedOperations: string[] = [];
     let integration = base;
     let exists = false;
+    let pathAvailability: "unknown" | undefined;
     try {
       exists = (await lstat(path)).isDirectory();
     } catch (error) {
-      if (!isMissingFileError(error)) addReason(`Could not inspect path: ${String(error)}`, "Could not inspect path", undefined, String(error));
+      if (!isMissingFileError(error)) {
+        pathAvailability = "unknown";
+        addReason(`Could not inspect path: ${String(error)}`, "Could not inspect path", undefined, String(error));
+      }
     }
     const main = path === resolve(mainPath);
     if (main) addReason("Main working tree");
@@ -346,7 +350,7 @@ export const createWorktreeService = ({
     return {
       path, repositoryPath: resolve(mainPath), commonDir, head: registration.head,
       branch: registration.branch, main, detached: registration.detached,
-      locked: registration.locked, prunable: registration.prunable, exists,
+      locked: registration.locked, prunable: registration.prunable, exists, pathAvailability,
       state, reasons, reasonDetails, changes, ignored, submodules,
       keptReason, repositoryKeptReason, cleanupReviewAvailable,
       manualReviewAvailable, headNeedsProtection, integration, pausedOperations, localContentUncertain
@@ -389,7 +393,7 @@ export const createWorktreeService = ({
       const cached = disposalEntries.get(discoveredKey(commonDir, path));
       if (!cached || cached.main || isWithin(path, commonDir) || isWithin(path, cached.repositoryPath) ||
         isWithin(path, appDataRoot) || isWithin(path, process.cwd())) throw new Error("This directory is not a removable linked Worktree");
-      return { ...cached, path: resolve(path), commonDir: await realpath(commonDir),
+      return { ...cached, path: resolve(path), commonDir: await realpath(commonDir).catch((error) => { if (isMissingFileError(error)) return resolve(commonDir); throw error; }),
         main: false, exists: true, state: "review",
         manualReviewAvailable: true, cleanupReviewAvailable: false, headNeedsProtection: false };
     },
@@ -668,23 +672,29 @@ export const createWorktreeService = ({
         controller.signal.throwIfAborted();
         discovered.clear();
         for (const key of found) discovered.add(key);
-        // An unreadable repository is not evidence that its worktrees were removed.
-        // Retained rows are display-only and never enter `discovered` authorization.
-        if (issues.length && previous && JSON.stringify([...scanRoots].sort()) === JSON.stringify([...previous.scanRoots].sort())) {
+        // Missing Git registration is not proof that the working directory is gone.
+        // Retained folders require a new explicit directory-identity confirmation.
+        const inspectedPaths = new Set(entries.map((entry) => entry.path));
+        if (previous && JSON.stringify([...scanRoots].sort()) === JSON.stringify([...previous.scanRoots].sort())) {
           for (const entry of previous.entries) {
-            if (!trashedPaths.has(entry.path) && !repositories.has(entry.commonDir) && !found.has(discoveredKey(entry.commonDir, entry.path))) {
-              entries.push({ ...entry, state: "unavailable", cleanupReviewAvailable: false,
+            if (!entry.main && !trashedPaths.has(entry.path) && !inspectedPaths.has(entry.path)) {
+              const info = await lstat(entry.path).catch((error) => { if (isMissingFileError(error)) return undefined; return null; });
+              if (info === undefined || info && !info.isDirectory()) continue;
+              const message = repositories.has(entry.commonDir) ? "Git registration is unavailable; the folder can still be cleaned up." : "Could not refresh this repository; showing the last known state.";
+              entries.push({ ...entry, exists: Boolean(info), pathAvailability: info ? undefined : "unknown", state: "unavailable", cleanupReviewAvailable: false,
                 manualReviewAvailable: false,
-                reasonDetails: [...(entry.reasonDetails ?? entry.reasons.map((message) => ({ message }))), { message: "Could not refresh this repository; showing the last known state." }],
-                reasons: [...new Set([...entry.reasons, "Could not refresh this repository; showing the last known state."])] });
+                reasonDetails: [...(entry.reasonDetails ?? entry.reasons.map((message) => ({ message }))), { message }],
+                reasons: [...new Set([...entry.reasons, message])] });
+              inspectedPaths.add(entry.path);
             }
           }
         }
-        const visiblePaths = new Set(entries.map((entry) => entry.path));
+        const presentEntries = entries.filter((entry) => entry.exists || entry.pathAvailability === "unknown");
+        const visiblePaths = new Set(presentEntries.map((entry) => entry.path));
         for (const path of measurements.keys()) if (!visiblePaths.has(path)) measurements.delete(path);
         if (!reuseRepositories) lastDiscoveryAt = Date.now();
         return measurementQueue.prepare({
-          scanRoots, configuredRoots, builtinRoots: [...new Set(builtinRoots)], entries, issues,
+          scanRoots, configuredRoots, builtinRoots: [...new Set(builtinRoots)], entries: presentEntries, issues,
           incomplete: issues.length > 0,
           scannedAt: new Date().toISOString()
         }, mode === "background");

@@ -12,11 +12,18 @@ export const DiagnosticCopyButton = ({ message }: { message: string }) => {
   if (!reference) return null;
   const copy = async () => {
     setState("copying");
+    let timeout: number | undefined;
     try {
-      const issue = await window.agentEnv.readDiagnosticIssue(reference).catch(() => undefined);
-      await window.agentEnv.copyText(issue ? formatDiagnosticIssue(issue) : message);
+      const issue = await Promise.race([
+        window.agentEnv.readDiagnosticIssue(reference).catch(() => undefined),
+        new Promise<undefined>((done) => { timeout = window.setTimeout(done, 500); })
+      ]);
+      let text = message;
+      if (issue) { try { text = formatDiagnosticIssue(issue); } catch { /* Visible details remain copyable if an older diagnostic record is incomplete. */ } }
+      await window.agentEnv.copyText(text);
       setState("copied");
     } catch { setState("failed"); }
+    finally { window.clearTimeout(timeout); }
   };
   return <IconButton
     appearance="inline"
@@ -28,7 +35,7 @@ export const DiagnosticCopyButton = ({ message }: { message: string }) => {
 
 export const DiagnosticMessage = ({ message }: { message: string }) => (
   <span className="ui-diagnostic-message">
-    <span>{message}</span>
+    <span className="selectable">{message}</span>
     <DiagnosticCopyButton message={message} />
   </span>
 );

@@ -28,7 +28,7 @@ export const formatDiagnosticIssue = (issue: DiagnosticIssueDetail): string => {
     issue.error.errno === undefined ? undefined : `Errno: ${issue.error.errno}`,
     issue.error.stack ? `Stack:\n${issue.error.stack}` : undefined
   ].filter((line): line is string => line !== undefined);
-  for (const [index, cause] of issue.error.causes.entries()) {
+  for (const [index, cause] of (issue.error.causes ?? []).entries()) {
     lines.push(
       "",
       `Cause ${index + 1}: ${cause.name}: ${cause.message}`,

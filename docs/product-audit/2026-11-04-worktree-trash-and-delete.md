@@ -5,8 +5,9 @@
 Core job: quickly reclaim working-directory space. Trash is reversible retention,
 not freed space; permanent deletion explicitly discards local contents without a
 full backup. Neither command requires integration analysis, fsck, AI, source hashes
-or complete size measurements. Preview verifies registered linked-directory identity.
-Main trees, redirected paths and real write locks remain protected.
+or complete size measurements. Preview verifies the selected known directory's identity;
+verified Git registration is optional permission, not a cleanup prerequisite.
+Main trees, redirected paths and known real write locks remain protected.
 
 Product read: a local-first desktop environment manager whose cleanup task is to
 release directory space deliberately, not certify code integration. Risk 9/10,
@@ -16,13 +17,14 @@ page-owned controls. The existing Worktrees list and centered resizable dialog
 remain the shell; paths and destructive scope stay visible at 920 x 620.
 
 Owner: Worktree service, device-local disposal journal and same-volume storage.
-Trash retains Git administration/index/operation state and uses a detached HEAD
+With verified Git metadata, Trash retains administration/index/operation state and uses a detached HEAD
 where available, so the old branch is not reserved. It stays registered at its valid
 retained path until purged; AgentEnv excludes only journal-verified Trash entries
 from normal inventory. Restore never overwrites an occupied original path. Branch
 reattachment is best effort and never moves a branch or overwrites another checkout.
-Permanent deletion removes the directory and its exact Git administration only;
-it never prunes other registrations or deletes branch/remote refs.
+Permanent deletion removes the directory and, only when verified, its exact Git
+administration. It never prunes other registrations or deletes branch/remote refs.
+Broken metadata is left unchanged, while raw-directory Trash and restore remain available.
 
 UI: two explicit commands, one shared confirmation/progress/result flow, existing
 buttons, Notice, ResourceRow, ModalFrame, and recovery components. Ordinary failures

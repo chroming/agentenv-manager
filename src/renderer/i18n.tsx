@@ -5985,6 +5985,8 @@ Object.assign(zhCN, {
   "Items in Trash": "回收站项目",
   "Trash is empty": "回收站为空",
   "Move incomplete": "移动未完成",
+  "Folder access needs review": "目录访问需要检查",
+  "Git registration is unavailable; the folder can still be cleaned up.": "Git 登记不可用，仍可清理此目录。",
   "Copy Trash location": "复制回收站存放路径"
 });
 Object.assign(zhTW, {
@@ -6019,5 +6021,7 @@ Object.assign(zhTW, {
   "Items in Trash": "資源回收筒項目",
   "Trash is empty": "資源回收筒為空",
   "Move incomplete": "移動未完成",
+  "Folder access needs review": "目錄存取需要檢查",
+  "Git registration is unavailable; the folder can still be cleaned up.": "Git 登記無法使用，仍可清理此目錄。",
   "Copy Trash location": "複製資源回收筒存放路徑"
 });

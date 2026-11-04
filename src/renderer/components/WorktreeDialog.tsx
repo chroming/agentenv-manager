@@ -150,7 +150,7 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
     const groups = new Map<string, WorktreeEntry[]>();
     const needle = query.trim().toLocaleLowerCase();
     for (const entry of inventory?.entries ?? []) {
-      if (entry.main) continue;
+      if (entry.main || !entry.exists && entry.pathAvailability !== "unknown") continue;
       if (needle && ![entry.path, entry.repositoryPath, entry.branch ?? ""].some((value) => value.toLocaleLowerCase().includes(needle))) continue;
       if (filter === "candidate" && !isAutomaticCleanupCandidate(entry)) continue;
       if (filter === "review" && (entry.main || entry.keptReason || entry.repositoryKeptReason || entry.state !== "review")) continue;
@@ -311,7 +311,7 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
         if (!preview.mode && record.verificationWarnings?.length) stoppedRepositories.add(preview.entry.commonDir);
       } catch (cause) {
         if (!preview.mode) stoppedRepositories.add(preview.entry.commonDir);
-        completed.push({ path: preview.entry.path, sizeBytes: preview.entry.sizeBytes, error: cause instanceof Error ? cause.message : String(cause) });
+        completed.push({ path: preview.entry.path, mode: preview.mode, sizeBytes: preview.entry.sizeBytes, error: cause instanceof Error ? cause.message : String(cause) });
       }
       setResults([...completed]);
     }
@@ -544,7 +544,7 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
           <DetailList items={[
             { label: t("Removed size"), value: sizeLabel(totalBytes(successful.map((result) => result.sizeBytes))) },
             { label: t("Estimated space freed"), value: sizeLabel(totalBytes(successful.map((result) => result.reclaimedSizeBytes))) },
-            { label: t(successful.some((result) => result.mode) ? "Space retained in Trash" : "Recovery copies retained"), value: sizeLabel(totalBytes(successful.map((result) => result.sizeBytes === undefined || result.reclaimedSizeBytes === undefined ? undefined : Math.max(0, result.sizeBytes - result.reclaimedSizeBytes)))) }
+            { label: t(results.some((result) => result.mode) ? "Space retained in Trash" : "Recovery copies retained"), value: sizeLabel(results.some((result) => result.error !== undefined) ? undefined : totalBytes(successful.map((result) => result.sizeBytes === undefined || result.reclaimedSizeBytes === undefined ? undefined : Math.max(0, result.sizeBytes - result.reclaimedSizeBytes)))) }
           ]} />
           {busy === "remove" ? <OperationStatusBar icon={<LoaderCircle className="is-spinning" size={15} />}
             label={operationProgress?.phase === "backing-up" ? t("Backing up local files...") : operationProgress?.phase === "verifying" ? t("Verifying removal...") : operationProgress?.phase === "removing" ? disposalMode === "trash" ? t("Moving Worktrees to Trash...") : t("Deleting Worktrees...") : t("Checking selected Worktree...")}

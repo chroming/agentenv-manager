@@ -482,6 +482,7 @@ describe("WorktreeDialog", () => {
   it.each<{ flags: Partial<WorktreeEntry>; offered: boolean }>([
     { flags: { main: true }, offered: false }, { flags: { locked: "Keep" }, offered: true },
     { flags: { exists: false }, offered: false }, { flags: { submodules: true }, offered: true },
+    { flags: { exists: false, pathAvailability: "unknown", state: "unavailable" }, offered: true },
     { flags: { keptReason: "Keep", state: "kept" }, offered: false }, { flags: { repositoryKeptReason: "Keep" }, offered: false },
     { flags: { manualReviewAvailable: false }, offered: true }, { flags: { prunable: "Missing metadata" }, offered: true },
     { flags: { head: undefined }, offered: true }, { flags: { state: "unavailable" }, offered: true }
@@ -489,7 +490,7 @@ describe("WorktreeDialog", () => {
     const api = installApi();
     api.inventoryWorktrees.mockResolvedValue({ ...inventory, entries: [{ ...dirty, ...flags }] });
     render(<WorktreeWorkspace />);
-    if ("main" in flags) await screen.findByText("No Worktrees found");
+    if ("main" in flags || flags.exists === false && flags.pathAvailability !== "unknown") await screen.findByText("No Worktrees found");
     else {
       if ("repositoryKeptReason" in flags) fireEvent.click(await screen.findByRole("button", { name: "Ignored repositories" }));
       await screen.findByText(dirty.path);
@@ -895,7 +896,7 @@ describe("WorktreeDialog", () => {
     expect(within(results).getAllByText("Removed", { exact: true })).toHaveLength(2);
   });
 
-  it("preserves kept, locked and unavailable sibling states after cleanup fails", async () => {
+  it("preserves kept and locked siblings but hides confirmed missing directories after cleanup fails", async () => {
     const api = installApi();
     const kept = { ...clean, path: "/projects/kept", state: "kept", keptReason: "Keep this work" };
     const locked = { ...clean, path: "/projects/locked", state: "kept", locked: "Release testing" };
@@ -911,7 +912,7 @@ describe("WorktreeDialog", () => {
     fireEvent.click(within(results).getAllByRole("button", { name: "Close" }).at(-1)!);
     expect(screen.getByText(kept.path).closest(".ui-resource-row")).toHaveTextContent("Ignored");
     expect(screen.getByText(locked.path).closest(".ui-resource-row")).toHaveTextContent("Git locked");
-    expect(screen.getByText(missing.path).closest(".ui-resource-row")).toHaveTextContent("Folder unavailable");
+    expect(screen.queryByText(missing.path)).not.toBeInTheDocument();
     expect(screen.getByText(clean.path).closest(".ui-resource-row")).toHaveTextContent("No local changes");
   });
 
@@ -1241,6 +1242,7 @@ describe("WorktreeDialog", () => {
       await waitFor(() => expect(api.copyText).toHaveBeenCalledWith(expect.stringContaining("AEM-20261004-ABC123")));
     }
     expect(modal.querySelector(".ui-detail-list")).toHaveTextContent("Removed size0 BEstimated space freed0 B");
+    expect(modal.querySelector(".ui-detail-list")).toHaveTextContent("Space retained in TrashUnavailable");
     expect(screen.getByText("/projects/_worktrees/dirty")).toBeInTheDocument();
   });
 

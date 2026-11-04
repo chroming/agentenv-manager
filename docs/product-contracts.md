@@ -401,8 +401,14 @@ states that it cannot be undone. Owning-repository branches and remote refs are 
 this is not a promise to preserve unreferenced commits or nested-repository histories.
 Neither command runs integration analysis, fsck, required-object certification, full-tree
 hashing, backup copying or AI. Size measurement is optional, not an action prerequisite.
-Preview checks the selected linked-directory identity; execution rechecks the directory
-and exact Git administration inode, `.git` pointer and backlink, not the whole repository.
+Preview binds a known inventory directory's filesystem identity; execution rechecks
+that same directory, not the whole repository. Verified Git administration is an
+optional capability: when its inode, `.git` pointer and backlink are still valid,
+cleanup may update/remove only that registration. Missing or malformed Git metadata
+does not block the explicitly selected directory's removal or move to Trash; unverified
+registration files are left untouched. A later metadata change removes that optional
+permission, never expands it. A redirected pointer or standalone main `.git` directory
+is still rejected, and a replaced directory cannot inherit an older confirmation.
 Redirected or replaced targets, a directory containing the owning Git database/main tree,
 AgentEnv storage or the running process directory are rejected. Real index/HEAD writer
 locks remain execution safety conditions; AgentEnv never kills Git or deletes lock files.
@@ -418,7 +424,9 @@ identity. All contents, index and unfinished-operation metadata remain in place.
 backlink is changed to the retained path; the worktree stays registered there and its
 current HEAD is detached when resolvable, releasing the original branch without moving
 that branch. Optional branch-release failure is reported, not treated as a failed move.
-Only verified Trash locations are excluded from ordinary inventory. Restore refuses an
+Only verified Trash locations are excluded from ordinary inventory. When Git metadata
+was already unusable, Trash retains/restores the directory without repairing or
+rewriting that metadata. Restore refuses an
 occupied source path and returns the same directory. It reattaches the old branch only
 if that ref still points at the retained HEAD and is unused elsewhere; otherwise the
 restored tree remains detached. It does not repair existing damaged repository history.
@@ -427,7 +435,11 @@ recovery points are separate and never included in Empty Trash or ordinary reten
 
 Permanent deletion first moves the exact authorized directory into a private same-volume
 slot to prevent later retries from touching a reused original path. It deletes only that
-slot, then its exact pinned Git registration; there is no repository-wide prune. Partial
+slot, then its exact pinned Git registration; there is no repository-wide prune.
+`ENOTEMPTY`, `EBUSY` and `EPERM` failures receive bounded filesystem retries, revalidating
+the private directory identity between outer attempts. There is no broad chmod, process
+killing, content hash scan or unbounded retry. Permission or persistent-writer failures
+remain per-item failures with recoverable residual paths. Partial
 filesystem deletion remains visible and retryable in Trash. If files are deleted but
 registration cleanup fails, the result says Registration cleanup pending, not total
 failure. Retry targets only the surviving registration after identity validation. A
@@ -450,6 +462,11 @@ detached or unconfirmed trees. Automatic repository/global controls only add cle
 integrated trees and never downgrade an existing manual selection. Clearing automatic
 selection removes only that control's clean scope and preserves manual dirty choices.
 Main, kept, repository-ignored and missing trees stay excluded from manual selection.
+Confirmed absent directories are omitted from both refreshed and cached list projections.
+Unreadable paths are not treated as absent: access-unknown rows remain manually
+selectable but can never enter automatic selection. Previously discovered directories
+that still exist remain available for explicit cleanup even if Git stops listing them;
+physical paths are deduplicated across old and refreshed registrations.
 Automatic selection remains stricter: Git-locked, submodule, dirty, uncertain or
 non-integrated trees are excluded. Explicit confirmation authorizes the entire selected
 directory's current contents, rather than certifying a cached clean classification.
@@ -496,6 +513,9 @@ are estimates, not physical disk allocation or APFS shared-block measurements. C
 items immediately reconcile the visible inventory without awaiting an unrelated scan.
 Device-local logs record stage durations, preparation failures and registration-only
 partial outcomes with copyable diagnostic references, never file bodies or telemetry.
+Inline diagnostic copying waits at most 500 ms for a full record before copying the
+visible error and reference instead. It tolerates older records without cause arrays,
+keeps visible errors selectable, and never silently reports clipboard failure as success.
 
 Legacy archive recovery remains readable and protected. Its old verified file/index/object
 backups and recovery refs are not silently discarded or converted to permanent deletion.

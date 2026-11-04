@@ -17,11 +17,13 @@ const identitySchema = z.object({
   worktreeDevice: z.string(), worktreeInode: z.string(), linkDevice: z.string(), linkInode: z.string(),
   gitFileHash: z.string(), backlinkHash: z.string(), commonLinkHash: z.string()
 }).strict();
+const directoryIdentitySchema = z.object({ worktreeDevice: z.string(), worktreeInode: z.string() }).strict();
+type DirectoryIdentity = z.infer<typeof directoryIdentitySchema>;
 const journalSchema = z.object({
   id: z.string().uuid(), mode: z.enum(["trash", "permanent"]),
   phase: z.enum(["prepared", "moved", "deleting", "removed", "restoring", "restored"]),
   entry: z.object({ path: z.string(), commonDir: z.string(), repositoryPath: z.string(), head: z.string().optional(), branch: z.string().optional(), sizeBytes: z.number().nonnegative().optional() }),
-  createdAt: z.string(), storage: z.string(), identity: identitySchema,
+  createdAt: z.string(), storage: z.string(), identity: identitySchema.optional(), directoryIdentity: directoryIdentitySchema.optional(),
   originalHead: z.string().optional(), originalGitFile: z.string().max(4096).optional(), detached: z.boolean().optional(), pendingGitCleanup: z.boolean().optional(), registrationError: z.string().optional(), notes: z.array(z.string()).optional()
 }).strict();
 type Journal = z.infer<typeof journalSchema>;
@@ -33,7 +35,7 @@ export const createWorktreeDisposal = ({ appDataRoot, lookup, branchAvailable, r
   resolveHead(path: string): Promise<string>;
 }) => {
   const root = join(appDataRoot, "worktree-trash");
-  const issued = new Map<string, { entry: WorktreeEntry; identity: WorktreeRestoreRegistration; mode: WorktreeDisposalMode; at: number; journalId?: string }>();
+  const issued = new Map<string, { entry: WorktreeEntry; identity?: WorktreeRestoreRegistration; directoryIdentity?: DirectoryIdentity; mode: WorktreeDisposalMode; at: number; journalId?: string }>();
   const journalPath = (id: string) => join(root, `${z.string().uuid().parse(id)}.json`);
   const save = async (item: Journal) => writeAtomic(journalPath(item.id), `${JSON.stringify(journalSchema.parse(item), null, 2)}\n`);
   const read = async (id: string): Promise<Journal> => {
@@ -42,7 +44,8 @@ export const createWorktreeDisposal = ({ appDataRoot, lookup, branchAvailable, r
     const item = journalSchema.parse(JSON.parse(await readFile(path, "utf8")));
     const allowed = [join(root, id, "files"), join(dirname(item.entry.path), ".agentenv-worktree-trash", id, "files")];
     if (item.id !== id || !allowed.includes(item.storage) || resolve(item.entry.path) !== item.entry.path ||
-      item.identity.commonDir !== item.entry.commonDir) throw new Error("Unverified Worktree Trash identity");
+      (!item.identity && !item.directoryIdentity) || item.identity && item.identity.commonDir !== item.entry.commonDir ||
+      item.identity && item.directoryIdentity && (item.identity.worktreeDevice !== item.directoryIdentity.worktreeDevice || item.identity.worktreeInode !== item.directoryIdentity.worktreeInode)) throw new Error("Unverified Worktree Trash identity");
     return item;
   };
   const projection = (item: Journal): WorktreeRecoveryRecord => ({
@@ -61,9 +64,27 @@ export const createWorktreeDisposal = ({ appDataRoot, lookup, branchAvailable, r
     if (!text.startsWith("gitdir: ")) throw new Error("This is not a verified linked Worktree directory");
     return readLinkedRegistrationIdentity(entry.commonDir, entry.path, resolve(entry.path, text.slice(8).trim()));
   };
+  const captureDirectory = async (path: string): Promise<DirectoryIdentity> => {
+    const info = await lstat(path, { bigint: true });
+    if (!info.isDirectory() || info.isSymbolicLink() || await realpath(path) !== path) throw new Error("Worktree directory identity changed; nothing was removed");
+    const gitInfo = await lstat(join(path, ".git")).catch((error) => { if (isMissingFileError(error)) return undefined; throw error; });
+    if (gitInfo && (!gitInfo.isFile() || gitInfo.isSymbolicLink())) throw new Error("This directory is not a linked Worktree; nothing was removed");
+    return { worktreeDevice: String(info.dev), worktreeInode: String(info.ino) };
+  };
+  const checkKnownPointer = async (entry: Pick<WorktreeEntry, "path" | "commonDir">) => {
+    const file = join(entry.path, ".git"), info = await lstat(file).catch((error) => { if (isMissingFileError(error)) return undefined; throw error; });
+    if (!info || !info.isFile() || info.isSymbolicLink() || info.size > 4096) return;
+    const text = await readFile(file, "utf8");
+    if (!text.startsWith("gitdir: ")) return;
+    const admin = resolve(entry.path, text.slice(8).trim());
+    if (dirname(admin) !== join(entry.commonDir, "worktrees")) throw new Error("Worktree Git pointer was redirected; nothing was removed");
+    await assertNoWorktreeWriter(admin);
+  };
   const prepare = async (entry: WorktreeEntry, mode: WorktreeDisposalMode, journalId?: string): Promise<WorktreeCleanupPreview> => {
-    const identity = await capture(entry), previewId = randomUUID();
-    issued.set(previewId, { entry, identity, mode, at: Date.now(), journalId });
+    const directoryIdentity = await captureDirectory(entry.path);
+    await checkKnownPointer(entry);
+    const identity = await capture(entry).catch(() => undefined), previewId = randomUUID();
+    issued.set(previewId, { entry, identity, directoryIdentity, mode, at: Date.now(), journalId });
     return { mode, previewId, entry, fingerprint: previewId, checkedAt: new Date().toISOString(),
       backupRequired: false, forceRequired: false, savedWorkspace: false };
   };
@@ -87,19 +108,21 @@ export const createWorktreeDisposal = ({ appDataRoot, lookup, branchAvailable, r
     await mkdir(slot, { mode: 0o700 });
     return join(slot, "files");
   };
-  const validateMoved = async (item: Journal) => assertRestoreRegistration(item.identity, item.entry.commonDir, item.storage);
-  const retainedPointer = (item: Journal) => `gitdir: ${item.identity.gitDir}\n`;
+  const validateMoved = async (item: Journal) => item.identity ? assertRestoreRegistration(item.identity, item.entry.commonDir, item.storage) : validateStorage(item);
+  const retainedPointer = (item: Journal) => `gitdir: ${item.identity!.gitDir}\n`;
   const writePointer = async (path: string, text: string) => {
     if (await readFile(join(path, ".git"), "utf8") !== text) await writeAtomic(join(path, ".git"), text);
   };
   const validateStorage = async (item: Journal) => {
     const info = await lstat(item.storage, { bigint: true });
-    if (!info.isDirectory() || info.isSymbolicLink() || String(info.dev) !== item.identity.worktreeDevice || String(info.ino) !== item.identity.worktreeInode) {
+    const identity = item.directoryIdentity ?? item.identity!;
+    if (!info.isDirectory() || info.isSymbolicLink() || String(info.dev) !== identity.worktreeDevice || String(info.ino) !== identity.worktreeInode) {
       throw new Error("Worktree Trash contents changed identity; nothing else was removed");
     }
   };
   const resumeMove = async (item: Journal) => {
     if (item.phase !== "prepared") return;
+    if (!item.identity) { await validateStorage(item); item.phase = "moved"; await save(item); return; }
     const info = await lstat(item.storage, { bigint: true }), admin = await lstat(item.identity.gitDir, { bigint: true });
     const backlink = (await readFile(join(item.identity.gitDir, "gitdir"), "utf8")).trim();
     const pointerHash = await hashRequiredPathEntry(join(item.storage, ".git"));
@@ -114,6 +137,7 @@ export const createWorktreeDisposal = ({ appDataRoot, lookup, branchAvailable, r
     item.identity = await capture(retainedEntry(item)); item.phase = "moved"; await save(item);
   };
   const clearRegistration = async (item: Journal) => {
+    if (!item.identity) return;
     const admin = item.identity.gitDir;
     if (await missing(admin)) return;
     const info = await lstat(admin, { bigint: true });
@@ -126,15 +150,25 @@ export const createWorktreeDisposal = ({ appDataRoot, lookup, branchAvailable, r
       throw new Error("Git registration identity changed; its files were not removed");
     }
     await assertNoWorktreeWriter(admin);
-    await rm(admin, { recursive: true });
+    await rm(admin, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
   };
   const purge = async (item: Journal, progress?: (phase: "preparing" | "removing" | "verifying") => void) => {
     if (!await missing(item.storage)) {
       await validateStorage(item);
-      await assertNoWorktreeWriter(item.identity.gitDir);
+      if (item.identity) await assertNoWorktreeWriter(item.identity.gitDir);
       item.phase = "deleting"; item.mode = "permanent"; await save(item);
       progress?.("removing");
-      try { await rm(item.storage, { recursive: true }); }
+      try {
+        for (let attempt = 0; ; attempt++) {
+          await validateStorage(item);
+          try { await rm(item.storage, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 }); break; }
+          catch (error) {
+            if (await missing(item.storage)) break;
+            if (attempt >= 2 || !["ENOTEMPTY", "EBUSY", "EPERM"].includes(String((error as NodeJS.ErrnoException).code))) throw error;
+            await new Promise((done) => setTimeout(done, 100 * (attempt + 1)));
+          }
+        }
+      }
       catch (error) { throw new Error(`Deletion did not finish. Remaining contents are in Worktree Trash; retry permanent deletion there. ${error instanceof Error ? error.message : String(error)}`, { cause: error }); }
     }
     progress?.("verifying");
@@ -171,30 +205,38 @@ export const createWorktreeDisposal = ({ appDataRoot, lookup, branchAvailable, r
       progress?.("preparing");
       if (request.journalId) { const item = await read(request.journalId); await resumeMove(item); return purge(item, progress); }
       const entry = request.entry;
-      await assertRestoreRegistration(request.identity, entry.commonDir, entry.path);
-      await assertNoWorktreeWriter(request.identity.gitDir);
-      const originalGitFile = await readFile(join(entry.path, ".git"), "utf8");
-      if (hashFileContent(originalGitFile) !== request.identity.gitFileHash) throw new Error("Worktree Git pointer changed; nothing was removed");
+      if (request.directoryIdentity && JSON.stringify(await captureDirectory(entry.path)) !== JSON.stringify(request.directoryIdentity)) throw new Error("Worktree directory identity changed; nothing was removed");
+      await checkKnownPointer(entry);
+      if (request.identity) {
+        try { await assertRestoreRegistration(request.identity, entry.commonDir, entry.path); }
+        catch { request.identity = undefined; }
+      }
+      const originalGitFile = request.identity ? await readFile(join(entry.path, ".git"), "utf8") : undefined;
+      if (request.identity && hashFileContent(originalGitFile!) !== request.identity.gitFileHash) throw new Error("Worktree Git pointer changed; nothing was removed");
       const id = randomUUID(), storage = await slots(entry, id);
       const item: Journal = { id, mode: request.mode, phase: "prepared", entry,
-        createdAt: new Date().toISOString(), storage, identity: request.identity, originalGitFile };
+        createdAt: new Date().toISOString(), storage, identity: request.identity, directoryIdentity: request.directoryIdentity, originalGitFile,
+        ...(!request.identity ? { notes: ["Git metadata could not be verified and was left unchanged. Only the selected directory is managed by this cleanup."] } : {}) };
       await save(item);
       progress?.("removing");
       await rename(entry.path, storage);
       try {
-        if (!isAbsolute(originalGitFile.slice(8).trim())) await writePointer(storage, retainedPointer(item));
-        await writeAtomic(join(item.identity.gitDir, "gitdir"), `${join(storage, ".git")}\n`);
-        item.identity = await capture(retainedEntry(item));
+        if (item.identity) {
+          if (!isAbsolute(originalGitFile!.slice(8).trim())) await writePointer(storage, retainedPointer(item));
+          await writeAtomic(join(item.identity.gitDir, "gitdir"), `${join(storage, ".git")}\n`);
+          item.identity = await capture(retainedEntry(item));
+        }
         item.phase = "moved"; await save(item);
       } catch (error) {
         if (await missing(entry.path)) {
           await rename(storage, entry.path);
-          await writePointer(entry.path, originalGitFile);
-          await writeAtomic(join(item.identity.gitDir, "gitdir"), `${join(entry.path, ".git")}\n`);
+          if (originalGitFile) await writePointer(entry.path, originalGitFile);
+          if (item.identity) await writeAtomic(join(item.identity.gitDir, "gitdir"), `${join(entry.path, ".git")}\n`);
         }
         throw error;
       }
       if (item.mode === "permanent") return purge(item, progress);
+      if (!item.identity) { progress?.("verifying"); return projection(item); }
       try {
         item.originalHead = await readFile(join(item.identity.gitDir, "HEAD"), "utf8");
         const branch = /^ref: refs\/heads\/(.+)$/.exec(item.originalHead.trim());
@@ -238,20 +280,23 @@ export const createWorktreeDisposal = ({ appDataRoot, lookup, branchAvailable, r
       }
       if (item.phase === "moved") {
         if (!await missing(item.entry.path)) throw new Error("The original path is occupied; nothing was overwritten");
-        await validateMoved(item); await assertNoWorktreeWriter(item.identity.gitDir);
+        await validateMoved(item); if (item.identity) await assertNoWorktreeWriter(item.identity.gitDir);
         await mkdir(dirname(item.entry.path), { recursive: true });
         if (await realpath(dirname(item.entry.path)) !== dirname(item.entry.path)) throw new Error("The original parent path changed; nothing was overwritten");
         item.phase = "restoring"; await save(item);
         await rename(item.storage, item.entry.path);
       }
       const info = await lstat(item.entry.path, { bigint: true });
-      const admin = await lstat(item.identity.gitDir, { bigint: true });
-      if (!info.isDirectory() || info.isSymbolicLink() || String(info.dev) !== item.identity.worktreeDevice || String(info.ino) !== item.identity.worktreeInode ||
-          !admin.isDirectory() || admin.isSymbolicLink() || String(admin.dev) !== item.identity.adminDevice || String(admin.ino) !== item.identity.adminInode) throw new Error("Restore target changed; nothing was overwritten");
-      await assertNoWorktreeWriter(item.identity.gitDir);
+      const identity = item.directoryIdentity ?? item.identity!;
+      if (!info.isDirectory() || info.isSymbolicLink() || String(info.dev) !== identity.worktreeDevice || String(info.ino) !== identity.worktreeInode) throw new Error("Restore target changed; nothing was overwritten");
+      if (item.identity) {
+        const admin = await lstat(item.identity.gitDir, { bigint: true });
+        if (!admin.isDirectory() || admin.isSymbolicLink() || String(admin.dev) !== item.identity.adminDevice || String(admin.ino) !== item.identity.adminInode) throw new Error("Restore target changed; nothing was overwritten");
+        await assertNoWorktreeWriter(item.identity.gitDir);
+      }
       if (item.originalGitFile) await writePointer(item.entry.path, item.originalGitFile);
-      await writeAtomic(join(item.identity.gitDir, "gitdir"), `${join(item.entry.path, ".git")}\n`);
-      if (item.detached && item.originalHead && item.entry.branch && item.entry.head &&
+      if (item.identity) await writeAtomic(join(item.identity.gitDir, "gitdir"), `${join(item.entry.path, ".git")}\n`);
+      if (item.identity && item.detached && item.originalHead && item.entry.branch && item.entry.head &&
         await branchAvailable(item.entry.commonDir, item.entry.branch, item.entry.head).catch(() => false)) {
         await writeAtomic(join(item.identity.gitDir, "HEAD"), item.originalHead);
       }

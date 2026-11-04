@@ -11,6 +11,7 @@ export const worktreeStatus = (entry: WorktreeEntry): {
   const neutral = (message: string) => ({ message, tone: "neutral" as const });
   if (entry.keptReason || entry.repositoryKeptReason) return neutral("Ignored");
   if (entry.locked) return neutral("Git locked");
+  if (entry.pathAvailability === "unknown") return neutral("Folder access needs review");
   if (!entry.exists) return neutral("Folder unavailable");
   if (entry.prunable) return neutral("Registration needs repair");
   if (entry.reasons.some((reason) => reason.includes("active writer lock"))) return neutral("Git write lock");

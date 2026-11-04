@@ -110,7 +110,7 @@ export const DiagnosticIssueDialog = ({
               <pre>{issue.error.stack}</pre>
             </section>
           ) : null}
-          {issue.error.causes.map((cause, index) => (
+          {(issue.error.causes ?? []).map((cause, index) => (
             <section key={`${cause.name}:${index}`}>
               <h3>{t("Cause {{count}}", { count: index + 1 })}</h3>
               <pre>{[

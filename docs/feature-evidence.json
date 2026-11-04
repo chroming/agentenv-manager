@@ -13,7 +13,7 @@
         "error": "Changed path identity, real writer locks and filesystem errors have per-item diagnostics and retry.",
         "cancelled": "Cancelling Preview writes nothing; Stop and navigation finish the current item then stop the queue.",
         "noOp": "Missing size, integration evidence and optional branch-release failure do not block an explicit command.",
-        "stale": "Execution rechecks exact directory, .git and registration identity, not full contents or unrelated Git state.",
+        "stale": "Execution rechecks the exact directory identity. Git registration is updated only when verified; otherwise it stays unchanged, without blocking physical cleanup.",
         "partial": "Deleted files with pending registration cleanup are separate from unfinished folder deletion; independent items continue.",
         "persisted": "Device-local journals expose interrupted moves/deletions after restart and never target reused original paths.",
         "rollback": "Trash restores the same directory without overwriting; completed permanent deletion cannot be restored. Legacy recovery remains protected."

@@ -64,6 +64,7 @@ describe("Worktree selection intent", () => {
     expect(selectWorktreeManually([], entry, true)).toEqual([]);
   });
   it.each([{ locked: "Keep" }, { submodules: true }, { manualReviewAvailable: false },
+    { exists: false, pathAvailability: "unknown" as const },
     { prunable: "Missing metadata" }, { head: undefined }, { state: "unavailable" as const }])("allows manual intent despite cached Git state: %j", (flags) => {
     const entry = { ...dirty, ...flags };
     expect(canSelectWorktreeForCleanup(entry)).toBe(true);

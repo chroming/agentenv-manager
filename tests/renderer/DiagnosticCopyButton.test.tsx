@@ -33,6 +33,27 @@ it("falls back to the original message when the diagnostic record cannot be read
   await waitFor(() => expect(api.copyText).toHaveBeenCalledWith(message));
 });
 
+it("copies the visible error if loading its full diagnostic record stalls", async () => {
+  vi.useFakeTimers();
+  try {
+    const api = install();
+    api.readDiagnosticIssue.mockImplementation(() => new Promise(() => {}));
+    render(<DiagnosticMessage message={message} />);
+    fireEvent.click(screen.getByRole("button", { name: "Copy details" }));
+    await vi.advanceTimersByTimeAsync(1200);
+    expect(api.copyText).toHaveBeenCalledWith(message);
+  } finally { vi.useRealTimers(); }
+});
+
+it("copies older diagnostic records that do not contain a causes array", async () => {
+  const api = install();
+  api.readDiagnosticIssue.mockResolvedValue({ reference: "AEM-20260918-ABC123", action: "worktrees:remove", occurredAt: "2026-09-18T12:00:00Z", error: { name: "Error", message: "directory not empty", stack: "at purge" } });
+  render(<DiagnosticMessage message={message} />);
+  fireEvent.click(screen.getByRole("button", { name: "Copy details" }));
+  await screen.findByRole("button", { name: "Copied" });
+  expect(api.copyText).toHaveBeenCalledWith(expect.stringContaining("directory not empty"));
+});
+
 it("does not add a meaningless copy action to ordinary notices and allows retry after clipboard failure", async () => {
   const api = install();
   const { rerender } = render(<Notice>Ordinary information</Notice>);

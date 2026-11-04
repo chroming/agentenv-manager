@@ -52,6 +52,27 @@ const fixture = async () => {
 };
 
 describe("worktree inventory and cleanup", () => {
+  it("omits registered directories that are confirmed missing rather than listing unusable cleanup rows", async () => {
+    const { linked, service } = await fixture();
+    await service.inventory();
+    await rm(linked, { recursive: true });
+    expect((await service.inventory()).entries.some((entry) => entry.path === linked)).toBe(false);
+  });
+
+  it("rechecks retained directory presence when Git listing fails and still allows explicit cleanup of an existing one", async () => {
+    const { linked, service, runner } = await fixture();
+    const inventory = await service.inventory(), entry = inventory.entries.find((item) => item.path === linked)!;
+    const runGit = runner.run.bind(runner);
+    vi.spyOn(runner, "run").mockImplementation(async (args, options) => {
+      if (args.includes("worktree") && args.includes("list")) throw new Error("unavailable Git listing");
+      return runGit(args, options);
+    });
+    expect((await service.inventory("background")).entries.find((item) => item.path === linked)).toMatchObject({ exists: true, state: "unavailable" });
+    expect((await service.preview(entry.commonDir, linked, true, "permanent")).mode).toBe("permanent");
+    await rm(linked, { recursive: true });
+    expect((await service.inventory("background")).entries.some((item) => item.path === linked)).toBe(false);
+  });
+
   it("removes and restores local content even when REBASE_HEAD already points to missing history", async () => {
     const { linked, service } = await fixture();
     const gitDir = resolve(linked, (await run("git", ["-C", linked, "rev-parse", "--git-dir"])).stdout.trim());

@@ -866,6 +866,49 @@ describe("Worktrees desktop workflow", () => {
     await reopened.getByRole("dialog", { name: t("Permanently delete Worktrees?"), exact: true }).getByRole("button", { name: t("Permanently delete {{count}}", { count }), exact: true }).click();
     await expect.poll(async () => reopened.getByRole("dialog", { name: t("Cleanup results"), exact: true }).getByText(t("Deleted"), { exact: true }).count()).toBe(count);
     expect((await reopened.evaluate(() => window.agentEnv.listWorktreeRecovery("trash"))).records).toEqual([]);
+    await reopened.getByRole("dialog", { name: t("Cleanup results"), exact: true }).getByRole("button", { name: t("Close"), exact: true }).last().click();
+    const broken = join(home, ".codex", "worktrees", "broken-git-metadata");
+    const gone = join(home, ".codex", "worktrees", "already-removed");
+    for (const path of [broken, gone]) await run("git", ["-C", repo, "worktree", "add", "-b", path === broken ? "broken-metadata" : "already-removed", path]);
+    await rm(gone, { recursive: true });
+    await writeFile(join(broken, ".git"), "invalid Git metadata\n");
+    await reopenedWorkspace.getByRole("button", { name: t("Refresh Worktrees"), exact: true }).click();
+    await expect.poll(() => reopenedWorkspace.getByRole("button", { name: t("Refresh Worktrees"), exact: true }).getAttribute("aria-busy")).toBe("false");
+    expect(await reopenedWorkspace.getByText(gone, { exact: true }).count()).toBe(0);
+    const brokenRow = reopenedWorkspace.locator(".ui-resource-row").filter({ has: reopened.getByText(broken, { exact: true }) });
+    await brokenRow.getByRole("checkbox", { name: t("Select Worktree for review"), exact: true }).check();
+    await app.evaluate(({ ipcMain }) => {
+      const handlers = (ipcMain as unknown as { _invokeHandlers: Map<string, (...args: unknown[]) => unknown> })._invokeHandlers;
+      for (const channel of ["worktrees:remove", "diagnostics:read-issue", "clipboard:write-text"]) {
+        const original = handlers.get(channel)!;
+        ipcMain.removeHandler(channel);
+        ipcMain.handle(channel, (_event, ...args) => {
+          ipcMain.removeHandler(channel); ipcMain.handle(channel, original);
+          if (channel === "worktrees:remove") throw new Error("ENOTEMPTY: directory not empty\nDiagnostic reference: AEM-20261104-ABCDEF");
+          if (channel === "diagnostics:read-issue") return new Promise(() => {});
+          Object.assign(globalThis, { worktreeCopiedError: String(args[0]) });
+        });
+      }
+    });
+    await reopenedWorkspace.getByRole("button", { name: t("Delete permanently..."), exact: true }).click();
+    await reopened.getByRole("dialog", { name: t("Permanently delete Worktrees?"), exact: true }).getByRole("button", { name: t("Permanently delete {{count}}", { count: 1 }), exact: true }).click();
+    const failedResults = reopened.getByRole("dialog", { name: t("Cleanup results"), exact: true });
+    await failedResults.getByText(t("Failed"), { exact: true }).waitFor();
+    await failedResults.getByRole("button", { name: t("Copy details"), exact: true }).click();
+    await failedResults.getByRole("button", { name: t("Copied"), exact: true }).waitFor();
+    expect(await app.evaluate(() => (globalThis as typeof globalThis & { worktreeCopiedError?: string }).worktreeCopiedError)).toContain("AEM-20261104-ABCDEF");
+    expect(await failedResults.evaluate((element) => {
+      const body = element.querySelector<HTMLElement>(".ui-dialog-body")!;
+      return body.scrollWidth <= body.clientWidth + 1 && element.querySelector(".ui-dialog-footer")!.getBoundingClientRect().bottom <= innerHeight;
+    })).toBe(true);
+    if (process.env.AGENTENV_CAPTURE_WORKTREES_DIR) await reopened.screenshot({ path: join(process.env.AGENTENV_CAPTURE_WORKTREES_DIR, `worktree-copy-fallback-${locale}-920.png`) });
+    await failedResults.getByRole("button", { name: t("Close"), exact: true }).last().click();
+    await brokenRow.getByRole("checkbox", { name: t("Select Worktree for review"), exact: true }).check();
+    await reopenedWorkspace.getByRole("button", { name: t("Delete permanently..."), exact: true }).click();
+    const brokenConfirm = reopened.getByRole("dialog", { name: t("Permanently delete Worktrees?"), exact: true });
+    await brokenConfirm.getByRole("button", { name: t("Permanently delete {{count}}", { count: 1 }), exact: true }).click();
+    await reopened.getByRole("dialog", { name: t("Cleanup results"), exact: true }).getByText(t("Deleted"), { exact: true }).waitFor();
+    await expect(readFile(join(broken, "README.md"))).rejects.toMatchObject({ code: "ENOENT" });
     expect(calls).toBe(1);
     const cleanupEvents = (await readFile(join(root, "logs", "runtime.jsonl"), "utf8")).trim().split("\n").map((line) => JSON.parse(line));
     expect(cleanupEvents.some((event) => event.action === "worktrees:preview-batch" && event.phase === "prepared-worktrees")).toBe(true);

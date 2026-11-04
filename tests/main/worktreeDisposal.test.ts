@@ -9,6 +9,7 @@ import { createGitCommandRunner } from "../../src/main/skillSources/gitCommandRu
 import { findExecutable } from "../../src/main/executableDiscovery";
 import type { ProjectStore } from "../../src/main/projects/projectStore";
 import * as snapshot from "../../src/main/worktrees/worktreeSnapshot";
+import { canSelectWorktreeForCleanup, isAutomaticCleanupCandidate } from "../../src/shared/worktrees";
 
 vi.mock("node:fs/promises", async (original) => ({ ...await original<typeof import("node:fs/promises")>() }));
 const exec = promisify(execFile), roots: string[] = [], services: WorktreeService[] = [];
@@ -286,4 +287,125 @@ it.each(["trash", "permanent"] as const)("does not let a failed progress observe
   const result = await service.remove(await service.preview(common, tree, true, mode), () => { throw new Error("observer closed"); });
   expect(result).toMatchObject({ mode, status: "removed" });
   await expect(fs.lstat(tree)).rejects.toMatchObject({ code: "ENOENT" });
+});
+
+it("retries a transient nonempty directory failure on the pinned private deletion path", async () => {
+  const { tree, service, common } = await fixture();
+  const original = fs.rm.bind(fs); let attempts = 0;
+  vi.spyOn(fs, "rm").mockImplementation(async (path, options) => {
+    if (String(path).endsWith("/files") && ++attempts === 1) throw Object.assign(new Error("directory not empty"), { code: "ENOTEMPTY" });
+    return original(path, options);
+  });
+  const result = await service.remove(await service.preview(common, tree, true, "permanent"));
+  expect(result).toMatchObject({ mode: "permanent", status: "removed" });
+  expect(attempts).toBeGreaterThan(1);
+});
+
+it("can permanently delete a known linked directory when its Git administration is already gone", async () => {
+  const { tree, service, common, admin } = await fixture();
+  await fs.rm(admin, { recursive: true });
+  const result = await service.remove(await service.preview(common, tree, true, "permanent"));
+  expect(result).toMatchObject({ mode: "permanent", status: "removed" });
+  await expect(fs.lstat(tree)).rejects.toMatchObject({ code: "ENOENT" });
+});
+
+it("keeps a previously discovered directory available for explicit cleanup when Git no longer lists it", async () => {
+  const { tree, service, common, admin } = await fixture();
+  await fs.rm(admin, { recursive: true });
+  const inventory = await service.inventory("background");
+  expect(inventory.entries.find((item) => item.path === tree)).toMatchObject({ exists: true, state: "unavailable" });
+  await service.remove(await service.preview(common, tree, true, "permanent"));
+  expect((await service.inventory("background")).entries.some((item) => item.path === tree)).toBe(false);
+});
+
+it("does not let Git metadata disappearing after Preview block deletion of the same selected directory", async () => {
+  const { tree, service, common, admin } = await fixture();
+  const preview = await service.preview(common, tree, true, "permanent");
+  await fs.rm(admin, { recursive: true });
+  expect((await service.remove(preview)).mode).toBe("permanent");
+  await expect(fs.lstat(tree)).rejects.toMatchObject({ code: "ENOENT" });
+});
+
+it("moves and restores the actual directory without repairing unavailable Git administration", async () => {
+  const { tree, service, common, admin } = await fixture();
+  await fs.writeFile(join(tree, "local.txt"), "keep raw local data");
+  const pointer = await fs.readFile(join(tree, ".git"), "utf8");
+  await fs.rm(admin, { recursive: true });
+  const moved = await service.remove(await service.preview(common, tree, true, "trash"));
+  expect(moved.mode).toBe("trash");
+  expect(await fs.readFile(join(moved.retainedPath!, "local.txt"), "utf8")).toBe("keep raw local data");
+  await service.restore(moved.id);
+  expect(await fs.readFile(join(tree, ".git"), "utf8")).toBe(pointer);
+  expect(await fs.readFile(join(tree, "local.txt"), "utf8")).toBe("keep raw local data");
+  await expect(fs.lstat(admin)).rejects.toMatchObject({ code: "ENOENT" });
+});
+
+it("permits explicit deletion of a known directory with a missing .git file or owning repository", async () => {
+  const { tree, service, common, repo } = await fixture();
+  await fs.rm(join(tree, ".git")); await fs.rm(repo, { recursive: true });
+  expect((await service.remove(await service.preview(common, tree, true, "permanent"))).mode).toBe("permanent");
+  await expect(fs.lstat(tree)).rejects.toMatchObject({ code: "ENOENT" });
+});
+
+it.each(["trash", "permanent"] as const)("still refuses a pointer redirected to the main repository for %s", async (mode) => {
+  const { tree, service, common } = await fixture();
+  await fs.writeFile(join(tree, ".git"), `gitdir: ${common}\n`);
+  await expect(service.preview(common, tree, true, mode)).rejects.toThrow("redirected");
+  expect(await fs.readFile(join(tree, "file.txt"), "utf8")).toBe("base\n");
+});
+
+it("refuses a standalone repository created at the selected path after a directory-only preview", async () => {
+  const { tree, service, common, admin } = await fixture();
+  await fs.rm(admin, { recursive: true });
+  const preview = await service.preview(common, tree, true, "permanent");
+  await fs.rm(join(tree, ".git")); await fs.mkdir(join(tree, ".git"));
+  await fs.writeFile(join(tree, ".git", "keep.txt"), "new standalone repository");
+  await expect(service.remove(preview)).rejects.toThrow("not a linked Worktree");
+  expect(await fs.readFile(join(tree, ".git", "keep.txt"), "utf8")).toBe("new standalone repository");
+});
+
+it("preserves an inaccessible directory as manually selectable, not absent or automatically selected", async () => {
+  const { tree, service } = await fixture();
+  const original = fs.lstat.bind(fs);
+  vi.spyOn(fs, "lstat").mockImplementation(((path: Parameters<typeof fs.lstat>[0], ...rest: unknown[]) => {
+    if (String(path) === tree) return Promise.reject(Object.assign(new Error("permission denied"), { code: "EACCES" }));
+    return Reflect.apply(original, fs, [path, ...rest]);
+  }) as typeof fs.lstat);
+  const entry = (await service.inventory("background")).entries.find((item) => item.path === tree)!;
+  expect(entry).toMatchObject({ exists: false, pathAvailability: "unknown" });
+  expect(canSelectWorktreeForCleanup(entry)).toBe(true);
+  expect(isAutomaticCleanupCandidate(entry)).toBe(false);
+});
+
+it("stops retrying if the private directory was replaced after an ENOTEMPTY failure", async () => {
+  const { tree, root, service, common } = await fixture();
+  const original = fs.rm.bind(fs);
+  vi.spyOn(fs, "rm").mockImplementation(async (path, options) => {
+    if (String(path).endsWith("/files")) {
+      await fs.rename(String(path), join(root, "original-contents"));
+      await fs.mkdir(String(path)); await fs.writeFile(join(String(path), "keep.txt"), "replacement");
+      throw Object.assign(new Error("directory not empty"), { code: "ENOTEMPTY" });
+    }
+    return original(path, options);
+  });
+  await expect(service.remove(await service.preview(common, tree, true, "permanent"))).rejects.toThrow("changed identity");
+  vi.restoreAllMocks();
+  expect(await fs.readFile(join(root, "original-contents", "file.txt"), "utf8")).toBe("base\n");
+});
+
+it("retries older partial-deletion journals without requiring their already removed .git file", async () => {
+  const { tree, data, service, common } = await fixture();
+  const original = fs.rm.bind(fs);
+  vi.spyOn(fs, "rm").mockImplementation(async (path, options) => {
+    if (String(path).endsWith("/files")) { await original(join(String(path), ".git")); throw Object.assign(new Error("remaining bundle resources"), { code: "EACCES" }); }
+    return original(path, options);
+  });
+  await expect(service.remove(await service.preview(common, tree, true, "permanent"))).rejects.toThrow("Remaining contents");
+  vi.restoreAllMocks();
+  const record = (await service.listRecovery("trash")).records[0], path = join(data, "worktree-trash", `${record.id}.json`);
+  const journal = JSON.parse(await fs.readFile(path, "utf8")); delete journal.directoryIdentity;
+  await fs.writeFile(path, JSON.stringify(journal));
+  const result = await service.remove(await service.previewTrashDeletion(record.id));
+  expect(result).toMatchObject({ mode: "permanent", status: "removed", pendingGitCleanup: false });
+  expect((await service.listRecovery("trash")).records).toEqual([]);
 });

@@ -23,6 +23,7 @@ export interface WorktreeEntry {
   locked?: string;
   prunable?: string;
   exists: boolean;
+  pathAvailability?: "unknown";
   state: WorktreeReviewState;
   reasons: string[];
   reasonDetails?: Array<{ message: string; values?: Record<string, string | number>; detail?: string }>;
@@ -43,10 +44,11 @@ export interface WorktreeEntry {
 }
 
 export const canSelectWorktreeForCleanup = (entry: WorktreeEntry): boolean =>
-  entry.exists && !entry.main && !entry.keptReason && !entry.repositoryKeptReason;
+  (entry.exists || entry.pathAvailability === "unknown") && !entry.main && !entry.keptReason && !entry.repositoryKeptReason;
 
 export const isAutomaticCleanupCandidate = (entry: WorktreeEntry): boolean =>
   canSelectWorktreeForCleanup(entry) &&
+  entry.exists && entry.pathAvailability !== "unknown" &&
   entry.state === "candidate" && entry.cleanupReviewAvailable &&
   !entry.locked && !entry.prunable && !entry.submodules && Boolean(entry.head) &&
   !entry.localContentUncertain &&
