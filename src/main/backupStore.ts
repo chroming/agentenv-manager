@@ -8,9 +8,9 @@ import {
   readlink,
   readdir,
   rename,
-  rm,
   stat,
 } from "node:fs/promises";
+import { removePhysicalPath as rm } from "./physicalFileRemoval";
 import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 import type {
   BackupEntry,

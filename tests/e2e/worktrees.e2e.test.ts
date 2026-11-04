@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { createServer, type Server } from "node:http";
-import { chmod, mkdir, mkdtemp, readFile, realpath, rm, utimes, writeFile } from "node:fs/promises";
-import { delimiter, join } from "node:path";
+import { chmod, copyFile, lstat, mkdir, mkdtemp, readFile, realpath, rm, symlink, utimes, writeFile } from "node:fs/promises";
+import { delimiter, dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import { promisify } from "node:util";
 import electronPath from "electron";
@@ -10,6 +10,8 @@ import { afterEach, describe, expect, it } from "vitest";
 import { requireCurrentElectronBuild } from "./currentBuild";
 import { translate } from "../../src/renderer/i18n";
 import { expectCatalogToolbar } from "./catalogToolbarAssertions";
+import { createBackupStore } from "../../src/main/backupStore";
+import { createPaths } from "../../src/main/paths";
 // @ts-expect-error Shared capture evidence is implemented as an executable JavaScript module.
 import { readInterfaceTypography } from "../../scripts/interface-typography.mjs";
 
@@ -20,7 +22,9 @@ let server: Server | undefined;
 requireCurrentElectronBuild();
 
 afterEach(async () => {
-  await app?.close().catch(() => undefined);
+  const closing = app;
+  const kill = setTimeout(() => closing?.process().kill("SIGKILL"), 5000);
+  try { await closing?.close().catch(() => undefined); } finally { clearTimeout(kill); }
   app = undefined;
   await new Promise<void>((resolve) => server ? server.close(() => resolve()) : resolve());
   server = undefined;
@@ -29,6 +33,56 @@ afterEach(async () => {
 }, 30_000);
 
 describe("Worktrees desktop workflow", () => {
+  it("purges physical Electron archives from Trash and backups without ASAR virtual-directory retries", async () => {
+    root = await realpath(await mkdtemp(join(tmpdir(), "aem-trash-asar-ui-")));
+    const home = join(root, "home"), data = join(root, "data"), repo = join(home, "repo"), tree = join(root, "trees", "archive-task");
+    await mkdir(home); await mkdir(data);
+    await run("git", ["init", "-b", "main", repo]);
+    await writeFile(join(repo, "README.md"), "Preserve the main repository\n");
+    await run("git", ["-C", repo, "add", "."]);
+    await run("git", ["-C", repo, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.com", "commit", "-m", "base"]);
+    await run("git", ["-C", repo, "worktree", "add", "-b", "archive-task", tree]);
+    const commonDir = join(repo, ".git");
+    const resources = process.platform === "darwin" ? join(dirname(electronPath as unknown as string), "..", "Resources") : join(dirname(electronPath as unknown as string), "resources");
+    const archive = join(resources, "default_app.asar");
+    const originalArchive = await readFile(archive);
+    const bundle = join(tree, "node_modules", "electron", "dist", "Electron.app", "Contents", "Resources");
+    await mkdir(bundle, { recursive: true }); await copyFile(archive, join(bundle, "default_app.asar"));
+    const outside = join(root, "outside"); await mkdir(outside); await writeFile(join(outside, "keep.txt"), "Do not follow this link\n");
+    if (process.platform !== "win32") await symlink(outside, join(tree, "outside-link"), "dir");
+    await writeFile(join(data, "agentenv-data.json"), '{"formatVersion":2}');
+    await writeFile(join(data, "settings.json"), JSON.stringify({ locale: "en", enabledTargetIds: [], agentDiscoveryVersion: 1,
+      agentDiscoveryReviewedIds: ["opencode", "codex", "claude-code", "antigravity", "antigravity-app", "trae-cli", "pi", "workbuddy"],
+      telemetryEnabled: false, telemetryConsentVersion: 1, skillAutoCheckEnabled: false, backupRetentionDays: null }));
+    const backup = await createBackupStore(createPaths({ appDataRoot: data, homeDir: home })).createBackup([bundle]);
+    app = await electron.launch({ executablePath: electronPath as unknown as string,
+      args: ["--disable-gpu", `--user-data-dir=${join(root, "electron")}`, join(process.cwd(), "out", "main", "main.js")],
+      env: { ...process.env, AGENTENV_AUTOMATION: "1", AGENTENV_DATA_ROOT: data, AGENTENV_HOME: home,
+        AGENTENV_FAKE_HOME: join(root, "fake"), AGENTENV_LOG_ROOT: join(root, "logs"), AGENTENV_CACHE_ROOT: join(root, "cache") } });
+    const page = await app.firstWindow();
+    await expect.poll(() => page.evaluate(() => window.agentEnv.readStartupStatus())).toEqual({ state: "ready" });
+    const moved = await page.evaluate(async ({ repo, commonDir, tree }) => {
+      await window.agentEnv.addWorktreeScanRoot(repo);
+      await window.agentEnv.inventoryWorktrees();
+      return window.agentEnv.removeWorktree(await window.agentEnv.previewWorktreeCleanup(commonDir, tree, true, "trash"));
+    }, { repo, commonDir, tree });
+    await mkdir(tree); await writeFile(join(tree, "new.txt"), "A new original folder must survive\n");
+    const preview = await page.evaluate((id) => window.agentEnv.previewWorktreeTrashDeletion(id), moved.id);
+    let timeout: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const removed = await Promise.race([page.evaluate((preview) => window.agentEnv.removeWorktree(preview), preview),
+        new Promise<never>((_, reject) => { timeout = setTimeout(() => reject(new Error("Physical archive purge stalled in Electron")), 3000); })]);
+      expect(removed).toMatchObject({ mode: "permanent", status: "removed" });
+    } finally { clearTimeout(timeout); }
+    expect(await readFile(join(tree, "new.txt"), "utf8")).toBe("A new original folder must survive\n");
+    expect(await readFile(join(outside, "keep.txt"), "utf8")).toBe("Do not follow this link\n");
+    expect(await readFile(join(repo, "README.md"), "utf8")).toBe("Preserve the main repository\n");
+    expect((await page.evaluate(() => window.agentEnv.listWorktreeRecovery("trash"))).records).toEqual([]);
+    const removedBackup = await page.evaluate((id) => window.agentEnv.deleteManagedBackup({ kind: "target-recovery", id }), backup.id);
+    expect(removedBackup.deletedCount).toBe(1);
+    await expect(lstat(join(data, "backups", backup.id))).rejects.toMatchObject({ code: "ENOENT" });
+    expect(await readFile(archive)).toEqual(originalArchive);
+  }, 30_000);
   it.each(["en", "zh_CN", "zh_TW"] as const)("keeps discovery, aligned rows and review dialogs consistent in %s", async (locale) => {
     const t = (message: string, values?: Record<string, string | number>) => translate(locale, message, values);
     root = await realpath(await mkdtemp(join(tmpdir(), "agentenv-worktrees-e2e-")));

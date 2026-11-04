@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { lstat, mkdir, readFile, readdir, realpath, rename, rm } from "node:fs/promises";
+import { lstat, mkdir, readFile, readdir, realpath, rename } from "node:fs/promises";
+import { removePhysicalPath as rm } from "../physicalFileRemoval";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { z } from "zod";
 import type { WorktreeCleanupPreview, WorktreeDisposalMode, WorktreeEntry, WorktreeRecoveryRecord, WorktreeRestoreRegistration } from "../../shared/worktrees";

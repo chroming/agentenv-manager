@@ -372,6 +372,11 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
   const modifiedMetric = (entry: WorktreeEntry) => <CatalogSortMetric dateOnly kind="date" label={t("Last modified")} value={entry.modifiedAt}
     detail={t("Latest file modification time, excluding .git. Includes ignored files; not the last commit time.")} />;
   const successful = results.filter((result) => result.error === undefined && !result.skipped);
+  const activePreview = previews[results.length];
+  const activePath = reviewItems.find((item) => item.preview?.previewId === activePreview?.previewId)?.entry.path
+    ?? activePreview?.entry.path ?? operationProgress?.path ?? "";
+  const elapsedSeconds = Math.floor((operationProgress?.elapsedMs ?? 0) / 1000);
+  const elapsedLabel = elapsedSeconds > 0 ? `${Math.floor(elapsedSeconds / 60)}:${String(elapsedSeconds % 60).padStart(2, "0")}` : "";
   const removalCount = previews.length || reviewItems.length;
   const removalLabel = disposalMode === "permanent" ? t("Permanently delete {{count}}", { count: removalCount }) : t("Move {{count}} to Trash", { count: removalCount });
   const fileProgress = operationProgress?.fileProgress;
@@ -546,14 +551,14 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
           <WorktreeCleanupReview items={reviewItems} mode={disposalMode} busy={Boolean(busy)} onRetry={(item) => item.trashId ? void prepareTrash([{ id: item.trashId, path: item.entry.path }], true) : void prepare([item.entry], "retry")} />
         </> : null}
         {view === "results" ? <>
-          <DetailList items={[
+          {busy !== "remove" || successful.length > 0 ? <DetailList items={[
             { label: t("Removed size"), value: sizeLabel(totalBytes(successful.map((result) => result.sizeBytes))) },
             { label: t("Estimated space freed"), value: sizeLabel(totalBytes(successful.map((result) => result.reclaimedSizeBytes))) },
             { label: t(results.some((result) => result.mode) ? "Space retained in Trash" : "Recovery copies retained"), value: sizeLabel(results.some((result) => result.error !== undefined) ? undefined : totalBytes(successful.map((result) => result.sizeBytes === undefined || result.reclaimedSizeBytes === undefined ? undefined : Math.max(0, result.sizeBytes - result.reclaimedSizeBytes)))) }
-          ]} />
+          ]} /> : null}
           {busy === "remove" ? <OperationStatusBar icon={<LoaderCircle className="is-spinning" size={15} />}
             label={operationProgress?.phase === "backing-up" ? t("Backing up local files...") : operationProgress?.phase === "verifying" ? t("Verifying removal...") : operationProgress?.phase === "removing" ? disposalMode === "trash" ? t("Moving Worktrees to Trash...") : t("Deleting Worktrees...") : t("Checking selected Worktree...")}
-            detail={[`${results.length}/${previews.length} · ${nameFromPath(operationProgress?.path ?? previews[results.length]?.entry.path ?? "")}`, fileProgressDetail].filter(Boolean).join(" · ")} /> : null}
+            detail={[`${results.length}/${previews.length} · ${nameFromPath(activePath)}`, elapsedLabel, fileProgressDetail].filter(Boolean).join(" · ")} /> : null}
           <AlignedResourceList actionTrack="compact" className="worktree-dialog__entries worktree-dialog__results">
             {results.map((result) => <ResourceRow key={result.id ?? result.path} density="compact" appearance="plain" icon={result.error !== undefined || result.skipped || result.verificationWarnings?.length ? <AlertTriangle size={16} /> : <Check size={16} />}
               title={nameFromPath(result.path)} description={<span className="selectable">{result.path}</span>}

@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { chmod, cp, lstat, mkdir, open, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
+import { chmod, cp, lstat, mkdir, open, readFile, readdir, rename, stat, writeFile } from "node:fs/promises";
+import { removePhysicalPath as rm } from "./physicalFileRemoval";
 import { basename, dirname, join } from "node:path";
 import { hashPathEntry, syncPathTree } from "./filesystemIntegrity";
 

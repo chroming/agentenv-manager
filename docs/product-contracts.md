@@ -454,6 +454,15 @@ registration cleanup fails, the primary result still says Deleted, with a separa
 optional registration-cleanup warning and retry. Retry targets only the surviving registration after identity validation. A
 completed permanent deletion has no Restore action and does not retain the directory.
 Prepared, moved and deleting phases remain recoverable/retryable after interruption.
+Recursive removal of Worktree contents, backups and atomic-replacement staging uses
+physical filesystem entries in Electron, not ASAR virtual-directory traversal. Normal
+archive/module reads remain ASAR-aware; global `process.noAsar` toggling is forbidden.
+During removal, progress identifies the original Worktree rather than its internal
+`files` storage basename and emits elapsed-time heartbeats without inventing file or
+byte completion. Before any item succeeds, results do not claim zero bytes removed.
+Diagnostic stage start, periodic liveness and finish records make pending filesystem
+calls observable; optional stage-log flushing has a bounded wait and cannot hold an
+already completed deletion indefinitely. None of these signals authorizes a mutation.
 One item's ordinary failure does not block the rest of the selected queue. Navigation or
 Stop finishes the current operation, then marks the remaining items Not run.
 The list and each repository offer Select integrated, unchanged Worktrees within

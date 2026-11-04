@@ -4,6 +4,7 @@ import type { WorktreeCleanupPreview, WorktreeOperationProgress, WorktreeScanRes
 import type { IpcRegistrationHandles } from "../ipc/registration";
 import { WorktreeScanCancelledError, type WorktreeService } from "./worktreeService";
 import type { RuntimeDiagnostics } from "../runtimeDiagnostics";
+import { readAdvisory } from "../advisoryRead";
 
 export const registerWorktreeIpc = (
   { diagnosticHandle, handleMutation }: Pick<IpcRegistrationHandles, "diagnosticHandle" | "handleMutation">,
@@ -71,28 +72,49 @@ export const registerWorktreeIpc = (
     service.setIntegrationRef(String(commonDir), ref === undefined ? undefined : String(ref)));
   handleMutation("worktrees:remove", async (event, preview: WorktreeCleanupPreview, id) => {
     const requestId = id === undefined ? undefined : z.string().uuid().parse(id);
-    let previous: string | undefined, started = performance.now();
-    const logs: Promise<unknown>[] = [];
-    const finishStage = () => {
-      if (previous && diagnostics) logs.push(diagnostics.record("worktrees:remove", "stage-finished", {
-        durationMs: Math.round(performance.now() - started), context: { stage: previous, path: preview.entry.path }
-      }).catch(() => undefined));
+    const operationStarted = performance.now();
+    const logs = new Set<Promise<unknown>>();
+    let previous: WorktreeOperationProgress["phase"] = "preparing", started = operationStarted, lastLogged = started;
+    let latest: WorktreeOperationProgress["fileProgress"];
+    const recordStage = (phase: string, durationMs?: number) => {
+      const pending = diagnostics?.record("worktrees:remove", phase, {
+        ...(durationMs === undefined ? {} : { durationMs }), context: { stage: previous, path: preview.entry.path }
+      }).catch(() => undefined);
+      if (pending) { logs.add(pending); void pending.then(() => logs.delete(pending)); }
     };
+    const finishStage = () => {
+      recordStage("stage-finished", Math.round(performance.now() - started));
+    };
+    recordStage("stage-started");
+    const heartbeat = setInterval(() => {
+      const now = performance.now();
+      if (requestId) sendProgress(event, { requestId, phase: previous, path: preview.entry.path, completed: 0, total: 1,
+        elapsedMs: Math.round(now - operationStarted), ...(latest ? { fileProgress: latest } : {}) });
+      if (now - lastLogged >= 15_000) { recordStage("stage-running", Math.round(now - started)); lastLogged = now; }
+    }, 1000);
+    heartbeat.unref?.();
     try {
       const result = await service.remove(preview, (phase, fileProgress) => {
-        if (previous !== phase) { finishStage(); previous = phase; started = performance.now(); }
+        if (previous !== phase) {
+          finishStage(); previous = phase; started = performance.now(); lastLogged = started; recordStage("stage-started");
+        }
+        latest = fileProgress;
         if (requestId) sendProgress(event, { requestId, phase, path: preview.entry.path, completed: 0, total: 1,
           ...(fileProgress ? { fileProgress } : {}) });
       });
-      if (result.verificationWarnings?.length && diagnostics) {
-        const reference = await diagnostics.record("worktrees:remove", "cleanup-completed-with-notes", {
-          outcome: "partial", error: new Error(result.verificationWarnings.join("\n")),
+      const warnings = result.verificationWarnings;
+      if (warnings?.length && diagnostics) {
+        const reference = await readAdvisory(() => diagnostics.record("worktrees:remove", "cleanup-completed-with-notes", {
+          outcome: "partial", error: new Error(warnings.join("\n")),
           context: { path: result.path, mode: result.mode, disposalId: result.id, pendingGitCleanup: result.pendingGitCleanup }
-        }).catch(() => undefined);
-        if (reference) return { ...result, verificationWarnings: result.verificationWarnings.map((warning) => `${warning}\nDiagnostic reference: ${reference}`) };
+        }), 150);
+        if (reference.available) return { ...result, verificationWarnings: warnings.map((warning) => `${warning}\nDiagnostic reference: ${reference.value}`) };
       }
       return result;
-    } finally { finishStage(); await Promise.allSettled(logs); }
+    } finally {
+      clearInterval(heartbeat); finishStage();
+      await readAdvisory(() => Promise.allSettled([...logs]), 150);
+    }
   });
   handleMutation("worktrees:restore", (_event, id: unknown) => service.restore(String(id)));
 };

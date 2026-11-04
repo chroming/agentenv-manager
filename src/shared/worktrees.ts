@@ -86,6 +86,7 @@ export interface WorktreeOperationProgress {
   path: string;
   completed: number;
   total: number;
+  elapsedMs?: number;
   fileProgress?: WorktreeFileProgress;
   preparation?: WorktreeCleanupPreparation;
 }

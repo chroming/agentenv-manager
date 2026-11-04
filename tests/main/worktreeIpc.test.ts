@@ -44,6 +44,42 @@ const fixture = async (gitAvailable = true) => {
 };
 
 describe("Worktree scan IPC lifecycle", () => {
+  it("keeps a pending removal observable without restarting work or claiming completed items", async () => {
+    const { invoke, service, sender, diagnostics } = await fixture();
+    const record = vi.spyOn(diagnostics, "record");
+    let finish!: () => void;
+    vi.spyOn(service, "remove").mockImplementation(async (_preview, progress) => {
+      progress?.("removing");
+      await new Promise<void>((done) => { finish = done; });
+      return { id: "done" } as WorktreeRecoveryRecord;
+    });
+    vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "performance"] });
+    const requestId = "00000000-0000-4000-8000-000000000001";
+    const pending = invoke("worktrees:remove", { entry: { path: "/trash/fixture/files" } } as WorktreeCleanupPreview, requestId);
+    try {
+      await vi.advanceTimersByTimeAsync(16_000);
+      expect(sender.send.mock.calls.length).toBeGreaterThan(1);
+      expect(sender.send).toHaveBeenLastCalledWith("worktrees:progress", expect.objectContaining({
+        requestId, phase: "removing", completed: 0, elapsedMs: 16_000
+      }));
+      expect(service.remove).toHaveBeenCalledTimes(1);
+      expect(record).toHaveBeenCalledWith("worktrees:remove", "stage-started", expect.objectContaining({ context: expect.objectContaining({ stage: "removing" }) }));
+      expect(record).toHaveBeenCalledWith("worktrees:remove", "stage-running", expect.objectContaining({ durationMs: 15_000 }));
+      finish(); await pending;
+      const sent = sender.send.mock.calls.length;
+      await vi.advanceTimersByTimeAsync(16_000);
+      expect(sender.send).toHaveBeenCalledTimes(sent);
+    } finally { finish(); await pending; vi.useRealTimers(); }
+  });
+  it("does not hold a completed removal hostage to stalled stage logging", async () => {
+    const { invoke, service, diagnostics } = await fixture();
+    vi.spyOn(diagnostics, "record").mockImplementation(() => new Promise(() => {}));
+    const result = { id: "removed" } as WorktreeRecoveryRecord;
+    vi.spyOn(service, "remove").mockImplementation(async (_preview, progress) => { progress?.("removing"); return result; });
+    const started = performance.now();
+    expect(await invoke("worktrees:remove", { entry: { path: "/trash/fixture/files" } })).toBe(result);
+    expect(performance.now() - started).toBeLessThan(1000);
+  });
   it("supports callbacks that only provide legacy item counts or phase strings", async () => {
     const { invoke, service, sender } = await fixture();
     const preview = { entry: { path: "/tree" } } as WorktreeCleanupPreview;

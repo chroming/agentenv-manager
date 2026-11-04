@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { clearTimeout, setTimeout } from "node:timers";
-import { lstat, mkdir, readFile, readdir, realpath, rm, stat } from "node:fs/promises";
+import { lstat, mkdir, readFile, readdir, realpath, stat } from "node:fs/promises";
+import { removePhysicalPath as rm } from "../physicalFileRemoval";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { homedir } from "node:os";
 import { z } from "zod";

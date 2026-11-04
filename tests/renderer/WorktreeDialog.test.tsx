@@ -75,6 +75,33 @@ afterEach(() => {
 });
 
 describe("WorktreeDialog", () => {
+  it("does not show completed zero-byte totals or an internal files name while the first Trash deletion is pending", async () => {
+    const api = installApi();
+    let report!: (value: WorktreeOperationProgress) => void;
+    Object.assign(api, { onWorktreeProgress: vi.fn((listener) => { report = listener; return () => undefined; }) });
+    api.listWorktreeRecovery.mockResolvedValue({ records: [{ id: "trash", mode: "trash", path: dirty.path,
+      status: "removed", createdAt: inventory.scannedAt }], issues: [] });
+    api.previewWorktreeTrashDeletion.mockResolvedValue({ ...preparedPreview(dirty), mode: "permanent",
+      entry: { ...dirty, path: "/data/worktree-trash/trash/files", sizeBytes: undefined } });
+    let finish!: (value: unknown) => void;
+    api.removeWorktree.mockImplementation(() => new Promise((done) => { finish = done; }));
+    render(<WorktreeWorkspace />); await screen.findByText(clean.path);
+    fireEvent.click(screen.getByRole("button", { name: "Worktree Trash" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Empty Trash..." }));
+    const confirm = await screen.findByRole("dialog", { name: "Permanently delete Worktrees?" });
+    await waitFor(() => expect(within(confirm).getByRole("button", { name: "Permanently delete 1" })).toBeEnabled());
+    fireEvent.click(within(confirm).getByRole("button", { name: "Permanently delete 1" }));
+    const results = await screen.findByRole("dialog", { name: "Cleanup results" });
+    expect(within(results).queryAllByText("0 B")).toHaveLength(0);
+    expect(results).toHaveTextContent("0/1 · dirty");
+    expect(results).not.toHaveTextContent("0/1 · files");
+    const requestId = api.removeWorktree.mock.calls[0][1] as string;
+    act(() => report({ requestId, phase: "removing", path: "/data/worktree-trash/trash/files", completed: 0, total: 1, elapsedMs: 65_000 }));
+    expect(results).toHaveTextContent("Deleting Worktrees...");
+    expect(results).toHaveTextContent("0/1 · dirty · 1:05");
+    expect(within(results).queryAllByText("0 B")).toHaveLength(0);
+    await act(async () => { finish({ id: "trash", mode: "permanent", path: dirty.path, status: "removed" }); });
+  });
   it.each(["trash", "permanent"] as const)("allows confirmed %s despite Git writing and unavailable Workspace advice", async (mode) => {
     const api = installApi();
     api.previewWorktreeCleanup.mockResolvedValue({ ...preparedPreview(dirty), mode, gitWriteInProgress: true, workspaceImpactUnknown: true });

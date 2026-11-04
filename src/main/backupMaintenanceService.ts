@@ -1,4 +1,5 @@
-import { lstat, readFile, readdir, rm } from "node:fs/promises";
+import { lstat, readFile, readdir } from "node:fs/promises";
+import { removePhysicalPath as rm } from "./physicalFileRemoval";
 import { isAbsolute, join } from "node:path";
 import type {
   AgentEnvSettings,
