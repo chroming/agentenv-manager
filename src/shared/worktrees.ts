@@ -155,3 +155,8 @@ export interface WorktreeRecoveryInventory {
   records: WorktreeRecoveryRecord[];
   issues: string[];
 }
+
+export const canEmptyWorktreeTrashRecord = (record: WorktreeRecoveryRecord): boolean =>
+  record.mode === "trash" && record.status === "removed" ||
+  Boolean(record.mode && record.retainedPath && record.disposalIncomplete &&
+    (record.status === "prepared" || record.status === "removed"));

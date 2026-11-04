@@ -435,6 +435,12 @@ if that ref still points at the retained HEAD and is unused elsewhere; otherwise
 restored tree remains detached. It does not repair existing damaged repository history.
 Trash can be permanently deleted individually or with Empty Trash. Existing historical
 recovery points are separate and never included in Empty Trash or ordinary retention.
+Empty Trash includes retained folders from failed deletion and interrupted moves in
+the same confirmation and per-item progress flow. Review shows the exact retained
+paths; original directories, restoring/restored records and historical recovery are
+not deletion targets. Storage identity and restore state are rechecked at commit.
+Unknown remaining size never delays deletion. Metadata-only Git cleanup stays in
+the full recovery view, not in Trash, and cannot prevent Trash from becoming empty.
 
 Permanent deletion first moves the exact authorized directory into a private same-volume
 slot to prevent later retries from touching a reused original path. It deletes only that

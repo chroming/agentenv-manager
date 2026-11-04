@@ -180,6 +180,68 @@ describe("WorktreeDialog", () => {
     expect(api.previewWorktreeTrashDeletion.mock.calls.map(([id]) => id)).toEqual(["trash-0", "trash-1", "trash-0"]);
     expect(api.removeWorktree).not.toHaveBeenCalled();
   });
+
+  it("empties normal, interrupted-move and failed-deletion Trash together without selecting recovery points or active restores", async () => {
+    const api = installApi();
+    api.listWorktreeRecovery.mockResolvedValue({ records: [
+      { id: "normal", mode: "trash", path: clean.path, status: "removed", createdAt: inventory.scannedAt },
+      { id: "partial", mode: "permanent", path: dirty.path, status: "removed", disposalIncomplete: true,
+        retainedPath: "/data/worktree-trash/partial/files", createdAt: inventory.scannedAt },
+      { id: "interrupted", mode: "trash", path: "/repo/interrupted", status: "prepared", disposalIncomplete: true,
+        retainedPath: "/data/worktree-trash/interrupted/files", createdAt: inventory.scannedAt },
+      { id: "restoring", mode: "trash", path: "/repo/restoring", status: "restoring", createdAt: inventory.scannedAt },
+      { id: "metadata", mode: "permanent", path: "/repo/gone", status: "removed", pendingGitCleanup: true, createdAt: inventory.scannedAt },
+      { id: "legacy", path: "/repo/legacy", status: "removed", backupHash: "a".repeat(64), createdAt: inventory.scannedAt }
+    ], issues: [] });
+    api.previewWorktreeTrashDeletion.mockImplementation(async (id) => ({ ...preparedPreview(clean), mode: "permanent", previewId: id,
+      entry: { ...clean, path: `/data/worktree-trash/${id}/files` } }));
+    api.removeWorktree.mockImplementation(async (preview) => ({ id: preview.previewId, mode: "permanent", path: preview.entry.path,
+      status: "removed", createdAt: inventory.scannedAt, head: "", repositoryPath: clean.repositoryPath }));
+    render(<WorktreeWorkspace />); await screen.findByText(clean.path);
+    fireEvent.click(screen.getByRole("button", { name: "Worktree Trash" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Empty Trash..." }));
+    const confirm = await screen.findByRole("dialog", { name: "Permanently delete Worktrees?" });
+    await waitFor(() => expect(within(confirm).getByRole("button", { name: "Permanently delete 3" })).toBeEnabled());
+    expect(api.previewWorktreeTrashDeletion.mock.calls.map(([id]) => id)).toEqual(["normal", "partial", "interrupted"]);
+    expect(within(confirm).getByText("Only retained Trash folders are deleted. Original folders and previous recovery points are not changed.")).toBeInTheDocument();
+    expect(within(confirm).getByText("/data/worktree-trash/partial/files")).toBeInTheDocument();
+    expect(api.removeWorktree).not.toHaveBeenCalled();
+    fireEvent.click(within(confirm).getByRole("button", { name: "Permanently delete 3" }));
+    await waitFor(() => expect(api.removeWorktree).toHaveBeenCalledTimes(3));
+  });
+
+  it("still offers Empty Trash when only failed permanent-deletion contents remain", async () => {
+    const api = installApi();
+    api.listWorktreeRecovery.mockResolvedValue({ records: [{ id: "partial", mode: "permanent", path: dirty.path,
+      status: "removed", disposalIncomplete: true, retainedPath: "/data/worktree-trash/partial/files", createdAt: inventory.scannedAt }], issues: [] });
+    api.previewWorktreeTrashDeletion.mockResolvedValue({ ...preparedPreview(dirty), mode: "permanent" });
+    render(<WorktreeWorkspace />); await screen.findByText(clean.path);
+    fireEvent.click(screen.getByRole("button", { name: "Worktree Trash" }));
+    const recovery = await screen.findByRole("dialog", { name: "Trash and recovery" });
+    expect(within(recovery).getByText("Items in Trash").nextElementSibling).toHaveTextContent("1");
+    fireEvent.click(within(recovery).getByRole("button", { name: "Empty Trash..." }));
+    await waitFor(() => expect(api.previewWorktreeTrashDeletion).toHaveBeenCalledExactlyOnceWith("partial"));
+  });
+
+  it("continues emptying independent Trash records when one deletion fails", async () => {
+    const api = installApi();
+    api.listWorktreeRecovery.mockResolvedValue({ records: ["first", "second"].map((id) => ({ id, mode: "trash", path: `/repo/${id}`,
+      status: "removed", createdAt: inventory.scannedAt })), issues: [] });
+    api.previewWorktreeTrashDeletion.mockImplementation(async (id) => ({ ...preparedPreview(clean), mode: "permanent", previewId: id,
+      entry: { ...clean, path: `/trash/${id}/files` } }));
+    api.removeWorktree.mockRejectedValueOnce(new Error("First retained folder is busy")).mockResolvedValueOnce({ id: "second",
+      mode: "permanent", path: "/repo/second", status: "removed", createdAt: inventory.scannedAt });
+    render(<WorktreeWorkspace />); await screen.findByText(clean.path);
+    fireEvent.click(screen.getByRole("button", { name: "Worktree Trash" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Empty Trash..." }));
+    const confirm = await screen.findByRole("dialog", { name: "Permanently delete Worktrees?" });
+    await waitFor(() => expect(within(confirm).getByRole("button", { name: "Permanently delete 2" })).toBeEnabled());
+    fireEvent.click(within(confirm).getByRole("button", { name: "Permanently delete 2" }));
+    await screen.findByText("First retained folder is busy");
+    await screen.findByText("Deleted", { exact: true });
+    expect(api.removeWorktree).toHaveBeenCalledTimes(2);
+    expect(screen.queryByText("Remaining Worktrees in the affected repository were not removed. Refresh and review that repository before continuing.")).not.toBeInTheDocument();
+  });
   it.each(["Git operation in progress", "Git operation in progress: active writer lock"])("lets cached %s be manually selected without treating the cached classification as permission", async (reason) => {
     const api = installApi();
     const unfinished = { ...dirty, manualReviewAvailable: false, reasons: [reason] };

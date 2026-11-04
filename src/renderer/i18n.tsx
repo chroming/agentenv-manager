@@ -6042,6 +6042,7 @@ Object.assign(zhCN, {
   "Managed Agent installs": "受管 Agent 安装",
   "Deleted {{count}} backups": "已删除 {{count}} 个备份",
   "Removing shared copies affects every Agent that reads this folder, including Agents not listed here.": "移除共享副本会影响读取此目录的所有 Agent，包括未在这里列出的 Agent。",
+  "Only retained Trash folders are deleted. Original folders and previous recovery points are not changed.": "只删除回收站内保留的目录，不改动原目录或旧恢复点。",
   "Review again": "重新预览",
   "Some additional history files could not be checked. Only the listed files will be deleted.": "部分附属历史文件暂时无法检查。只删除列表中列出的文件。"
 });
@@ -6054,6 +6055,7 @@ Object.assign(zhTW, {
   "Managed Agent installs": "受管 Agent 安裝",
   "Deleted {{count}} backups": "已刪除 {{count}} 個備份",
   "Removing shared copies affects every Agent that reads this folder, including Agents not listed here.": "移除共用副本會影響讀取此目錄的所有 Agent，包括未在這裡列出的 Agent。",
+  "Only retained Trash folders are deleted. Original folders and previous recovery points are not changed.": "僅刪除資源回收筒內保留的目錄，不更動原目錄或舊復原點。",
   "Review again": "重新預覽",
   "Some additional history files could not be checked. Only the listed files will be deleted.": "部分附屬歷史檔案暫時無法檢查。僅刪除清單中列出的檔案。"
 });

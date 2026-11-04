@@ -94,6 +94,7 @@ export const createWorktreeDisposal = ({ appDataRoot, lookup, branchAvailable, r
       backupRequired: false, forceRequired: false, savedWorkspace: false, gitWriteInProgress: permission.gitWriteInProgress };
   };
   const retainedEntry = (item: Journal): WorktreeEntry => ({ ...item.entry, path: item.storage,
+    sizeBytes: item.phase === "deleting" ? undefined : item.entry.sizeBytes,
     main: false, exists: true, detached: true, state: "review", changes: [], ignored: [], reasons: [],
     submodules: false, manualReviewAvailable: true, cleanupReviewAvailable: false, headNeedsProtection: false });
   const slots = async (entry: WorktreeEntry, id: string) => {
@@ -162,7 +163,9 @@ export const createWorktreeDisposal = ({ appDataRoot, lookup, branchAvailable, r
     await rm(admin, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
   };
   const purge = async (item: Journal, progress?: (phase: "preparing" | "removing" | "verifying") => void) => {
-    if (!await missing(item.storage)) {
+    const hasContents = !await missing(item.storage);
+    const remainingSize = hasContents ? item.phase === "deleting" ? undefined : item.entry.sizeBytes : 0;
+    if (hasContents) {
       await validateStorage(item);
       item.phase = "deleting"; item.mode = "permanent"; await save(item);
       progress?.("removing");
@@ -185,13 +188,17 @@ export const createWorktreeDisposal = ({ appDataRoot, lookup, branchAvailable, r
     try { await clearRegistration(item); item.pendingGitCleanup = false; item.registrationError = undefined; }
     catch (error) { item.pendingGitCleanup = true; item.registrationError = error instanceof Error ? error.message : String(error); }
     await save(item);
-    return projection(item);
+    return { ...projection(item), sourceSizeBytes: remainingSize, reclaimedSizeBytes: remainingSize };
+  };
+  const assertTrashDeletionAllowed = (item: Journal) => {
+    if (item.phase === "restoring" || item.phase === "restored") throw new Error("This Worktree is being restored or was already restored. Refresh Trash; its files were not deleted.");
+    if (item.mode !== "trash" && !item.pendingGitCleanup && !["prepared", "moved", "deleting"].includes(item.phase)) throw new Error("This Worktree is not in Trash");
   };
   return {
     preview: async (commonDir: string, path: string, mode: WorktreeDisposalMode) => prepare(await lookup(commonDir, path), mode),
     previewTrash: async (id: string) => {
       const item = await read(id);
-      if (item.phase === "restored" || item.mode !== "trash" && !item.pendingGitCleanup && !["prepared", "moved", "deleting"].includes(item.phase)) throw new Error("This Worktree is not in Trash");
+      assertTrashDeletionAllowed(item);
       if (!(await missing(item.storage) && item.pendingGitCleanup)) await validateStorage(item);
       const previewId = randomUUID(), entry = retainedEntry(item);
       issued.set(previewId, { entry, identity: item.identity, mode: "permanent", at: Date.now(), journalId: id });
@@ -202,7 +209,11 @@ export const createWorktreeDisposal = ({ appDataRoot, lookup, branchAvailable, r
       const request = issued.get(preview.previewId); issued.delete(preview.previewId);
       if (!request || request.mode !== preview.mode || Date.now() - request.at > 10 * 60_000) throw new Error("Cleanup review expired. Review this Worktree again.");
       progress?.("preparing");
-      if (request.journalId) return purge(await read(request.journalId), progress);
+      if (request.journalId) {
+        const item = await read(request.journalId);
+        assertTrashDeletionAllowed(item);
+        return purge(item, progress);
+      }
       const entry = request.entry;
       if (request.directoryIdentity && JSON.stringify(await captureDirectory(entry.path)) !== JSON.stringify(request.directoryIdentity)) throw new Error("Worktree directory identity changed; nothing was removed");
       const current = await gitPermission(entry);

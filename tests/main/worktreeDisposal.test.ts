@@ -131,9 +131,13 @@ it("deletes retained contents while leaving a newly busy Git registration for op
   const result = await service.remove(await service.previewTrashDeletion(moved.id));
   expect(result).toMatchObject({ mode: "permanent", status: "removed", pendingGitCleanup: true });
   await expect(fs.lstat(moved.retainedPath!)).rejects.toMatchObject({ code: "ENOENT" });
+  expect((await service.listRecovery("trash")).records).toEqual([]);
+  expect((await service.listRecovery("all")).records.find((record) => record.id === moved.id)?.pendingGitCleanup).toBe(true);
   expect(await fs.readFile(join(admin, "HEAD.lock"), "utf8")).toBe("active writer");
   await fs.rm(join(admin, "HEAD.lock"));
-  expect((await service.remove(await service.previewTrashDeletion(moved.id))).pendingGitCleanup).toBe(false);
+  const retried = await service.remove(await service.previewTrashDeletion(moved.id));
+  expect(retried.pendingGitCleanup).toBe(false);
+  expect(retried.reclaimedSizeBytes).toBe(0);
 });
 
 it.each(["trash", "permanent"] as const)("prepares %s even when optional Workspace metadata is unreadable", async (mode) => {
@@ -226,7 +230,7 @@ it("resumes an interrupted Trash move while preserving exact local content", asy
 });
 
 it("retries a partially deleted private folder even after its .git file is gone, never touching a reused original path", async () => {
-  const { tree, service, common } = await fixture();
+  const { tree, data, service, common } = await fixture();
   const preview = await service.preview(common, tree, true, "permanent"), original = fs.rm.bind(fs);
   let interrupted = false;
   vi.spyOn(fs, "rm").mockImplementation(async (path, options) => {
@@ -238,10 +242,37 @@ it("retries a partially deleted private folder even after its .git file is gone,
   await expect(service.remove(preview)).rejects.toThrow("Remaining contents are in Worktree Trash");
   const recovery = (await service.listRecovery("trash")).records[0];
   expect(recovery).toMatchObject({ mode: "permanent", disposalIncomplete: true });
+  const journalPath = join(data, "worktree-trash", `${recovery.id}.json`);
+  const journal = JSON.parse(await fs.readFile(journalPath, "utf8"));
+  journal.entry.sizeBytes = 8192;
+  await fs.writeFile(journalPath, JSON.stringify(journal));
   await fs.mkdir(tree); await fs.writeFile(join(tree, "new.txt"), "new unrelated content");
   vi.restoreAllMocks();
-  expect((await service.remove(await service.previewTrashDeletion(recovery.id))).pendingGitCleanup).toBe(false);
+  const retry = await service.previewTrashDeletion(recovery.id);
+  expect(retry.entry.sizeBytes).toBeUndefined();
+  const result = await service.remove(retry);
+  expect(result.pendingGitCleanup).toBe(false);
+  expect(result.reclaimedSizeBytes).toBeUndefined();
   expect(await fs.readFile(join(tree, "new.txt"), "utf8")).toBe("new unrelated content");
+});
+
+it.each(["restoring", "restored"] as const)("does not purge a Trash record that became %s after deletion preview", async (phase) => {
+  const { tree, data, service, common } = await fixture();
+  await fs.writeFile(join(tree, "local.txt"), "Preserve my recovery\n");
+  const moved = await service.remove(await service.preview(common, tree, true, "trash"));
+  const preview = await service.previewTrashDeletion(moved.id);
+  const path = join(data, "worktree-trash", `${moved.id}.json`);
+  if (phase === "restored") await service.restore(moved.id);
+  else {
+    const journal = JSON.parse(await fs.readFile(path, "utf8")); journal.phase = "restoring";
+    await fs.writeFile(path, JSON.stringify(journal));
+  }
+  const before = await fs.readFile(path, "utf8");
+  await expect(service.previewTrashDeletion(moved.id)).rejects.toThrow("restore");
+  await expect(service.remove(preview)).rejects.toThrow("restore");
+  expect(await fs.readFile(path, "utf8")).toBe(before);
+  const retained = JSON.parse(before).storage;
+  expect(await fs.readFile(join(phase === "restored" ? tree : retained, "local.txt"), "utf8")).toBe("Preserve my recovery\n");
 });
 
 it("does not silently copy after a same-volume move fails", async () => {

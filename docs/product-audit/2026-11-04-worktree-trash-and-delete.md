@@ -35,6 +35,12 @@ retryable results; cancellation stops after the current transaction. Unknown siz
 remain unknown and never delay an action. Trash has Restore / Delete permanently /
 Empty Trash; old recovery points remain distinct and cannot be silently purged.
 
+Empty Trash includes verified retained contents from failed permanent deletion and
+interrupted moves, not only normal Trash moves. Partially deleted sizes stay unknown
+and never delay confirmation. The review shows the retained storage paths; original
+directories are not targets. Restoring/restored records and metadata-only Git
+cleanup are excluded from bulk disposal, with the restore state rechecked at commit.
+
 Component mapping: Button / IconButton and ControlGroup own commands; ContextMenu
 composes existing ActionMenu / ActionMenuItem without new styles; ModalFrame and
 DialogFooter own the overlay; WorktreeCleanupReview, DetailList, AlignedResourceList,

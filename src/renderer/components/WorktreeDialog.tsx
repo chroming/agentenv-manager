@@ -7,7 +7,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import type {
   WorktreeEntry, WorktreeInventory, WorktreeRecoveryRecord, WorktreeOperationProgress, WorktreeDisposalMode
 } from "../../shared/worktrees";
-import { canSelectWorktreeForCleanup, isAutomaticCleanupCandidate } from "../../shared/worktrees";
+import { canEmptyWorktreeTrashRecord, canSelectWorktreeForCleanup, isAutomaticCleanupCandidate } from "../../shared/worktrees";
 import type { UiState, UiStateUpdate, WorktreeSort } from "../../shared/uiState";
 import { sortWorktreeGroups, worktreeGroupMetric, worktreeName } from "../worktreeSort";
 import { formatBytes } from "../formatBytes";
@@ -67,6 +67,7 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
     return window.agentEnv.onWorktreeInventoryChanged?.(acceptInventory);
   }, [open]);
   const [recovery, setRecovery] = useState<WorktreeRecoveryRecord[]>([]);
+  const trashItems = recovery.filter(canEmptyWorktreeTrashRecord);
   const [recoveryIssues, setRecoveryIssues] = useState<string[]>([]);
   const [restoreWarnings, setRestoreWarnings] = useState<string[]>([]);
   const [recoveryScope, setRecoveryScope] = useState<"trash" | "all">("trash");
@@ -578,16 +579,16 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
           {recovery.some((item) => item.status === "prepared" && !item.mode) ? <Notice tone="warning" icon={<AlertTriangle size={15} />}>
             {t("An interrupted cleanup needs a check of its original folder and Git registration. Restore is unavailable until the removal is verified.")}
           </Notice> : null}
-          {recovery.some((item) => item.mode === "trash") ? <DetailList items={[
-            { label: t("Items in Trash"), value: String(recovery.filter((item) => item.mode === "trash").length) },
-            { label: t("Space retained in Trash"), value: sizeLabel(totalBytes(recovery.filter((item) => item.mode === "trash").map((item) => item.sourceSizeBytes))) }
+          {trashItems.length ? <DetailList items={[
+            { label: t("Items in Trash"), value: String(trashItems.length) },
+            { label: t("Space retained in Trash"), value: sizeLabel(totalBytes(trashItems.map((item) => item.disposalIncomplete ? undefined : item.sourceSizeBytes))) }
           ]} /> : null}
           {recovery.length === 0 ? <EmptyState icon={<History size={25} />} title={recoveryScope === "trash" ? t("Trash is empty") : t("No Worktree recovery points")} /> : null}
           <AlignedResourceList className="worktree-dialog__recovery">
           {recovery.map((item) => <ResourceRow key={item.id} density="compact" appearance="plain" icon={item.mode ? <Trash2 size={16} /> : <History size={16} />} title={nameFromPath(item.path)} description={<span className="selectable">{item.path}</span>} metadata={<span className="worktree-dialog__metrics"><span>{formatDate(item.createdAt)}</span><span title={item.mode ? t("Space retained in Trash") : t("Recovery copies retained")}>{item.mode || item.backupHash ? sizeLabel(item.pendingGitCleanup ? 0 : item.sourceSizeBytes) : t("Commits retained")}</span></span>} state={<InteractiveStatus size="metadata" statusKind={item.status === "prepared" || item.status === "restoring" || item.pendingGitCleanup || item.disposalIncomplete ? "warning" : item.status === "restored" ? "success" : "neutral"} label={item.pendingGitCleanup ? t("Registration cleanup pending") : item.disposalIncomplete ? item.mode === "trash" ? t("Move incomplete") : t("Deletion incomplete") : item.mode === "trash" && item.status === "removed" ? t("In Trash") : recoveryLabel(item.status)} icon={worktreeRecoveryNote(item) ? <Info size={14} /> : undefined} title={worktreeRecoveryNote(item) ? t(worktreeRecoveryNote(item)!) : undefined} />} actions={<ControlGroup density="compact">
             <IconButton label={item.retainedPath ? t("Copy Trash location") : t("Copy path")} variant="ghost" onClick={() => void window.agentEnv.copyText(item.retainedPath ?? item.path)}><Copy size={15} /></IconButton>
             {item.status === "restored" || item.status === "unchanged" || (item.status === "prepared" && !item.mode) || item.mode === "permanent" ? null : <Button size="compact" icon={<RotateCcw size={14} />} busy={busy === item.id} disabled={Boolean(busy)} onClick={() => void restore(item.id)}>{t("Restore")}</Button>}
-            {item.mode ? <IconButton label={t(item.pendingGitCleanup ? "Retry cleanup" : "Delete permanently...")} variant="ghost" disabled={Boolean(busy)} onClick={() => void prepareTrash([item])}>{item.pendingGitCleanup ? <RotateCcw size={15} /> : <Trash2 size={15} />}</IconButton> : null}
+            {canEmptyWorktreeTrashRecord(item) || item.mode && item.pendingGitCleanup && item.status === "removed" ? <IconButton label={t(item.pendingGitCleanup ? "Retry cleanup" : "Delete permanently...")} variant="ghost" disabled={Boolean(busy)} onClick={() => void prepareTrash([item])}>{item.pendingGitCleanup ? <RotateCcw size={15} /> : <Trash2 size={15} />}</IconButton> : null}
           </ControlGroup>} />)}
           </AlignedResourceList>
         </> : null}
@@ -607,7 +608,7 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
           {canSelectWorktreeForCleanup(detail) ? <ControlGroup><Button icon={<Trash2 size={15} />} disabled={Boolean(busy)} busy={busy === "preview"} onClick={() => void prepare([detail], "manual", "trash")}>{t("Move to Trash...")}</Button>
             <Button variant="danger" disabled={Boolean(busy)} onClick={() => void prepare([detail], "manual", "permanent")}>{t("Delete permanently...")}</Button></ControlGroup> : null}
         </> : <>
-          {view === "recovery" && recovery.some((item) => item.mode === "trash" && item.status === "removed") ? <Button variant="danger" disabled={Boolean(busy)} onClick={() => void prepareTrash(recovery.filter((item) => item.mode === "trash" && item.status === "removed"))}>{t("Empty Trash...")}</Button> : null}
+          {view === "recovery" && trashItems.length > 0 ? <Button variant="danger" icon={<Trash2 size={15} />} disabled={Boolean(busy)} onClick={() => void prepareTrash(trashItems)}>{t("Empty Trash...")}</Button> : null}
           {view === "results" && !busy && results.length ? <Button icon={<Trash2 size={15} />} onClick={() => void showRecovery("trash")}>{t("View Trash")}</Button> : null}
           <Button variant={view === "results" && !busy && results.length > 0 && results.every((result) => result.error === undefined && !result.skipped && !result.verificationWarnings?.length) ? "primary" : "secondary"} disabled={Boolean(busy)} onClick={dismiss}>{t("Close")}</Button>
         </>}

@@ -862,10 +862,36 @@ describe("Worktrees desktop workflow", () => {
     expect(count).toBeGreaterThan(0);
     await reopened.setViewportSize({ width: 920, height: 620 });
     if (process.env.AGENTENV_CAPTURE_WORKTREES_DIR) await reopened.screenshot({ path: join(process.env.AGENTENV_CAPTURE_WORKTREES_DIR, `worktree-trash-${locale}-920.png`) });
+    // A failed permanent deletion must remain part of the same Empty Trash command.
+    const partial = trashItems.records.find((item) => item.mode === "trash" && item.status === "removed")!;
+    const partialJournalPath = join(data, "worktree-trash", `${partial.id}.json`);
+    const partialJournal = JSON.parse(await readFile(partialJournalPath, "utf8"));
+    partialJournal.mode = "permanent"; partialJournal.phase = "deleting";
+    partialJournal.entry.sizeBytes = 9999999;
+    await rm(join(partialJournal.storage, ".git"));
+    await writeFile(partialJournalPath, JSON.stringify(partialJournal));
+    await mkdir(partial.path, { recursive: true });
+    await writeFile(join(partial.path, "new-work.txt"), "A new folder at the original path must survive\n");
+    await trashDialog.getByRole("button", { name: t("Recheck recovery"), exact: true }).click();
+    await trashDialog.getByText(t("Deletion incomplete"), { exact: true }).waitFor();
     await trashDialog.getByRole("button", { name: t("Empty Trash..."), exact: true }).click();
-    await reopened.getByRole("dialog", { name: t("Permanently delete Worktrees?"), exact: true }).getByRole("button", { name: t("Permanently delete {{count}}", { count }), exact: true }).click();
+    const emptyTrashConfirm = reopened.getByRole("dialog", { name: t("Permanently delete Worktrees?"), exact: true });
+    await emptyTrashConfirm.getByRole("button", { name: t("Permanently delete {{count}}", { count }), exact: true }).click({ trial: true });
+    expect(await emptyTrashConfirm.getByText(partialJournal.storage, { exact: true }).count()).toBe(1);
+    for (const width of [920, 1180, 1440]) {
+      await reopened.setViewportSize({ width, height: width === 920 ? 620 : 900 });
+      expect(await emptyTrashConfirm.evaluate((element) => {
+        const box = element.getBoundingClientRect(), body = element.querySelector<HTMLElement>(".ui-dialog-body")!;
+        const footer = element.querySelector(".ui-dialog-footer")!.getBoundingClientRect();
+        return box.left >= 0 && box.right <= innerWidth && box.top >= 0 && box.bottom <= innerHeight && body.scrollWidth <= body.clientWidth + 1 && footer.bottom <= innerHeight;
+      })).toBe(true);
+      if (process.env.AGENTENV_CAPTURE_WORKTREES_DIR) await reopened.screenshot({ path: join(process.env.AGENTENV_CAPTURE_WORKTREES_DIR, `worktree-empty-trash-partial-${locale}-${width}.png`) });
+    }
+    await emptyTrashConfirm.getByRole("button", { name: t("Permanently delete {{count}}", { count }), exact: true }).click();
     await expect.poll(async () => reopened.getByRole("dialog", { name: t("Cleanup results"), exact: true }).getByText(t("Deleted"), { exact: true }).count()).toBe(count);
     expect((await reopened.evaluate(() => window.agentEnv.listWorktreeRecovery("trash"))).records).toEqual([]);
+    expect(await readFile(join(partial.path, "new-work.txt"), "utf8")).toBe("A new folder at the original path must survive\n");
+    expect(calls).toBe(1);
     await reopened.getByRole("dialog", { name: t("Cleanup results"), exact: true }).getByRole("button", { name: t("Close"), exact: true }).last().click();
     const broken = join(home, ".codex", "worktrees", "broken-git-metadata");
     const gone = join(home, ".codex", "worktrees", "already-removed");

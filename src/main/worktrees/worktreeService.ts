@@ -909,7 +909,7 @@ export const createWorktreeService = ({
     },
     listRecovery: async (scope) => {
       const trash = await disposal.list();
-      if (scope === "trash") return { records: trash.records, issues: trash.issues };
+      if (scope === "trash") return { records: trash.records.filter((item) => item.retainedPath || item.mode === "trash"), issues: trash.issues };
       try {
         const files = (await readdir(recoveryRoot)).filter((name) => /^[0-9a-f-]{36}\.json$/.test(name));
         const results = await Promise.allSettled(files.map((name) => readRecovery(name.slice(0, -5))));
