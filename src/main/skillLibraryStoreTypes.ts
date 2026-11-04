@@ -99,7 +99,8 @@ export interface SkillLibraryStore {
     runtimeSnapshots?: ReadonlyMap<string, SkillRuntimeSnapshot>
   ): Promise<SkillInventoryEntry[]>;
   findManagedInstallPaths(libraryId: string, targetPaths: TargetPaths[]): Promise<string[]>;
-  listCleanupBackups(): Promise<SkillCleanupBackupSummary[]>;
+  listCleanupBackups(id?: string): Promise<SkillCleanupBackupSummary[]>;
+  listCleanupBackupMetadata?(id?: string): Promise<SkillCleanupBackupSummary[]>;
   previewCleanupBackup(id: string): Promise<ManagedBackupFile[]>;
   recoverInterruptedCleanupBackups(): Promise<import("./skillCleanupBackupStore").SkillCleanupRecoveryResult>;
   listPendingCleanupRecoveries(): Promise<string[]>;
@@ -126,7 +127,7 @@ export interface SkillLibraryStore {
   setSourceCandidateIgnored(input: import("../shared/types").SkillSourceCandidateIgnoreInput): Promise<SkillSourceGroupView>;
   previewSourceMerge(input: SkillSourceMergePreviewInput): Promise<SkillSourceMergePreview>;
   mergeSources(previewId: string): Promise<SkillSourceMergeResult>;
-  removeSkill(id: string, managedInstallPaths?: string[]): Promise<SkillCleanupResult>;
+  removeSkill(id: string, managedInstallPaths?: string[], references?: import("./skillRemovalTransaction").SkillRemovalReferences): Promise<SkillCleanupResult>;
   manageTargetSkill(input: ManageTargetSkillStoreInput): Promise<void>;
   deployLibrarySkill(input: DeployLibrarySkillStoreInput): Promise<void>;
   consolidateSkillGroup(input: ConsolidateSkillGroupStoreInput): Promise<SkillCleanupResult>;
@@ -146,6 +147,7 @@ export interface SkillLibraryStore {
   setTags(input: SkillTagsInput): Promise<SkillLibraryEntry>;
   previewUpdate(id: string): Promise<SkillUpdatePlan>;
   previewUpdates(ids: string[]): Promise<SkillUpdatePreviewBatchResult>;
+  readUpdateImpact(previewId: string): Promise<import("../shared/types").SkillUpdateImpact>;
   readUpdateChange(input: SkillUpdateChangeReadInput): Promise<import("../shared/types").PlannedFileChange>;
   readSummaryInput(previewId: string): Promise<import("../shared/skillSummaries").SkillSummaryInput>;
   updateSkill(input: SkillUpdateConfirmation): Promise<SkillLibraryUpdateResult>;

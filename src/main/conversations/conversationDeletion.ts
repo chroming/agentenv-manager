@@ -1,5 +1,6 @@
 import { constants } from "node:fs";
 import { chmod, copyFile, lstat, mkdir, realpath, unlink } from "node:fs/promises";
+import { setTimeout as delay } from "node:timers/promises";
 import { dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { z } from "zod";
 import type { BackupManifest } from "../../shared/types";
@@ -18,14 +19,23 @@ const phaseSchema = z.enum(["prepared", "deleting", "deleted", "restoring", "res
 export const inspectConversationFiles = async (files: string[], roots: string[], now = Date.now()) => {
   let sizeBytes = 0;
   const hashes: Record<string, string> = {};
+  const signatures = new Map<string, string>();
+  const signature = (info: Awaited<ReturnType<typeof lstat>>) => [info.dev, info.ino, info.size, info.mtimeMs, info.ctimeMs].join(":");
+  let recent = false;
   for (const path of files) {
     await assertConversationPath(path, roots);
     const info = await lstat(path);
-    if (now - info.mtimeMs < 60_000) throw new Error("This conversation was recently written. Close its Agent session and retry after one minute.");
+    recent ||= now - info.mtimeMs < 60_000;
     const hash = await hashPathEntry(path);
     if (!hash) throw new Error(`Conversation file disappeared: ${path}`);
     hashes[path] = hash;
+    signatures.set(path, signature(info));
     sizeBytes += info.size;
+  }
+  if (recent) await delay(200);
+  for (const path of files) {
+    await assertConversationPath(path, roots);
+    if (signatures.get(path) !== signature(await lstat(path))) throw new Error("This conversation is still being written. Close its Agent session, then retry deletion.");
   }
   return { hashes, sizeBytes };
 };

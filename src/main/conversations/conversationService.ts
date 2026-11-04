@@ -361,17 +361,13 @@ export const createConversationService = async (options: {
       const capability = options.targetRegistry.get(agentId).conversations!;
       if (!capability.deletionFiles) throw new Error("Deleting original history is not supported for this Agent yet. Its files and search index have not been changed.");
       const context = await deletionContext(origin.sourceKey, agentId);
-      const discovered = await capability.discover(context);
-      if (!discovered.complete) throw new Error("The Agent history could not be fully read. Refresh its history source before deleting a conversation.");
-      const candidate = discovered.candidates.find((item) => item.source.locator === record.candidate.source.locator);
-      if (!candidate) throw new Error("The original conversation is no longer available. Refresh Conversations.");
-      const collected = await capability.deletionFiles({ ...context, candidate, candidates: discovered.candidates });
+      const collected = await capability.deletionFiles({ ...context, candidate: record.candidate, candidates: index.relatedCandidates(id) });
       const inspected = await inspectConversationFiles(collected.files, collected.roots, now());
       const settings = await options.settingsStore.readSettings();
       const preview: ConversationDeletePreview = {
         previewId: randomUUID(), title: record.summary.title, files: collected.files,
         sizeBytes: inspected.sizeBytes, retentionDays: settings.deletedConversationRetentionDays === undefined ? 30 : settings.deletedConversationRetentionDays,
-        warnings: ["Close this conversation in its original Agent before deleting it. Native Agent recent-session lists may retain an entry until refreshed."]
+        warnings: ["Close this conversation in its original Agent before deleting it. Native Agent recent-session lists may retain an entry until refreshed.", ...(collected.warnings ?? [])]
       };
       pendingDeletes.set(preview.previewId, { preview, metadata: { conversationId: id, title: record.summary.title, agentId, sourceKey: origin.sourceKey, workspacePath: record.summary.workspacePath, roots: collected.roots }, hashes: inspected.hashes, createdAt: now() });
       return preview;
@@ -384,11 +380,8 @@ export const createConversationService = async (options: {
       const context = await deletionContext(pending.metadata.sourceKey, pending.metadata.agentId);
       const capability = options.targetRegistry.get(pending.metadata.agentId).conversations!;
       if (!capability.deletionFiles) throw new Error("Conversation deletion is unavailable for this Agent");
-      const discovered = await capability.discover(context);
       const record = index.record(pending.metadata.conversationId);
-      const candidate = discovered.candidates.find((item) => item.source.locator === record.candidate.source.locator);
-      if (!discovered.complete || !candidate) throw new Error("Conversation history changed. Review deletion again.");
-      const collected = await capability.deletionFiles({ ...context, candidate, candidates: discovered.candidates });
+      const collected = await capability.deletionFiles({ ...context, candidate: record.candidate, candidates: index.relatedCandidates(pending.metadata.conversationId) });
       const inspected = await inspectConversationFiles(collected.files, collected.roots, now());
       if (JSON.stringify(inspected.hashes) !== JSON.stringify(pending.hashes)) throw new Error("Conversation changed after preview. Review deletion again.");
       const backupId = await deletion.remove(pending.metadata, pending.hashes, () => index.removeLocalFiles(collected.files));
@@ -397,7 +390,7 @@ export const createConversationService = async (options: {
     restoreDeleted: async (id) => {
       await history.mutate(() => deletion.restore(id));
       // Restoration does not opt the user into scanning disabled or paused sources.
-      await history.refresh().catch((error) => console.warn("Conversation restored; search refresh deferred:", error));
+      void history.refresh().catch((error) => console.warn("Conversation restored; search refresh deferred:", error));
     },
     historyStatus: history.status,
     configureHistory: history.configure,

@@ -134,6 +134,7 @@ import {
 } from "./skillLibraryMetadataMutations";
 import { createSkillSourceRegistry } from "./skillSourceRegistry";
 import { createSkillMetadataWriter } from "./skillMetadataWriter";
+import { createSkillRemovalTransaction } from "./skillRemovalTransaction";
 import {
   createLocalSkillSourceCollection,
   createSingleSkillSourceCollection,
@@ -178,7 +179,7 @@ import { createSkillUpdateCandidateCache } from "./skillUpdateCandidateCache";
 import { createSkillUpdateChecker } from "./skillUpdateChecker";
 import { createSkillLibraryReader } from "./skillLibraryReader";
 import {
-  createSkillUpdateImpactIndex,
+  readSkillUpdateImpactIndex, previewSkillUpdateImpact,
   skillUpdateImpactFromIndex,
   type SkillUpdateImpactIndex
 } from "./skillUpdateImpact";
@@ -322,6 +323,7 @@ export const createSkillLibraryStore = (
     setCleanupStatus,
     readCleanupBackup,
     listCleanupBackups,
+    listCleanupBackupMetadata,
     previewCleanupBackup,
     recoverInterruptedCleanupBackups,
     listPendingCleanupRecoveries,
@@ -1231,81 +1233,8 @@ export const createSkillLibraryStore = (
     }
   };
 
-  const removeSkill = async (
-    id: string,
-    managedInstallPaths: string[] = []
-  ): Promise<SkillCleanupResult> => {
-    const safeId = SafeIdSchema.parse(id);
-    const targetLibraryDir = join(await libraryDir(), safeId);
-    if (!(await pathExists(join(targetLibraryDir, "SKILL.md")))) {
-      throw new Error(`Library skill does not exist: ${safeId}`);
-    }
-
-    const backupId = `remove-${Date.now()}-${randomUUID().slice(0, 8)}`;
-    const backupDir = join(cleanupBackupRoot(), backupId);
-    const libraryBackupPath = join(backupDir, "library", safeId);
-    const uniqueInstallPaths = [...new Set(managedInstallPaths)];
-    const protectedInstallPaths = uniqueInstallPaths.flatMap((sourcePath) => [
-      sourcePath,
-      markerPathForFile(sourcePath)
-    ]);
-    const entries: SkillCleanupBackupManifest["entries"] = [];
-    await mkdir(dirname(libraryBackupPath), { recursive: true });
-    const libraryBackupHash = await copyPathVerified(targetLibraryDir, libraryBackupPath, {
-      recursive: true,
-      dereference: false
-    });
-
-    for (const [index, sourcePath] of protectedInstallPaths.entries()) {
-      if (!(await pathEntryExists(sourcePath))) {
-        continue;
-      }
-      const backupPath = join(backupDir, "locations", `${index}-${basename(sourcePath)}`);
-      await copyCleanupEntry(entries, sourcePath, backupPath);
-    }
-
-    const manifest: SkillCleanupBackupManifest = {
-      formatVersion: 2,
-      id: backupId,
-      libraryId: safeId,
-      libraryCreated: false,
-      libraryRemoved: true,
-      libraryBackupPath,
-      libraryBackupHash,
-      operation: "remove",
-      status: "prepared",
-      createdAt: new Date().toISOString(),
-      expectedPaths: await snapshotCleanupPaths([
-        targetLibraryDir,
-        ...protectedInstallPaths
-      ]),
-      entries
-    };
-    await writeCleanupManifest(manifest);
-
-    try {
-      const claimPath = createCleanupPathClaimer(manifest);
-      for (const sourcePath of uniqueInstallPaths) {
-        await claimPath(sourcePath, markerPathForFile(sourcePath));
-        await removeSkillDeployment(sourcePath, {
-          allowedRoot: dirname(sourcePath)
-        });
-        await claimPath.recordMutation(sourcePath, markerPathForFile(sourcePath));
-      }
-      await claimPath(targetLibraryDir);
-      await rm(targetLibraryDir, { recursive: true, force: true });
-      await claimPath.recordMutation(targetLibraryDir);
-      await setCleanupStatus(manifest, "complete");
-      return {
-        backupId,
-        libraryId: safeId,
-        managedLocations: uniqueInstallPaths,
-        operation: "remove"
-      };
-    } catch (error) {
-      return failAfterCleanupRollback(manifest, `Removing ${safeId}`, error);
-    }
-  };
+  const removeSkill = createSkillRemovalTransaction({ libraryDir, cleanupBackupRoot, copyCleanupEntry, snapshotCleanupPaths,
+    writeCleanupManifest, createCleanupPathClaimer, setCleanupStatus, failAfterCleanupRollback });
 
   const importGitHubSkill = async ({
     url,
@@ -2401,7 +2330,8 @@ export const createSkillLibraryStore = (
   };
 
   const deleteCleanupBackup = async (backupId: string): Promise<void> => {
-    const { backupDir } = await readCleanupBackup(backupId);
+    const { backupDir, manifest } = await readCleanupBackup(backupId, false);
+    if (!["complete", "rolled-back", "restored"].includes(manifest.status)) throw new Error("This Skill backup is still required for recovery");
     await rm(backupDir, { recursive: true, force: true });
   };
 
@@ -2593,22 +2523,19 @@ export const createSkillLibraryStore = (
   });
 
   const prepareSkillUpdateImpactIndex = async (ids?: readonly string[]): Promise<SkillUpdateImpactIndex> => {
-    const [profiles, inventory] = await measureSkillPerformancePhase("impact-scan", () =>
-      Promise.all([
-        profileStore
+    return measureSkillPerformancePhase("impact-scan", () => readSkillUpdateImpactIndex(
+        () => profileStore
           ? readAllProfilesForResourceMutation(profileStore, "Skill update preview")
           : Promise.resolve([]),
-        Promise.all([targetPathsProvider(), listSkills(() => undefined)]).then(([targetPaths, skills]) =>
+        () => Promise.all([targetPathsProvider(), listSkills(() => undefined)]).then(([targetPaths, skills]) =>
           scanInventory(targetPaths, skills.filter((skill) => !skill.readIssue), undefined, ids ? new Set(ids) : undefined)
         )
-      ])
-    );
-    return createSkillUpdateImpactIndex(profiles, inventory);
+    ));
   };
   const previewUpdateWithImpactImpl = async (
     id: string,
     refreshSource?: boolean,
-    impactIndex?: SkillUpdateImpactIndex
+    impactIndex?: Promise<SkillUpdateImpactIndex>
   ): Promise<SkillUpdatePlan> => {
     await discardExpiredPendingUpdates();
     const safeId = SafeIdSchema.parse(id);
@@ -2620,14 +2547,8 @@ export const createSkillLibraryStore = (
     const metadata = await readLibraryMetadata(targetDir);
     const recentCheck = recentUpdateChecks.getFresh(safeId, metadataHash(metadata));
     const shouldRefreshSource = refreshSource ?? !recentCheck;
-    const impactIndexPromise = impactIndex
-      ? Promise.resolve(impactIndex)
-      : prepareSkillUpdateImpactIndex([safeId]);
-    void impactIndexPromise.catch(() => undefined);
-    const readImpact = async () => skillUpdateImpactFromIndex(
-      safeId,
-      await impactIndexPromise
-    );
+    const impactRead = (impactIndex ?? prepareSkillUpdateImpactIndex([safeId])).then((index) => skillUpdateImpactFromIndex(safeId, index));
+    const readImpact = () => previewSkillUpdateImpact(impactRead);
     const removedSourcePlan = async () => createRemovedSourceSkillUpdatePlan({
       discardPendingUpdates: discardPendingUpdatesForSkill,
       impact: await readImpact(),
@@ -2741,7 +2662,7 @@ export const createSkillLibraryStore = (
         expectedLibraryContentHash,
         expectedMetadataHash: metadataHash(currentMetadata),
         createdAt: Date.now(),
-        nextMetadata
+        nextMetadata, impactRead
       });
       return {
         id: skill.id,
@@ -2934,7 +2855,7 @@ export const createSkillLibraryStore = (
   const previewUpdateWithImpact = (
     id: string,
     refreshSource?: boolean,
-    impactIndex?: SkillUpdateImpactIndex
+    impactIndex?: Promise<SkillUpdateImpactIndex>
   ): Promise<SkillUpdatePlan> =>
     runSkillPerformanceTrace("preview-update", id, recordPerformance, () =>
       previewUpdateWithImpactImpl(id, refreshSource, impactIndex)
@@ -2946,7 +2867,7 @@ export const createSkillLibraryStore = (
   const previewUpdatesImpl = async (ids: string[]): Promise<SkillUpdatePreviewBatchResult> => {
     const uniqueIds = [...new Set(ids.map((id) => SafeIdSchema.parse(id)))];
     if (uniqueIds.length === 0) return { plans: [], failed: [] };
-    const impactIndex = await prepareSkillUpdateImpactIndex(ids);
+    const impactIndex = prepareSkillUpdateImpactIndex(ids);
     const groups = new Map<string, string[]>();
     const metadataById = new Map<string, SkillMetadataFile>();
     for (const id of uniqueIds) {
@@ -3137,6 +3058,7 @@ export const createSkillLibraryStore = (
     scanInventory,
     findManagedInstallPaths,
     listCleanupBackups,
+    listCleanupBackupMetadata,
     previewCleanupBackup,
     recoverInterruptedCleanupBackups,
     listPendingCleanupRecoveries,
@@ -3184,6 +3106,11 @@ export const createSkillLibraryStore = (
     previewUpdate,
     previewUpdates,
     readUpdateChange,
+    readUpdateImpact: async (previewId) => {
+      const pending = pendingUpdates.get(previewId);
+      if (!pending || pendingUpdates.isExpired(pending)) throw new Error("Skill update preview expired; reopen it to check impact");
+      return pending.impactRead ?? skillUpdateImpactFromIndex(pending.id, { profileNamesBySkillId: new Map(), installsByLibraryId: new Map() });
+    },
     readSummaryInput,
     updateSkill
   };

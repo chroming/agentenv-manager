@@ -128,7 +128,7 @@ export const registerProfileIpc = (
     return remoteActivationService?.hasPreview(parsedPreviewId)
       ? remoteActivationService.applyProfile(parsedProfileId, parsedPreviewId)
       : activationService.applyProfile(parsedProfileId, parsedPreviewId);
-  });
+  }, (_event, profileId, previewId) => remoteActivationService?.hasPreview(String(previewId)) ? undefined : activationService.applyMutationPaths(parseId(profileId, "profile id"), String(previewId)));
 
   registerProfileComparisonIpc(handles, evaluationService);
 };

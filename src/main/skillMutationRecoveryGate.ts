@@ -5,6 +5,7 @@ import { dirname, join, resolve, basename } from "node:path";
 import { isPathInside } from "./platformPaths";
 import {
   listPendingSkillSourceMerges,
+  readSkillSourceMergeRecoveryPaths,
   recoverInterruptedSkillSourceMerges
 } from "./skillSourceMergeService";
 
@@ -31,7 +32,7 @@ const canonicalRecoveryPath = async (path: string): Promise<string> => {
   }
 };
 
-const recoveryPathKeys = async (paths: readonly string[]) => [...new Set((await Promise.all(
+export const recoveryPathKeys = async (paths: readonly string[]) => [...new Set((await Promise.all(
   paths.map(async (path) => [resolve(path), await canonicalRecoveryPath(resolve(path))])
 )).flat().map((path) => process.platform === "linux" ? path : path.toLowerCase()))];
 
@@ -64,6 +65,12 @@ export const createSkillMutationRecoveryGate = (options: {
         const paths = await options.skillLibraryStore.readCleanupRecoveryPaths?.(id);
         if (paths?.length) recoveryPaths.set(`cleanup:${id}`, await recoveryPathKeys(paths));
       } catch { /* Unverifiable journals retain the conservative gate. */ }
+    }
+    for (const id of sourceMerges) {
+      try {
+        const paths = await readSkillSourceMergeRecoveryPaths(options.appDataRoot, id, options.backupStore);
+        if (paths.length) recoveryPaths.set(`source-merge:${id}`, await recoveryPathKeys(paths));
+      } catch { /* Unknown source-merge scope remains protected. */ }
     }
   };
 

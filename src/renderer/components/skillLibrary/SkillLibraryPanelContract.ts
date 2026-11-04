@@ -216,7 +216,7 @@ export interface SkillLibraryPanelActions {
     onSetAvailability(input: SkillAvailabilityInput): Promise<boolean>;
     onSetIcon(input: SkillIconInput): void;
     onSetTags(input: SkillTagsInput): Promise<boolean>;
-    onRemoveLibrarySkill(id: string): void;
+    onRemoveLibrarySkill(id: string, previewId: string): void | Promise<void>;
     onPreviewSkillMerge(id: string): Promise<SkillMergePreview>;
     onMergeLibrarySkills(input: SkillMergeInput): Promise<boolean>;
     onReviewSkillUsage(id: string): void;

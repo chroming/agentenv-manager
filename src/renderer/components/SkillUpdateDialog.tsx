@@ -18,6 +18,7 @@ import { useI18n } from "../i18n";
 import { SkillSummaryReview } from "./SkillSummaryReview";
 import { SyntaxCodePreview } from "./SyntaxCodePreview";
 import { SkillUpdateCopyNotice } from "./SkillUpdateCopyNotice";
+import { useSkillUpdateImpacts } from "../hooks/useSkillUpdateImpacts";
 
 interface SkillUpdateDialogProps {
   mode?: "update" | "addition";
@@ -94,7 +95,7 @@ const SkillUpdateChange = ({
 
 export const SkillUpdateDialog = ({
   mode = "update",
-  plan,
+  plan: suppliedPlan,
   impact,
   busy = false,
   progress,
@@ -103,6 +104,7 @@ export const SkillUpdateDialog = ({
   onConfirm
 }: SkillUpdateDialogProps) => {
   const { t } = useI18n();
+  const plan = useSkillUpdateImpacts(suppliedPlan ? [suppliedPlan] : [])[0];
   const dialogRef = useRef<HTMLElement>(null);
   const adding = mode === "addition";
   const initialFocusRef = useRef<HTMLButtonElement>(null);
@@ -158,6 +160,9 @@ export const SkillUpdateDialog = ({
     copiedTargetIds: []
   };
   const impactSummary = impact ?? (() => {
+    if (planImpact.status) return t(planImpact.status === "pending"
+      ? "Checking usage. Live links update immediately."
+      : "Some usage information is unavailable. Live links update immediately.");
     const parts: string[] = [];
     if (planImpact.profileNames.length > 0) {
       parts.push(t("Used by {{count}} Profiles", { count: planImpact.profileNames.length }));
@@ -258,12 +263,12 @@ export const SkillUpdateDialog = ({
             setSummaryEvidence(summary.files.map((file) => ({ ...file, before: "", after: "", action: "write" })));
             setSummaryFile(path); setDiffWorkspaceOpen(true);
           }} />
-          {planImpact.copiedInstallCount > 0 && progress?.status !== "updated" ? (
+          {(planImpact.copiedInstallCount > 0 || planImpact.status) && progress?.status !== "updated" ? (
             <div className="skill-update-copy-option">
               <span className="skill-update-copy-option__copy">
                 <strong>{t("Also update Agent copies")}</strong>
                 <small>
-                  {syncCopiedInstalls
+                  {planImpact.status ? t("Only verified, unchanged Agent copies will be updated.") : syncCopiedInstalls
                     ? t("{{count}} clean managed copies will update in the same backed-up operation.", {
                         count: planImpact.copiedInstallCount
                       })

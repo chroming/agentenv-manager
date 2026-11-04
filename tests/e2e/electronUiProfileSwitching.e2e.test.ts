@@ -3781,7 +3781,7 @@ describe("Electron UI profile switching e2e", () => {
       .click();
     await page.getByRole("menuitem", { name: /Remove from library/ }).click();
     const removeDialog = page.getByRole("dialog", { name: "Remove from library" });
-    await expect.poll(() => removeDialog.textContent()).toContain("1 managed Agent install");
+    await expect.poll(() => removeDialog.textContent()).toContain("Managed Agent installs");
     await removeDialog.getByRole("button", { name: "Remove skill and installs" }).click();
     await expect
       .poll(() => page.getByRole("status").textContent(), { timeout: 5_000 })

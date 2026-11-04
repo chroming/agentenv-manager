@@ -18,6 +18,7 @@ export const electronE2eTestFiles = [
   "tests/e2e/remoteProfileEndpoint.e2e.test.ts",
   "tests/e2e/repositorySkillSource.e2e.test.ts",
   "tests/e2e/startupRecovery.e2e.test.ts",
+  "tests/e2e/scopedResourceOperations.e2e.test.ts",
   "tests/e2e/workspaceSync.e2e.test.ts",
   "tests/e2e/worktrees.e2e.test.ts",
   "tests/e2e/worktreeRecoveryBackups.e2e.test.ts"
@@ -31,4 +32,4 @@ export const exclusiveElectronE2eTestNames = [
 ];
 
 export const electronE2eExcludeGlob =
-  "**/tests/e2e/{aiAssistance,aiServiceSettings,catalogViews,conversations,conversationDeletion,conversationHistorySearch,desktopShell,desktopRefreshLayout,electronAppUpdates,electronUiProfileSwitching,instructions,profileEvaluation,projects,remoteProfileEndpoint,repositorySkillSource,skillReadReliability,skillSummaries,skillTagSuggestions,startupRecovery,workspaceSync,worktrees,worktreeRecoveryBackups}.e2e.test.ts";
+  "**/tests/e2e/{aiAssistance,aiServiceSettings,catalogViews,conversations,conversationDeletion,conversationHistorySearch,desktopShell,desktopRefreshLayout,electronAppUpdates,electronUiProfileSwitching,instructions,profileEvaluation,projects,remoteProfileEndpoint,repositorySkillSource,scopedResourceOperations,skillReadReliability,skillSummaries,skillTagSuggestions,startupRecovery,workspaceSync,worktrees,worktreeRecoveryBackups}.e2e.test.ts";

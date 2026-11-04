@@ -20,6 +20,7 @@ import {
   restoreRecordedBackupMutations
 } from "./activationBackupRecovery";
 import { createRollbackChange } from "./activationRecoveryPreview";
+import { applyAgentDetachPlan, planAgentDetach, type AgentDetachPlan } from "./agentDetachPlan";
 import { hashPathEntry } from "./filesystemIntegrity";
 import type { AgentEnvPaths } from "./paths";
 import type { ProfileStore } from "./profileStore";
@@ -200,6 +201,8 @@ export interface ActivationService {
   rollback(backupId: string): Promise<RollbackResult>;
   previewStopManaging(targetId: string, mode: StopManagingMode): Promise<StopManagingPreview>;
   stopManaging(previewId: string): Promise<StopManagingResult>;
+  applyMutationPaths(profileId: string, previewId: string): string[] | undefined;
+  stopManagingMutationPaths(previewId: string): string[] | undefined;
   adoptTargetChanges(profileId: string, targetId: string): Promise<AdoptTargetChangesResult>;
 }
 
@@ -237,7 +240,7 @@ export const createActivationService = ({
   const captureReceiptStore = createCaptureReceiptStore(paths);
   const sharedSkillAreaStore = createSharedSkillAreaStore(paths);
   const previews = new Map<string, InternalActivationPreview>();
-  const stopManagingPreviews = new Map<string, StopManagingPreview>();
+  const stopManagingPreviews = new Map<string, StopManagingPreview & { detachPlan?: AgentDetachPlan }>();
   const rollbackPreviewFingerprints = new Map<string, Record<string, string | undefined>>();
   const activeTargetOperations = new Set<string>();
   const targetStateRepository = createTargetStateRepository(paths);
@@ -2060,41 +2063,6 @@ export const createActivationService = ({
     }
   };
 
-  const materializeManagedResource = async (path: string) => {
-    if (!(await pathEntryExists(path))) {
-      return;
-    }
-    const stats = await lstat(path);
-    if (stats.isSymbolicLink()) {
-      const resolvedStats = await stat(path);
-      if (resolvedStats.isDirectory()) {
-        await replacePathAtomically(path, (stagingPath) =>
-          cp(path, stagingPath, { recursive: true, dereference: true })
-        );
-      } else {
-        await replacePathAtomically(path, (stagingPath) =>
-          cp(path, stagingPath, { dereference: true })
-        );
-      }
-    }
-    const currentStats = await lstat(path).catch(() => undefined);
-    if (currentStats?.isDirectory()) {
-      const removeMarkers = async (directory: string): Promise<void> => {
-        const entries = await readdir(directory, { withFileTypes: true });
-        for (const entry of entries) {
-          const entryPath = join(directory, entry.name);
-          if (entry.name === ".agentenv-owner.json" || entry.name === ".agentenv-skill.json") {
-            await rm(entryPath, { force: true });
-          } else if (entry.isDirectory()) {
-            await removeMarkers(entryPath);
-          }
-        }
-      };
-      await removeMarkers(path);
-    }
-    await rm(markerPathForFile(path), { force: true });
-  };
-
   const previewStopManaging = async (
     targetId: string,
     mode: StopManagingMode
@@ -2109,7 +2077,7 @@ export const createActivationService = ({
     let takeoverBackupId: string | undefined;
     let changes: PlannedFileChange[] = [];
     if (mode === "restore-pre-takeover") {
-      const candidates = (await backupStore.listBackups())
+      const candidates = (await backupStore.listBackupMetadata())
         .filter((backup) => backup.targetId === targetId && backup.operation === "apply")
         .sort((left, right) => left.createdAt.localeCompare(right.createdAt));
       takeoverBackupId = candidates[0]?.id;
@@ -2137,7 +2105,9 @@ export const createActivationService = ({
       errors,
       changes
     };
-    stopManagingPreviews.set(preview.id, preview);
+    const detachPlan = mode === "keep-current" ? await planAgentDetach(stateFile.state.managedResources ?? [], targetId) : undefined;
+    if (detachPlan?.links.length) preview.warnings.push(`Live links will become independent copies: ${detachPlan.links.map((link) => link.path).join(", ")}`);
+    stopManagingPreviews.set(preview.id, { ...preview, detachPlan });
     return preview;
   };
 
@@ -2164,8 +2134,10 @@ export const createActivationService = ({
         return { ok: false, errors: ["Agent management state changed after preview"] };
       }
       const managedPaths = (stateFile.state.managedResources ?? []).map((resource) => resource.path);
+      const detachPlan = preview.mode === "keep-current" ? await planAgentDetach(stateFile.state.managedResources ?? [], preview.targetId) : undefined;
+      if (JSON.stringify(detachPlan) !== JSON.stringify(preview.detachPlan)) return { ok: false, errors: ["Agent links or ownership markers changed after preview. Review the current environment again."] };
       const protectedPaths = [
-        ...managedPaths.flatMap((path) => [path, markerPathForFile(path)]),
+        ...(detachPlan ? [...detachPlan.links, ...detachPlan.markers].map((item) => item.path) : managedPaths.flatMap((path) => [path, markerPathForFile(path)])),
         stateFile.path
       ];
       const safetyBackup = await backupStore.createBackup(
@@ -2198,12 +2170,7 @@ export const createActivationService = ({
         if (preview.mode === "restore-pre-takeover" && preview.takeoverBackupId) {
           await restoreBackupSafely(await backupStore.readBackup(preview.takeoverBackupId));
         } else {
-          for (const path of managedPaths) {
-            await claimPath(path);
-            await claimPath(markerPathForFile(path));
-            await materializeManagedResource(path);
-            await claimPath.recordMutation(path, markerPathForFile(path));
-          }
+          await applyAgentDetachPlan(detachPlan!, claimPath);
           await claimPath(stateFile.path);
           await rm(stateFile.path, { force: true });
           await claimPath.recordMutation(stateFile.path);
@@ -2334,6 +2301,19 @@ export const createActivationService = ({
     rollback,
     previewStopManaging,
     stopManaging,
+    stopManagingMutationPaths: (previewId) => {
+      const preview = stopManagingPreviews.get(previewId);
+      if (!preview?.detachPlan) return undefined;
+      return [join(paths.targetStatesDir, `${preview.targetId}.json`), ...preview.detachPlan.links.flatMap((link) => [link.path, link.source]), ...preview.detachPlan.markers.map((marker) => marker.path)];
+    },
+    applyMutationPaths: (profileId, previewId) => {
+      const preview = previews.get(previewId);
+      if (!preview || preview.profileId !== profileId) return undefined;
+      return [...new Set([...preview.assetBackupPaths, ...preview.changes.map((change) => change.path),
+        join(paths.targetStatesDir, `${preview.targetId}.json`), join(paths.profilesDir, profileId),
+        ...preview.skillDeployment.sourceSkills.map((skill) => join(preview.skillDeployment.skillLibraryDir, skill.libraryId)),
+        ...(preview.skillDeployment.profile.resources.instructions ?? []).map((instruction) => join(paths.instructionsLibraryDir, instruction.libraryId))])];
+    },
     adoptTargetChanges
   };
 };

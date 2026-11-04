@@ -21,6 +21,7 @@ import { useModalDialog } from "../hooks/useModalDialog";
 import { DiffWorkspaceDialog } from "./DiffWorkspaceDialog";
 import { SkillSummaryReview } from "./SkillSummaryReview";
 import { SkillUpdateCopyNotice } from "./SkillUpdateCopyNotice";
+import { useSkillUpdateImpacts } from "../hooks/useSkillUpdateImpacts";
 import {
   Button,
   ChoiceInput,
@@ -54,7 +55,7 @@ const isFinished = (item?: SkillUpdateRunItem) =>
   item?.status === "updated" || item?.status === "failed" || item?.status === "skipped";
 
 export const BulkSkillUpdateDialog = ({
-  plans,
+  plans: suppliedPlans,
   failures,
   updateRun,
   isBusy,
@@ -67,6 +68,7 @@ export const BulkSkillUpdateDialog = ({
   onUpdate
 }: BulkSkillUpdateDialogProps) => {
   const { t } = useI18n();
+  const plans = useSkillUpdateImpacts(suppliedPlans);
   const dialogRef = useRef<HTMLElement>(null);
   const initialFocusRef = useRef<HTMLButtonElement>(null);
   const expandPreviewRef = useRef<HTMLButtonElement>(null);
@@ -201,12 +203,12 @@ export const BulkSkillUpdateDialog = ({
             setSummaryEvidence(summary.files.map((file) => ({ ...file, path: `${plan.name}/${file.path}`, before: "", after: "", action: "write" })));
             setSummaryFile(`${plan.name}/${path}`); setDiffWorkspaceOpen(true);
           }} />
-          {copiedInstallCount > 0 && !started ? (
+          {(copiedInstallCount > 0 || applicablePlans.some((plan) => plan.impact.status)) && !started ? (
             <div className="skill-update-copy-option">
               <span className="skill-update-copy-option__copy">
                 <strong>{t("Also update Agent copies")}</strong>
                 <small>
-                  {syncCopiedInstalls
+                  {applicablePlans.some((plan) => plan.impact.status) ? t("Only verified, unchanged Agent copies will be updated.") : syncCopiedInstalls
                     ? t("{{count}} clean managed copies will update in the same backed-up operation.", {
                         count: copiedInstallCount
                       })
@@ -298,7 +300,7 @@ export const BulkSkillUpdateDialog = ({
                   <SkillUpdateCopyNotice copies={progress?.skippedAgentCopies} />
                   {plan.impact && progress?.status !== "updated" ? (
                     <p className="skill-update-impact">
-                      {t(syncCopiedInstalls
+                      {plan.impact.status ? t(plan.impact.status === "pending" ? "Checking usage. Live links update immediately." : "Some usage information is unavailable. Live links update immediately.") : t(syncCopiedInstalls
                         ? "{{profiles}} Profiles · {{linked}} linked installs update now · {{copied}} copied installs update now"
                         : "{{profiles}} Profiles · {{linked}} linked installs update now · {{copied}} copied installs need Apply", {
                         profiles: plan.impact.profileNames.length,

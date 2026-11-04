@@ -256,7 +256,8 @@ export interface AgentEnvApi {
   previewSkillSourceMerge(input: SkillSourceMergePreviewInput): Promise<SkillSourceMergePreview>;
   mergeSkillSources(previewId: string): Promise<SkillSourceMergeResult>;
   cancelRepositoryOperations(): Promise<void>;
-  removeSkillFromLibrary(id: string): Promise<SkillCleanupResult>;
+  previewRemoveLibrarySkill(id: string): Promise<SkillRemovalPreview>;
+  removeSkillFromLibrary(id: string, previewId: string): Promise<SkillCleanupResult>;
   manageTargetSkill(input: ManageTargetSkillInput): Promise<void>;
   consolidateSkillGroup(input: SkillCleanupRequest): Promise<SkillCleanupResult>;
   rollbackSkillCleanup(backupId: string): Promise<void>;
@@ -282,6 +283,7 @@ export interface AgentEnvApi {
   generateSkillSummary(input: import("./skillSummaries").SkillSummaryGenerateInput): Promise<import("./skillSummaries").SkillSummary>;
   cancelSkillSummary(requestId: string): Promise<void>;
   previewLibrarySkillUpdates(ids: string[]): Promise<SkillUpdatePreviewBatchResult>;
+  readLibrarySkillUpdateImpact(previewId: string): Promise<SkillUpdateImpact>;
   readLibrarySkillUpdateChange(input: SkillUpdateChangeReadInput): Promise<PlannedFileChange>;
   updateLibrarySkill(input: SkillUpdateConfirmation): Promise<SkillLibraryUpdateResult>;
   readSettings(): Promise<AgentEnvSettings>;
@@ -1113,6 +1115,7 @@ export interface SkillUpdatePreviewBatchResult {
 }
 
 export interface SkillUpdateImpact {
+  status?: "pending" | "partial";
   profileNames: string[];
   linkedInstallCount: number;
   linkedTargetIds: string[];
@@ -1129,6 +1132,16 @@ export interface SkillUpdateConfirmation {
 export interface SkillUpdateChangeReadInput {
   previewId: string;
   path: string;
+}
+
+export interface SkillRemovalPreview {
+  previewId: string;
+  libraryId: string;
+  libraryPath: string;
+  profiles: Array<{ id: string; name: string }>;
+  groups: Array<{ id: string; name: string }>;
+  installs: Array<{ path: string; targetIds: string[] }>;
+  sharedPaths?: string[];
 }
 
 export type SkillInventoryStatus =
@@ -1725,6 +1738,7 @@ export type ManagedBackupCleanupStatus = "required" | "retained" | "kept" | "eli
 export type ManagedBackupRequiredReason = "recovery-required" | "takeover-baseline" | "workspace-sync-recovery" | "worktree-recovery" | "worktree-recovery-incomplete";
 
 export interface ManagedBackupItem {
+  sizePending?: boolean;
   conversationTitle?: string;
   deletionPhase?: import("./conversationDeletion").ConversationDeletionPhase;
   expiresAt?: string;
@@ -1776,6 +1790,7 @@ export interface ManagedBackupPreview {
 export interface ManagedBackupDeleteResult {
   deletedCount: number;
   freedBytes: number;
+  freedBytesIncomplete?: boolean;
 }
 
 export interface ManagedBackupCleanupFailure extends DeleteManagedBackupInput {

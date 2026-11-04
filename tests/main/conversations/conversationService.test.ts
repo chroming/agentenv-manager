@@ -150,17 +150,20 @@ describe("conversation service", () => {
       // History ownership is bound to its approved source, not today's Agent install/config.
       target.health.installationFound = false;
       target.paths.configDir = join(root, "another-agent-home");
+      const discovery = vi.spyOn(adapter.conversations!, "discover").mockRejectedValue(new Error("unrelated history directory unavailable"));
       let preview = await service.previewDelete(id);
       await writeFile(file, `${original}\n`); await utimes(file, new Date(0), new Date(0));
       await expect(service.delete(preview.previewId)).rejects.toThrow("changed after preview");
       preview = await service.previewDelete(id);
       const { backupId } = await service.delete(preview.previewId);
+      expect(discovery).not.toHaveBeenCalled();
+      discovery.mockRestore();
       expect(await service.search({ query: "unique deletion needle" })).toHaveLength(0);
       await service.refresh();
       expect((await service.list()).items).toHaveLength(0);
       service.dispose(); service = await createConversationService(options);
       await service.restoreDeleted(backupId);
-      expect(await service.search({ query: "unique deletion needle" })).toHaveLength(1);
+      await vi.waitFor(async () => expect(await service.search({ query: "unique deletion needle" })).toHaveLength(1));
       expect(await readFile(file, "utf8")).toBe(`${original}\n`);
     } finally { service.dispose(); }
   });

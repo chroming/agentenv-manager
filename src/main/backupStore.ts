@@ -39,6 +39,8 @@ export interface BackupStore {
     context?: Pick<BackupManifest, "operation" | "targetId" | "targetIds" | "profileId" | "profileName" | "conversation">
   ): Promise<BackupManifest>;
   listBackups(): Promise<BackupSummary[]>;
+  listBackupMetadata(): Promise<BackupSummary[]>;
+  readBackupManifest(id: string): Promise<BackupManifest>;
   readBackup(id: string): Promise<BackupManifest>;
   deleteBackup(id: string): Promise<void>;
 }
@@ -82,7 +84,7 @@ export const createBackupStore = (
   const copyPath = options.copyPath ?? copyPathVerified;
   const invalidBackupWarnings = new Set<string>();
 
-  const readBackup = async (id: string): Promise<BackupManifest> => {
+  const readManifest = async (id: string, verifyPayload: boolean): Promise<BackupManifest> => {
     const safeId = SafeIdSchema.parse(id);
     const backupDir = join(paths.backupsDir, safeId);
     const backupStats = await lstat(backupDir);
@@ -172,6 +174,11 @@ export const createBackupStore = (
       ) {
         throw new Error(`Invalid AgentEnv backup file mapping: ${safeId}`);
       }
+      if (!verifyPayload) {
+        if (!legacy && !isSha256(entry.sha256)) throw new Error(`Invalid AgentEnv backup content hash: ${safeId}`);
+        normalizedEntries.push({ ...entry, backupPath: expectedBackupPath });
+        continue;
+      }
       const backupStats = await lstat(expectedBackupPath);
       if (
         (entry.kind === "file" && !backupStats.isFile()) ||
@@ -207,6 +214,8 @@ export const createBackupStore = (
     }
     return { ...manifest, formatVersion: 2, entries: normalizedEntries };
   };
+  const readBackup = (id: string) => readManifest(id, true);
+  const readBackupManifest = (id: string) => readManifest(id, false);
 
   const createBackup = async (
     sourcePaths: string[],
@@ -309,7 +318,7 @@ export const createBackupStore = (
     }
   };
 
-  const listBackups = async (): Promise<BackupSummary[]> => {
+  const list = async (verifyPayload: boolean): Promise<BackupSummary[]> => {
     let entries: Dirent[];
     try {
       entries = await readdir(paths.backupsDir, { withFileTypes: true });
@@ -329,7 +338,7 @@ export const createBackupStore = (
               if (!SafeIdSchema.safeParse(entry.name).success) {
                 return undefined;
               }
-              return await readBackup(entry.name);
+              return await readManifest(entry.name, verifyPayload);
             } catch (error) {
               if (
                 isMissingFileError(error) &&
@@ -364,13 +373,18 @@ export const createBackupStore = (
 
   const deleteBackup = async (id: string): Promise<void> => {
     const safeId = SafeIdSchema.parse(id);
-    await readBackup(safeId);
-    await rm(join(paths.backupsDir, safeId), { recursive: true, force: true });
+    const path = join(paths.backupsDir, safeId), before = await lstat(path);
+    await readBackupManifest(safeId);
+    const current = await lstat(path);
+    if (current.dev !== before.dev || current.ino !== before.ino || !current.isDirectory() || current.isSymbolicLink()) throw new Error("Backup directory changed; nothing was deleted");
+    await rm(path, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
   };
 
   return {
     createBackup,
-    listBackups,
+    listBackups: () => list(true),
+    listBackupMetadata: () => list(false),
+    readBackupManifest,
     readBackup,
     deleteBackup
   };

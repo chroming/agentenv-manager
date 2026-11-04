@@ -1,8 +1,8 @@
+import { SkillRemovalDialog } from "./SkillRemovalDialog";
 import {
   Fragment,
   type RefObject,
   useEffect,
-  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -423,7 +423,6 @@ export const SkillLibraryPanel = ({ model, actions, onOpenLocalSkills, onRefresh
   const aiPreferences = useAIPreferences();
   const openActionId = openAction?.id;
   const [deleteCandidate, setDeleteCandidate] = useState<SkillLibraryEntry>();
-  const deleteDialogTitleId = useId();
   const [disableCandidate, setDisableCandidate] = useState<SkillLibraryEntry>();
   const [sourceCandidate, setSourceCandidate] = useState<SkillLibraryEntry>();
   const [tagCandidate, setTagCandidate] = useState<SkillLibraryEntry>();
@@ -528,8 +527,7 @@ export const SkillLibraryPanel = ({ model, actions, onOpenLocalSkills, onRefresh
       setBrowsingSkill(undefined);
     } else if (selectedUpdatePlan) {
       onCloseUpdatePreview();
-    } else if (deleteCandidate) {
-      setDeleteCandidate(undefined);
+
     } else if (disableCandidate) {
       setDisableCandidate(undefined);
     } else if (sourceCandidate) {
@@ -554,7 +552,6 @@ export const SkillLibraryPanel = ({ model, actions, onOpenLocalSkills, onRefresh
   };
   const modalOpen = Boolean(
     (selectedUpdatePlan && selectedUpdatePlan.changes.length > 0) ||
-      deleteCandidate ||
       disableCandidate ||
       sourceCandidate ||
       tagCandidate ||
@@ -2438,108 +2435,7 @@ export const SkillLibraryPanel = ({ model, actions, onOpenLocalSkills, onRefresh
         onSuggest={aiPreferences.enabled("tags") ? (skill) => { setTagCandidate(undefined); setTagAnalysisSkills([skill]); } : undefined}
       />
 
-      {deleteCandidate ? createPortal(
-        <div
-          className="preview-modal-backdrop"
-          data-dismiss-policy="standard"
-          onClick={() => setDeleteCandidate(undefined)}
-        >
-          <section
-            ref={modalDialogRef}
-            className="profile-form-dialog profile-form-dialog--compact"
-            role="dialog"
-            aria-labelledby={deleteDialogTitleId}
-            aria-modal="true"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <header className="profile-dialog-header">
-              <div className="ui-dialog-header__copy">
-                <div id={deleteDialogTitleId} className="section-title ui-dialog-title">{t("Remove from library")}</div>
-                <p className="muted ui-dialog-description">
-                  {(skillUsage[deleteCandidate.id] ?? []).length > 0
-                    ? t("{{name}} is used by {{profiles}} Profiles. Remove it from those Profiles first.", {
-                        name: deleteCandidate.name,
-                        profiles: (skillUsage[deleteCandidate.id] ?? []).join(", ")
-                      })
-                    : (() => {
-                        const installCount = installsFor(deleteCandidate.id).filter(
-                          (item) => item.status === "managed"
-                        ).length;
-                        return installCount > 0
-                          ? t(
-                              installCount === 1
-                                ? "Remove {{name}} and 1 managed Agent install? Unmanaged copies are kept."
-                                : "Remove {{name}} and {{count}} managed Agent installs? Unmanaged copies are kept.",
-                              { name: deleteCandidate.name, count: installCount }
-                            )
-                          : t("Remove {{name}} from the shared library?", { name: deleteCandidate.name });
-                      })()}
-                </p>
-              </div>
-            </header>
-            <div className="skill-delete-paths ui-dialog-body">
-              <div>
-                <strong>{t("Library")}</strong>
-                <PreviewText
-                  ariaLabel={t("Full Library path {{path}}", {
-                    path: deleteCandidate.path
-                  })}
-                  className="skill-delete-path"
-                  text={deleteCandidate.path}
-                  tooltipClassName="library-source-tooltip"
-                />
-              </div>
-              {installsFor(deleteCandidate.id)
-                .filter((item) => item.status === "managed")
-                .map((item) => (
-                  <div key={item.path}>
-                    <strong>{t(cleanupLocationLabel(item, targetNames))}</strong>
-                    <PreviewText
-                      ariaLabel={t("Full managed install path {{path}}", {
-                        path: item.path
-                      })}
-                      className="skill-delete-path"
-                      text={item.path}
-                      tooltipClassName="library-source-tooltip"
-                    />
-                  </div>
-                ))}
-            </div>
-            <footer className="preview-actions">
-              <Button
-                ref={modalInitialFocusRef}
-                onClick={() => setDeleteCandidate(undefined)}
-              >
-                {t("Cancel")}
-              </Button>
-              {(skillUsage[deleteCandidate.id] ?? []).length > 0 ? (
-                <Button
-                  variant="primary"
-                  onClick={() => {
-                    onReviewSkillUsage(deleteCandidate.id);
-                    setDeleteCandidate(undefined);
-                  }}
-                >
-                  {t("Review Profiles")}
-                </Button>
-              ) : (
-                <Button
-                  variant="danger"
-                  onClick={() => {
-                    onRemoveLibrarySkill(deleteCandidate.id);
-                    setDeleteCandidate(undefined);
-                  }}
-                >
-                  {installsFor(deleteCandidate.id).some((item) => item.status === "managed")
-                    ? t("Remove skill and installs")
-                    : t("Remove skill")}
-                </Button>
-              )}
-            </footer>
-          </section>
-        </div>,
-        document.body
-      ) : null}
+      {deleteCandidate ? <SkillRemovalDialog skill={deleteCandidate} onClose={() => setDeleteCandidate(undefined)} onRemove={onRemoveLibrarySkill} /> : null}
 
       {autoCleanupReviewOpen ? (
         <AutomaticSkillCleanupDialog

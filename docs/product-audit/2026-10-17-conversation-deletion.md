@@ -9,8 +9,9 @@ points (undo changes) from recently deleted conversations (restore objects).
 Contract:
 - Local file-backed adapters explicitly enumerate the transcript and associated
   files. Database-backed and SSH histories remain read-only for deletion.
-- Preview binds the exact file set and hashes. Reject changed/recently written
-  files, symlinks and paths outside declared history roots.
+- Preview binds the exact file set and hashes. Reject changing files, symlinks and
+  paths outside declared history roots. Recently written but stable selected files
+  use a short observation window rather than a fixed one-minute prohibition.
 - Verify a private backup before removing originals. Persist phase before writes;
   incomplete operations are protected from retention cleanup and remain restorable.
 - Serialize history indexing with mutations; remove matching cached records and

@@ -80,6 +80,47 @@ const writeCodexLiveFiles = async (paths: ReturnType<typeof createPaths>) => {
 };
 
 describe("activation service v2", () => {
+  it("detaches ordinary copies without backing up or rewriting their contents, including external edits", async () => {
+    const { paths, settingsStore, service } = await makeEnv();
+    await settingsStore.updateSettings({ enabledTargetIds: ["codex"], skillSyncMethod: "copy" });
+    await writeCodexLiveFiles(paths);
+    const apply = await service.previewProfile("daily-coding", "codex");
+    const applied = await service.applyProfile("daily-coding", apply.id);
+    if (!applied.ok) throw new Error(applied.errors.join("; "));
+    const skill = join(paths.codexHome, "skills", "review");
+    await mkdir(join(skill, "references"));
+    const nested = join(skill, "references", ".agentenv-owner.json");
+    await writeFile(nested, "unrelated user file");
+    const preview = await service.previewStopManaging("codex", "keep-current");
+    await writeFile(join(skill, "SKILL.md"), "# Latest local content\n");
+    const time = (await lstat(join(skill, "SKILL.md"))).mtimeMs;
+    const result = await service.stopManaging(preview.id);
+    if (!result.ok) throw new Error(result.errors.join("; "));
+    const backup = await createBackupStore(paths).readBackup(result.backupId);
+    expect(backup.entries.map((entry) => entry.sourcePath)).toEqual([join(paths.targetStatesDir, "codex.json")]);
+    expect(await readFile(join(skill, "SKILL.md"), "utf8")).toBe("# Latest local content\n");
+    expect((await lstat(join(skill, "SKILL.md"))).mtimeMs).toBe(time);
+    expect(await readFile(nested, "utf8")).toBe("unrelated user file");
+  });
+
+  it("materializes only Live links before detaching and keeps their original link in recovery", async () => {
+    const { paths, settingsStore, service } = await makeEnv();
+    await settingsStore.updateSettings({ enabledTargetIds: ["codex"], skillSyncMethod: "symlink" });
+    await writeCodexLiveFiles(paths);
+    const apply = await service.previewProfile("daily-coding", "codex");
+    const applied = await service.applyProfile("daily-coding", apply.id);
+    if (!applied.ok) throw new Error(applied.errors.join("; "));
+    const skill = join(paths.codexHome, "skills", "review");
+    expect((await lstat(skill)).isSymbolicLink()).toBe(true);
+    const preview = await service.previewStopManaging("codex", "keep-current");
+    const result = await service.stopManaging(preview.id);
+    if (!result.ok) throw new Error(result.errors.join("; "));
+    expect((await lstat(skill)).isDirectory()).toBe(true);
+    expect(await readFile(join(skill, "SKILL.md"), "utf8")).toContain("# Review");
+    const backup = await createBackupStore(paths).readBackup(result.backupId);
+    expect(backup.entries.find((entry) => entry.sourcePath === skill)?.kind).toBe("symlink");
+    expect(backup.entries).toHaveLength(2);
+  });
   it("keeps conversation recovery out of Agent rollback", async () => {
     const { paths, service } = await makeEnv();
     const file = join(paths.codexHome, "history-fixture.jsonl");

@@ -638,6 +638,7 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
     previewSkillSourceMerge: vi.fn(),
     mergeSkillSources: vi.fn(),
     cancelRepositoryOperations: vi.fn().mockResolvedValue(undefined),
+    previewRemoveLibrarySkill: vi.fn(),
     removeSkillFromLibrary: vi.fn().mockResolvedValue({
       backupId: "remove-backup",
       libraryId: "skill",
@@ -726,6 +727,7 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
       errors: []
     }),
     previewLibrarySkillUpdates: vi.fn().mockResolvedValue({ plans: [], failed: [] }),
+    readLibrarySkillUpdateImpact: vi.fn(),
     readLibrarySkillUpdateChange: vi.fn().mockRejectedValue(new Error("No deferred preview")),
     updateLibrarySkill: vi.fn().mockResolvedValue({
       id: "skill",

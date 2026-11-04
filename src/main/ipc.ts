@@ -79,6 +79,9 @@ import { registerInstructionIpc } from "./ipc/instructionIpc";
 import { registerSkillLibraryBrowserIpc } from "./ipc/skillLibraryBrowserIpc";
 import { registerSkillGroupIpc } from "./ipc/skillGroupIpc";
 import { registerSkillRemovalIpc } from "./ipc/skillRemovalIpc";
+import { targetPathInputFor } from "./targets/pathInput";
+import { assertWorkspaceRecoveryScope, localMutationScope } from "./ipc/mutationScope";
+import type { MutationScope } from "./ipc/registration";
 import type { InstructionLibraryStore } from "./instructionLibraryStore";
 import type { SkillGroupStore } from "./skillGroupStore";
 import { scanSkillInventoryForRenderer } from "./skillInventoryResponse";
@@ -177,25 +180,14 @@ export const registerIpcHandlers = ({
   };
   const handleMutation = (
     channel: string,
-    handler: (event: any, ...args: any[]) => any
+    handler: (event: any, ...args: any[]) => any,
+    scope?: MutationScope
   ) => {
     diagnosticHandle(channel, (event, ...args) =>
       mutationCoordinator.runExclusive(channel, async () => {
-        const metadataOnly = ["skills:set-icon", "skills:set-tags", "skills:set-availability", "skills:set-update-settings"].includes(channel);
-        const skillId = metadataOnly ? SafeIdSchema.safeParse(args[0]?.id) : undefined;
-        const affectedPaths = skillId?.success ? [
-          join(resolveSkillsLibraryDir(paths, await settingsStore.readSettings()), skillId.data, ".agentenv-skill.json"),
-          paths.skillSourcesPath
-        ] : undefined;
+        const affectedPaths = scope ? await scope(event, ...args) : await localMutationScope(channel, args, { paths, settingsStore, profileStore });
         return skillMutationRecoveryGate.run(channel, async () => {
-          const changesWorkspace = /^(skills|instructions|profiles|activation|targets|data|settings|workspace-sync):/.test(channel);
-          if (
-            changesWorkspace &&
-            channel !== "workspace-sync:recover" &&
-            await pathEntryExists(paths.workspaceSyncJournalPath)
-          ) {
-            throw new Error("Workspace recovery is required before changing Profiles, Library resources, or Agents");
-          }
+          await assertWorkspaceRecoveryScope(paths, backupStore, channel, affectedPaths);
           return await handler(event, ...args);
         }, affectedPaths);
       })
@@ -310,11 +302,14 @@ export const registerIpcHandlers = ({
   registerSharedSkillAreaIpc({ diagnosticHandle, handleMutation, handleWorkspaceSyncMutation }, { skillLibraryStore, resolveSharedSkillPaths });
   registerInstructionIpc({ diagnosticHandle, handleMutation }, { backupStore, instructionLibraryStore, profileStore });
   registerSkillGroupIpc({ diagnosticHandle, handleMutation }, skillGroupStore);
-  registerSkillRemovalIpc({ handleMutation }, {
-    profileStore,
+  registerSkillRemovalIpc({ diagnosticHandle, handleMutation }, {
+    paths, settingsStore,
     skillGroupStore,
     skillLibraryStore,
-    targetDiscoveryService
+    targetPaths: async () => {
+      const settings = await settingsStore.readSettings();
+      return targetRegistry.listAdapters().map((adapter) => adapter.createTargetPaths(targetPathInputFor(paths, settings, adapter.descriptor.id)));
+    }
   });
   registerSkillLibraryBrowserIpc(
     { diagnosticHandle },
@@ -339,7 +334,7 @@ export const registerIpcHandlers = ({
   diagnosticHandle("skills:list-cleanup-backups", async () =>
     (await Promise.all([
       activationService.listSharedSkillMigrationBackups(),
-      skillLibraryStore.listCleanupBackups()
+      skillLibraryStore.listCleanupBackupMetadata?.() ?? skillLibraryStore.listCleanupBackups()
     ]))
       .flat()
       .sort((left, right) => right.createdAt.localeCompare(left.createdAt))

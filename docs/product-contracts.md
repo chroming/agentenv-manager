@@ -1715,7 +1715,7 @@ Two paths are required:
 
 ### Keep current environment
 
-- Back up current managed resources and state.
+- Back up the state and only paths this detach operation actually changes. Plain copied resources without validated legacy markers MUST NOT be traversed, rehashed, backed up or rewritten just to release management; current external edits and file timestamps remain intact.
 - Materialize AgentEnv-managed Skill links as independent copies where possible.
 - Remove AgentEnv deployment state and any validated legacy ownership markers.
 - Keep current Target behavior unchanged.
@@ -2009,14 +2009,22 @@ Management-boundary and evidence contract:
 
 ### 16.4 Delete
 
-- A Skill referenced by any Profile MUST NOT be deleted.
-- The user is directed to affected Profiles.
-- Deleting an unreferenced Skill explicitly includes or excludes its managed Target installs.
+- Preview lists referencing Profiles, cached Profile Group membership, manual Library Groups, and owned local Agent install paths. One explicit confirmation removes those references and the Skill in the same recoverable transaction; users MUST NOT be required to visit each Profile or Group first.
+- References are read from validated resource metadata without compiling unrelated Instructions or detecting CLI health. Unreadable reference metadata is not interpreted as empty.
+- Commit revalidates the exact dependency set and path hashes. A new reference or changed selected file requires a fresh preview; it never silently overwrites external changes.
+- Managed installs are found from current private receipts and verified legacy ownership, including copied installs and runtime aliases. Unmanaged copies are not inferred as owned by matching name or content.
 - The confirmation lists the canonical Library path and every managed install path that will be removed; complete paths remain selectable.
 - Unmanaged copies are never deleted.
-- Deletion with managed installs creates an undoable Backup.
+- One undoable Backup covers Library, removed installs, Profile resource files, Group membership and affected management receipts. Partial failure restores the whole transaction; Undo restores those relationships together.
 
-Status: local, read-only Workspace, recursive GitHub, and System Git Repository import/update; in-place Refresh; per-Skill update policy; YAML frontmatter runtime identity; direct and recursive Agent scanning; read-only Skills CLI and Claude plugin evidence detection with malformed-inventory isolation; independent copy import; scan; cleanup; device-local management boundaries; icon metadata; duplicate runtime-name blocking; reference blocking; managed-install removal; and undo are `Implemented`.
+### 16.4.1 Optional Information And Operation Scope
+
+- Skill Diff previews return without awaiting whole-workspace usage scans. Pending or partial usage is explicit and enriched asynchronously; it MUST NOT imply zero consumers or hide immediate Live link effects. Commit still verifies actual affected installs and backup integrity.
+- Single Backup preview and deletion read only the selected manifest and applicable recovery ownership, not every payload or size. Space estimates are advisory and may remain unknown; restore still verifies payload content. Sole or incomplete recovery copies remain protected.
+- Verified recovery journals protect overlapping paths, including canonical aliases. Independent Profile edits, ordinary preferences and declared non-overlapping operations remain usable. An unknown recovery scope is never treated as an empty scope.
+- Local conversation deletion uses the selected session, known related candidates and exact sibling variants, not a fresh full-history discovery. Recent stable files are permitted after a short stability observation; active writes, changed hashes, symlinks and out-of-root paths remain protected. Restore persists verified files before starting asynchronous reindexing.
+
+Status: local, read-only Workspace, recursive GitHub, and System Git Repository import/update; in-place Refresh; per-Skill update policy; YAML frontmatter runtime identity; direct and recursive Agent scanning; read-only Skills CLI and Claude plugin evidence detection with malformed-inventory isolation; independent copy import; scan; cleanup; device-local management boundaries; icon metadata; duplicate runtime-name blocking; transactional reference removal; managed-install removal; and undo are `Implemented`.
 
 ### 16.5 Instruction Library Contract
 

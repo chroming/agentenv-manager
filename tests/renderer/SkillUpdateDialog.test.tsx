@@ -5,7 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { SkillUpdateDialog } from "../../src/renderer/components/SkillUpdateDialog";
 import type { SkillUpdatePlan } from "../../src/shared/types";
 
-afterEach(cleanup);
+afterEach(() => { cleanup(); Reflect.deleteProperty(window, "agentEnv"); });
 
 const planWithChanges = (count: number): SkillUpdatePlan => ({
   id: "claude-api",
@@ -38,6 +38,21 @@ const planWithChanges = (count: number): SkillUpdatePlan => ({
 });
 
 describe("SkillUpdateDialog", () => {
+  it("keeps update usable while usage is pending and enriches the issued preview", async () => {
+    const plan = planWithChanges(1); plan.impact.status = "pending";
+    let finish!: (value: SkillUpdatePlan["impact"]) => void;
+    const readImpact = vi.fn(() => new Promise<SkillUpdatePlan["impact"]>((done) => { finish = done; }));
+    Object.defineProperty(window, "agentEnv", { configurable: true, value: { readLibrarySkillUpdateImpact: readImpact } });
+    render(<SkillUpdateDialog plan={plan} onClose={vi.fn()} onConfirm={vi.fn()} />);
+    expect(screen.getByRole("button", { name: "Apply update claude-api" })).toBeEnabled();
+    expect(screen.getByText("Checking usage. Live links update immediately.")).toBeInTheDocument();
+    expect(screen.getByRole("switch", { name: "Also update Agent copies" })).not.toBeChecked();
+    await act(async () => { await Promise.resolve(); });
+    await act(async () => { finish({ ...plan.impact, status: undefined, profileNames: ["Daily"], linkedInstallCount: 1, copiedInstallCount: 2 }); });
+    expect(readImpact).toHaveBeenCalledWith(plan.previewId);
+    expect(screen.queryByText("Checking usage. Live links update immediately.")).not.toBeInTheDocument();
+    expect(screen.getByText(/Used by 1 Profiles.*1 linked Agent installs/)).toBeInTheDocument();
+  });
   it("keeps the completed dialog open and lists preserved Agent paths", async () => {
     vi.useFakeTimers();
     try {

@@ -12,6 +12,7 @@ export const backupCleanupNotice = (
   message: result.failures.length > 0
     ? t(result.deletedCount === 1 ? "Deleted 1 backup; {{failed}} failed" : "Deleted {{count}} backups; {{failed}} failed",
       { count: result.deletedCount, failed: result.failures.length })
+    : result.freedBytesIncomplete ? t("Deleted {{count}} backups", { count: result.deletedCount })
     : t(result.deletedCount === 1 ? "Deleted 1 backup · Freed {{size}}" : "Deleted {{count}} backups · Freed {{size}}",
       { count: result.deletedCount, size: formatBytes(result.freedBytes) })
 });

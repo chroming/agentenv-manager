@@ -313,9 +313,12 @@ describe("backup maintenance service", () => {
       { readSettings: vi.fn().mockResolvedValue({ backupRetentionDays: 30 }) }
     );
 
-    await expect(service.listInventory()).rejects.toThrow("Cannot safely evaluate backup protections");
+    await expect(service.listInventory()).resolves.toMatchObject({
+      items: [expect.objectContaining({ id: backup.id, deletable: false, cleanupStatus: "required" })],
+      issues: [expect.stringContaining("Cannot safely evaluate backup protections")]
+    });
     await expect(service.deleteBackup({ id: backup.id, kind: "target-recovery" }))
-      .rejects.toThrow("Cannot safely evaluate backup protections");
+      .rejects.toThrow("required for recovery");
     await expect(backupStore.readBackup(backup.id)).resolves.toBeTruthy();
   });
 

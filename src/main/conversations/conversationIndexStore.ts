@@ -66,6 +66,7 @@ export interface ConversationIndexStore {
   search(input: ConversationIndexSearchInput): Promise<ConversationSummary[]>;
   read(id: string, input?: ConversationReadInput): Promise<ConversationDetail>;
   record(id: string): IndexedConversationRecord;
+  relatedCandidates(id: string): AgentConversationCandidate[];
   close(): void;
 }
 
@@ -94,6 +95,19 @@ const summaryFromRow = (row: ConversationRow): ConversationSummary => ({
   sizeBytes: row.size_bytes ?? undefined,
   detailState: row.detail_state,
   archived: row.archived === 1 || undefined
+});
+
+const recordFromRow = (row: ConversationRow): IndexedConversationRecord => ({
+  summary: summaryFromRow(row),
+  candidate: {
+    recordId: row.record_id,
+    source: { version: decodeSourceVersion(row.source_version), locator: row.source_locator,
+      ...(row.source_runtime_home ? { runtimeHome: row.source_runtime_home } : {}) },
+    providerSession: { kind: row.provider_session_kind ?? "native", id: row.source_id, resumeLocator: row.provider_resume_locator ?? row.source_id },
+    title: row.title, snippet: row.snippet, workspacePath: row.workspace_path ?? undefined,
+    createdAt: row.created_at, updatedAt: row.updated_at, messageCount: row.message_count,
+    detailState: row.detail_state, archived: row.archived === 1 || undefined
+  }
 });
 
 const createDatabase = (path: string) => {
@@ -510,34 +524,14 @@ export const createConversationIndexStore = async (
     list: (input = {}) => reader.list(input),
     search: (input) => reader.search(input),
     read: (id, input = {}) => reader.read(id, input),
-    record: (id) => {
-      const row = rowFor(id);
-      return {
-        summary: summaryFromRow(row),
-        candidate: {
-          recordId: row.record_id,
-          source: {
-            version: decodeSourceVersion(row.source_version),
-            locator: row.source_locator,
-            ...(row.source_runtime_home
-              ? { runtimeHome: row.source_runtime_home }
-              : {})
-          },
-          providerSession: {
-            kind: row.provider_session_kind ?? "native",
-            id: row.source_id,
-            resumeLocator: row.provider_resume_locator ?? row.source_id
-          },
-          title: row.title,
-          snippet: row.snippet,
-          workspacePath: row.workspace_path ?? undefined,
-          createdAt: row.created_at,
-          updatedAt: row.updated_at,
-          messageCount: row.message_count,
-          detailState: row.detail_state,
-          archived: row.archived === 1 || undefined
-        }
-      };
+    record: (id) => recordFromRow(rowFor(id)),
+    relatedCandidates: (id) => {
+      const row = rowFor(id), origin = summaryFromRow(row).origin;
+      const rows = database.prepare("SELECT * FROM conversations WHERE agent_id = ? AND source_id = ?").all(row.agent_id, row.source_id) as unknown as ConversationRow[];
+      return rows.filter((item) => {
+        const other = summaryFromRow(item).origin;
+        return other?.deviceId === "local" && other.sourceKey === origin?.sourceKey;
+      }).map((item) => recordFromRow(item).candidate);
     },
     close: () => {
       reader.close();

@@ -122,7 +122,7 @@ export const BackupManagerDialog = ({
   const titleFor = (item: ManagedBackupItem) => managedBackupTitle(item, t, targetNames);
   const statusFor = (item: ManagedBackupItem) => managedBackupStatusLabel(item, t, localeTag);
   const sizeFor = (item: ManagedBackupItem) => item.sizeIncomplete
-    ? t("At least {{size}}", { size: formatBytes(item.sizeBytes) }) : formatBytes(item.sizeBytes);
+    ? item.sizeBytes === 0 ? t("Not measured") : t("At least {{size}}", { size: formatBytes(item.sizeBytes) }) : formatBytes(item.sizeBytes);
   const [section, setSection] = useState(initialSection);
   const [view, updateView] = useCatalogView("backups", {
     sort: "newest", kindFilter: "all", statusFilter: "all", targetFilter: "all"
@@ -240,7 +240,7 @@ export const BackupManagerDialog = ({
               </div>
             </header>
             <div className="backup-confirm-summary">
-              <strong>{formatBytes(deleteCandidate.sizeBytes)}</strong>
+              <strong>{sizeFor(deleteCandidate)}</strong>
               <p>
                 {t(deleteDescription)}
               </p>

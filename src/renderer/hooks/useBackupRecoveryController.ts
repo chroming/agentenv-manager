@@ -6,7 +6,6 @@ import type {
   ManagedBackupPreview
 } from "../../shared/types";
 import type { TranslationValues } from "../i18n";
-import { formatBytes } from "../formatBytes";
 import { backupCleanupNotice, refreshBackupInventory, withoutDeletedBackup } from "../backupInventory";
 import { notifyConversationRecoveryChange } from "../conversationRecoveryEvents";
 import type { BackupManagerNotice } from "../components/BackupManagerDialog";
@@ -79,6 +78,12 @@ export const useBackupRecoveryController = ({
     void refreshManagedBackups("page-entry");
   }, [activeWorkspace, refreshManagedBackups]);
 
+  useEffect(() => {
+    if (!backupManagerOpen || !managedBackups?.items.some((item) => item.sizePending)) return;
+    const timer = window.setTimeout(() => void refreshManagedBackups("mutation"), 1000);
+    return () => window.clearTimeout(timer);
+  }, [backupManagerOpen, managedBackups, refreshManagedBackups]);
+
   const revealManager = useCallback(() => {
     setBackupManagerOpen(true);
   }, []);
@@ -150,13 +155,7 @@ export const useBackupRecoveryController = ({
         }
       }
       setBackupDeleteCandidate(undefined);
-      setBackupManagerNotice({
-        kind: "success",
-        message: t("Deleted {{count}} backup · Freed {{size}}", {
-          count: result.deletedCount,
-          size: formatBytes(result.freedBytes)
-        })
-      });
+      setBackupManagerNotice(backupCleanupNotice({ ...result, failures: [] }, t));
       void refreshManagedBackups("mutation");
     } catch (error) {
       setBackupManagerNotice({ kind: "error", message: errorMessage(error) });

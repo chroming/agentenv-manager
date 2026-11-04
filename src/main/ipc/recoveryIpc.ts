@@ -51,7 +51,8 @@ export const registerRecoveryIpc = (
       mode === "restore-pre-takeover" ? "restore-pre-takeover" : "keep-current"
     )
   );
-  handleMutation("targets:stop-managing", (_event, previewId: unknown) => activationService.stopManaging(String(previewId)));
+  handleMutation("targets:stop-managing", (_event, previewId: unknown) => activationService.stopManaging(String(previewId)),
+    (_event, previewId) => activationService.stopManagingMutationPaths(String(previewId)));
   diagnosticHandle("data:create-backup", async () => {
     const owner = BrowserWindow.getFocusedWindow();
     const options = {

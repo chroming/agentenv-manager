@@ -17,6 +17,7 @@ import type { SkillLibraryStore } from "./skillLibraryStore";
 import { SafeIdSchema } from "../shared/schemas";
 import { readConversationDeletionPhase } from "./conversations/conversationDeletion";
 import { listWorktreeRecoveryBackups, previewWorktreeRecoveryBackup } from "./worktrees/worktreeRecoveryBackup";
+import { readAdvisory } from "./advisoryRead";
 
 export interface BackupMaintenanceServiceOptions {
   now?: () => Date;
@@ -25,7 +26,7 @@ export interface BackupMaintenanceServiceOptions {
 export interface BackupMaintenanceService {
   listInventory(): Promise<ManagedBackupInventory>;
   previewBackup(input: DeleteManagedBackupInput): Promise<ManagedBackupPreview>;
-  deleteBackup(input: DeleteManagedBackupInput): Promise<{ deletedCount: number; freedBytes: number }>;
+  deleteBackup(input: DeleteManagedBackupInput): Promise<{ deletedCount: number; freedBytes: number; freedBytesIncomplete?: boolean }>;
   cleanup(scope?: "recovery" | "deleted"): Promise<ManagedBackupCleanupResult>;
 }
 
@@ -69,11 +70,11 @@ const readTargetStates = async (paths: AgentEnvPaths): Promise<Array<{ targetId:
   return states;
 };
 
-const readRestoredCleanupBackups = async (paths: AgentEnvPaths) => {
+const readRestoredCleanupBackups = async (paths: AgentEnvPaths, selectedId?: string) => {
   const root = join(paths.backupsDir, "skill-cleanup-restored");
   let entries: string[];
   try {
-    entries = await readdir(root);
+    entries = selectedId ? [SafeIdSchema.parse(selectedId)] : await readdir(root);
   } catch (error) {
     if (isMissingFileError(error)) return [];
     throw error;
@@ -174,18 +175,41 @@ const readSkillSourceMergeRecoveryBackupIds = async (paths: AgentEnvPaths) => {
 
 export const createBackupMaintenanceService = (
   paths: AgentEnvPaths,
-  backupStore: Pick<BackupStore, "listBackups" | "readBackup" | "deleteBackup">,
+  backupStore: Pick<BackupStore, "listBackups" | "readBackup" | "deleteBackup"> & Partial<Pick<BackupStore, "listBackupMetadata" | "readBackupManifest">>,
   skillLibraryStore: Pick<
     SkillLibraryStore,
-    "listCleanupBackups" | "previewCleanupBackup" | "deleteCleanupBackup"
+    "listCleanupBackups" | "listCleanupBackupMetadata" | "previewCleanupBackup" | "deleteCleanupBackup"
   >,
   settingsStore: { readSettings(): Promise<Pick<AgentEnvSettings, "backupRetentionDays" | "deletedConversationRetentionDays">> },
   options: BackupMaintenanceServiceOptions = {}
 ): BackupMaintenanceService => {
   const now = options.now ?? (() => new Date());
   let activeMutation = false;
+  const sizes = new Map<string, { pending: Promise<void>; bytes?: number; done?: boolean }>();
+  let measurementQueue = Promise.resolve();
+  const sizeFor = async (path: string, measure: boolean) => {
+    let size = sizes.get(path);
+    if (measure && !size) {
+      size = { pending: Promise.resolve() };
+      const entry = size;
+      entry.pending = measurementQueue.then(async () => {
+        const result = await readAdvisory(() => directorySize(path), 5000);
+        if (result.available) entry.bytes = result.value;
+      }).finally(() => { entry.done = true; });
+      measurementQueue = entry.pending;
+      sizes.set(path, entry);
+    }
+    if (measure && size?.bytes === undefined) await readAdvisory(() => size!.pending, 150);
+    return { sizeBytes: size?.bytes ?? 0, ...(size?.bytes === undefined ? { sizeIncomplete: true, ...(size && !size.done ? { sizePending: true } : {}) } : {}) };
+  };
 
-  const listInventory = async (): Promise<ManagedBackupInventory> => {
+  const listInventory = async (selection?: { kind: ManagedBackupItem["kind"] | "recovery" | "all"; id?: string }): Promise<ManagedBackupInventory> => {
+    const measure = !selection;
+    const general = !selection || ["target-recovery", "workspace-sync", "recovery", "all"].includes(selection.kind);
+    const include = (kind: ManagedBackupItem["kind"]) => !selection || selection.kind === "all" || selection.kind === kind ||
+      selection.kind === "recovery" && kind !== "conversation-delete" && kind !== "worktree-recovery";
+    const issues: string[] = [];
+    let protectionUnknown = false;
     const [
       backups,
       cleanupBackups,
@@ -196,20 +220,22 @@ export const createBackupMaintenanceService = (
       skillSourceMergeRecovery,
       worktreeRecovery
     ] = await Promise.all([
-      backupStore.listBackups(),
-      skillLibraryStore.listCleanupBackups(),
-      readRestoredCleanupBackups(paths),
+      selection?.kind === "conversation-delete" && selection.id && backupStore.readBackupManifest
+        ? backupStore.readBackupManifest(selection.id).then((backup) => [{ ...backup, fileCount: backup.entries.length }])
+        : general || include("conversation-delete") ? (backupStore.listBackupMetadata?.() ?? backupStore.listBackups()) : [],
+      general || include("skill-cleanup") ? (skillLibraryStore.listCleanupBackupMetadata?.(selection?.kind === "skill-cleanup" ? selection.id : undefined) ?? skillLibraryStore.listCleanupBackups(selection?.kind === "skill-cleanup" ? selection.id : undefined)) : [],
+      include("skill-cleanup") ? readRestoredCleanupBackups(paths, selection?.id) : [],
       settingsStore.readSettings(),
-      readTargetStates(paths),
-      readWorkspaceSyncRecoveryBackupIds(paths),
-      readSkillSourceMergeRecoveryBackupIds(paths),
-      listWorktreeRecoveryBackups(paths.appDataRoot).then(
+      general ? readTargetStates(paths).catch((error) => { protectionUnknown = true; issues.push(String(error)); return []; }) : [],
+      general ? readWorkspaceSyncRecoveryBackupIds(paths).catch((error) => { protectionUnknown = true; issues.push(String(error)); return []; }) : [],
+      general ? readSkillSourceMergeRecoveryBackupIds(paths) : { ids: [], ambiguous: false },
+      !selection ? listWorktreeRecoveryBackups(paths.appDataRoot).then(
         (items) => ({ items, issues: [] as string[] }),
         (error: unknown) => ({
           items: [] as ManagedBackupItem[],
           issues: [error instanceof Error ? error.message : String(error)]
         })
-      )
+      ) : { items: [], issues: [] }
     ]);
     const required = new Map<string, ManagedBackupRequiredReason>();
     for (const { state } of targetStates) {
@@ -226,7 +252,7 @@ export const createBackupMaintenanceService = (
     for (const backupId of skillSourceMergeRecovery.ids) {
       required.set(backupId, "recovery-required");
     }
-    if (skillSourceMergeRecovery.ambiguous) {
+    if (skillSourceMergeRecovery.ambiguous || protectionUnknown) {
       for (const backup of backups) required.set(backup.id, "recovery-required");
     }
     for (const backup of cleanupBackups) {
@@ -254,7 +280,10 @@ export const createBackupMaintenanceService = (
       ? undefined
       : now().getTime() - settings.backupRetentionDays * 24 * 60 * 60 * 1000;
 
-    const targetItems = await Promise.all(backups.map(async (backup): Promise<ManagedBackupItem> => {
+    const targetItems = await Promise.all(backups.filter((backup) => {
+      const kind = backup.operation === "conversation-delete" ? "conversation-delete" : backup.operation === "workspace-sync" ? "workspace-sync" : "target-recovery";
+      return include(kind) && (!selection?.id || backup.id === selection.id);
+    }).map(async (backup): Promise<ManagedBackupItem> => {
       if (backup.operation === "conversation-delete") {
         const phase = await readConversationDeletionPhase(paths.backupsDir, backup.id).catch(() => undefined);
         const retention = settings.deletedConversationRetentionDays === undefined ? 30 : settings.deletedConversationRetentionDays;
@@ -263,7 +292,7 @@ export const createBackupMaintenanceService = (
         return {
           id: backup.id, kind: "conversation-delete", operation: backup.operation,
           createdAt: backup.createdAt, fileCount: backup.fileCount,
-          sizeBytes: await directorySize(join(paths.backupsDir, backup.id)),
+          ...await sizeFor(join(paths.backupsDir, backup.id), measure),
           targetId: backup.targetId, conversationTitle: backup.conversation?.title,
           deletionPhase: phase, expiresAt, restored: phase === "restored",
           cleanupStatus: incomplete ? "required" : expiresAt && expiresAt <= now().toISOString() ? "eligible" : "kept",
@@ -278,7 +307,7 @@ export const createBackupMaintenanceService = (
         id: backup.id,
         kind: backup.operation === "workspace-sync" ? "workspace-sync" : "target-recovery",
         createdAt: backup.createdAt,
-        sizeBytes: await directorySize(join(paths.backupsDir, backup.id)),
+        ...await sizeFor(join(paths.backupsDir, backup.id), measure),
         fileCount: backup.fileCount,
         operation: backup.operation,
         targetId: backup.targetId,
@@ -294,7 +323,7 @@ export const createBackupMaintenanceService = (
         deletable: !requiredReason
       };
     }));
-    const cleanupItems = await Promise.all(cleanupBackups.map(async (backup): Promise<ManagedBackupItem> => {
+    const cleanupItems = await Promise.all(cleanupBackups.filter((backup) => include("skill-cleanup") && (!selection?.id || backup.id === selection.id)).map(async (backup): Promise<ManagedBackupItem> => {
       const requiredReason = backup.recoveryRequired ? "recovery-required" : undefined;
       const isEligible = !requiredReason && cutoff !== undefined &&
         new Date(backup.createdAt).getTime() < cutoff;
@@ -302,7 +331,7 @@ export const createBackupMaintenanceService = (
         id: backup.id,
         kind: "skill-cleanup",
         createdAt: backup.createdAt,
-        sizeBytes: await directorySize(join(paths.backupsDir, "skill-cleanup", backup.id)),
+        ...await sizeFor(join(paths.backupsDir, "skill-cleanup", backup.id), measure),
         fileCount: backup.locationCount,
         operation: backup.operation,
         libraryId: backup.libraryId,
@@ -311,13 +340,13 @@ export const createBackupMaintenanceService = (
         deletable: !requiredReason
       };
     }));
-    const restoredCleanupItems = await Promise.all(restoredCleanupBackups.map(async (backup): Promise<ManagedBackupItem> => {
+    const restoredCleanupItems = await Promise.all(restoredCleanupBackups.filter((backup) => !selection?.id || backup.id === selection.id).map(async (backup): Promise<ManagedBackupItem> => {
       const isEligible = cutoff !== undefined && new Date(backup.createdAt).getTime() < cutoff;
       return {
         id: backup.id,
         kind: "skill-cleanup",
         createdAt: backup.createdAt,
-        sizeBytes: await directorySize(join(paths.backupsDir, "skill-cleanup-restored", backup.id)),
+        ...await sizeFor(join(paths.backupsDir, "skill-cleanup-restored", backup.id), measure),
         fileCount: backup.locationCount,
         operation: backup.operation as ManagedBackupItem["operation"],
         libraryId: backup.libraryId,
@@ -331,7 +360,7 @@ export const createBackupMaintenanceService = (
     );
     return {
       items,
-      ...(worktreeRecovery.issues.length ? { issues: worktreeRecovery.issues } : {}),
+      ...([...issues, ...worktreeRecovery.issues].length ? { issues: [...issues, ...worktreeRecovery.issues] } : {}),
       totalBytes: items.reduce((total, item) => total + item.sizeBytes, 0),
       eligibleBytes: items.filter((item) => item.cleanupStatus === "eligible")
         .reduce((total, item) => total + item.sizeBytes, 0),
@@ -357,15 +386,11 @@ export const createBackupMaintenanceService = (
     input: DeleteManagedBackupInput
   ): Promise<ManagedBackupPreview> => {
     if (input.kind === "worktree-recovery") return previewWorktreeRecoveryBackup(paths.appDataRoot, input.id);
-    const inventory = await listInventory();
-    const item = inventory.items.find(
-      (candidate) => candidate.id === input.id && candidate.kind === input.kind
-    );
-    if (!item) throw new Error(`Backup does not exist: ${input.id}`);
-
     let files: ManagedBackupFile[];
-    if (item.kind === "target-recovery" || item.kind === "workspace-sync" || item.kind === "conversation-delete") {
-      const manifest = await backupStore.readBackup(item.id);
+    if (input.kind === "target-recovery" || input.kind === "workspace-sync" || input.kind === "conversation-delete") {
+      const manifest = await (backupStore.readBackupManifest?.(input.id) ?? backupStore.readBackup(input.id));
+      const kind = manifest.operation === "conversation-delete" ? "conversation-delete" : manifest.operation === "workspace-sync" ? "workspace-sync" : "target-recovery";
+      if (kind !== input.kind) throw new Error(`Backup does not exist: ${input.id}`);
       files = manifest.entries.map((entry) => ({
         kind: entry.kind === "directory"
           || (entry.kind === "symlink" && entry.linkType !== "file")
@@ -374,13 +399,13 @@ export const createBackupMaintenanceService = (
         path: entry.sourcePath,
         state: entry.missing ? "missing" : "saved"
       }));
-    } else if (item.restored) {
-      const restored = await readRestoredCleanupBackups(paths);
-      files = restored.find((backup) => backup.id === item.id)?.files ?? [];
+    } else if ((await readRestoredCleanupBackups(paths, input.id)).some((item) => item.id === input.id)) {
+      const restored = await readRestoredCleanupBackups(paths, input.id);
+      files = restored.find((backup) => backup.id === input.id)?.files ?? [];
     } else {
-      files = await skillLibraryStore.previewCleanupBackup(item.id);
+      files = await skillLibraryStore.previewCleanupBackup(input.id);
     }
-    return { id: item.id, kind: item.kind, files };
+    return { id: input.id, kind: input.kind, files };
   };
 
   const deleteBackup = async (input: DeleteManagedBackupInput) => {
@@ -388,11 +413,11 @@ export const createBackupMaintenanceService = (
     if (activeMutation) throw new Error("Backup cleanup is already running");
     activeMutation = true;
     try {
-      const inventory = await listInventory();
+      const inventory = await listInventory(input);
       const item = inventory.items.find((candidate) => candidate.id === input.id && candidate.kind === input.kind);
       if (!item) throw new Error(`Backup does not exist: ${input.id}`);
       await removeItem(item);
-      return { deletedCount: 1, freedBytes: item.sizeBytes };
+      return { deletedCount: 1, freedBytes: item.sizeBytes, ...(item.sizeIncomplete ? { freedBytesIncomplete: true } : {}) };
     } finally {
       activeMutation = false;
     }
@@ -402,17 +427,19 @@ export const createBackupMaintenanceService = (
     if (activeMutation) throw new Error("Backup cleanup is already running");
     activeMutation = true;
     try {
-      const inventory = await listInventory();
+      const inventory = await listInventory({ kind: scope === "deleted" ? "conversation-delete" : scope === "recovery" ? "recovery" : "all" });
       const eligible = inventory.items.filter((item) => item.kind !== "worktree-recovery" && item.deletable && item.cleanupStatus === "eligible" && (!scope || (item.kind === "conversation-delete") === (scope === "deleted")));
       let freedBytes = 0;
       let deletedCount = 0;
       const failures: ManagedBackupCleanupResult["failures"] = [];
       const deletedItems: DeleteManagedBackupInput[] = [];
+      let freedBytesIncomplete = false;
       for (const item of eligible) {
         try {
           await removeItem(item);
           deletedCount += 1;
           freedBytes += item.sizeBytes;
+          freedBytesIncomplete ||= Boolean(item.sizeIncomplete);
           deletedItems.push({ id: item.id, kind: item.kind });
         } catch (error) {
           failures.push({
@@ -422,7 +449,7 @@ export const createBackupMaintenanceService = (
           });
         }
       }
-      return { deletedCount, freedBytes, failures, deletedItems };
+      return { deletedCount, freedBytes, failures, deletedItems, ...(freedBytesIncomplete ? { freedBytesIncomplete: true } : {}) };
     } finally {
       activeMutation = false;
     }

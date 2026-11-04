@@ -30,6 +30,7 @@ export const registerSkillUpdateIpc = (
       path: candidate.path
     });
   });
+  diagnosticHandle("skills:read-update-impact", (_event, previewId: unknown) => skillLibraryStore.readUpdateImpact(parseId(previewId, "Skill update preview id")));
   handleMutation("skills:update-library", (_event, input: SkillUpdateConfirmation) => {
     if (!input || typeof input !== "object" || typeof input.previewId !== "string") {
       throw new Error("Skill update confirmation requires a preview");

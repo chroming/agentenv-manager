@@ -54,7 +54,7 @@ export interface SharedSkillAreaStore {
   recordManaged(
     receipts: Array<Omit<ManagedSharedSkillReceipt, "createdAt" | "updatedAt">>
   ): Promise<SharedSkillAreaState>;
-  removeManaged(paths: readonly string[]): Promise<SharedSkillAreaState>;
+  removeManaged(paths: readonly string[], options?: { expectedPathHash?: string }): Promise<SharedSkillAreaState>;
 }
 
 export const createSharedSkillAreaStore = (paths: AgentEnvPaths): SharedSkillAreaStore => {
@@ -67,14 +67,14 @@ export const createSharedSkillAreaStore = (paths: AgentEnvPaths): SharedSkillAre
     }
   };
 
-  const write = async (next: SharedSkillAreaState) => {
+  const write = async (next: SharedSkillAreaState, options?: { expectedPathHash?: string }) => {
     const normalized = normalizedState(next);
     const content = `${JSON.stringify(normalized, null, 2)}\n`;
     const current = await readFile(paths.sharedSkillAreaStatePath, "utf8").catch((error) => {
       if (isMissingFileError(error)) return undefined;
       throw error;
     });
-    if (current !== content) await writeAtomic(paths.sharedSkillAreaStatePath, content);
+    if (current !== content) await writeAtomic(paths.sharedSkillAreaStatePath, content, options ? { expectedTargetHash: options.expectedPathHash } : {});
     return normalized;
   };
 
@@ -108,13 +108,13 @@ export const createSharedSkillAreaStore = (paths: AgentEnvPaths): SharedSkillAre
     });
   };
 
-  const removeManaged = async (removedPaths: readonly string[]) => {
+  const removeManaged: SharedSkillAreaStore["removeManaged"] = async (removedPaths, options) => {
     const current = await read();
     const removed = new Set(removedPaths.map((path) => resolve(path)));
     return write({
       ...current,
       receipts: current.receipts.filter((receipt) => !removed.has(resolve(receipt.path)))
-    });
+    }, options);
   };
 
   return { path: paths.sharedSkillAreaStatePath, read, setMode, recordManaged, removeManaged };

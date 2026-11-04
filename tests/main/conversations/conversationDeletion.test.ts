@@ -29,6 +29,16 @@ const setup = async () => {
 };
 
 describe("recoverable conversation deletion", () => {
+  it("refuses a file that changes during the short stability check without removing it", async () => {
+    const f = await setup();
+    await utimes(f.files[0], new Date(), new Date());
+    const inspection = inspectConversationFiles(f.files, [f.history]);
+    const rejected = expect(inspection).rejects.toThrow("still being written");
+    await new Promise((done) => setTimeout(done, 40));
+    await writeFile(f.files[0], "new message while checking");
+    await rejected;
+    expect(await readFile(f.files[0], "utf8")).toBe("new message while checking");
+  });
   it("backs up all files, restores exact content and modes, and records completion", async () => {
     const f = await setup();
     const id = await f.deletion.remove(f.metadata, f.hashes);
@@ -95,10 +105,10 @@ describe("recoverable conversation deletion", () => {
     expect(await readConversationDeletionPhase(f.paths.backupsDir,backup.id)).toBe("restored");
   });
 
-  it("rejects recent writes, symlinks, hardlinks and redirected parent directories", async () => {
+  it("accepts a recently closed stable file but rejects symlinks, hardlinks and redirected parents", async () => {
     const f = await setup();
     await utimes(f.files[0], new Date(), new Date());
-    await expect(inspectConversationFiles(f.files, [f.history])).rejects.toThrow("recently written");
+    await expect(inspectConversationFiles(f.files, [f.history])).resolves.toHaveProperty("hashes");
     const linked = join(f.history, "linked.jsonl");
     await symlink(f.files[1], linked);
     await expect(inspectConversationFiles([linked], [f.history])).rejects.toThrow("regular");

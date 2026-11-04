@@ -2343,20 +2343,19 @@ const AppContent = ({
     }
   };
 
-  const removeLibrarySkill = async (id: string) => {
+  const removeLibrarySkill = async (id: string, previewId: string) => {
     setBusy(true);
     setError(undefined);
     setSelectedSkillUpdatePlan(undefined);
     try {
-      const result = await window.agentEnv.removeSkillFromLibrary(id);
+      const result = await window.agentEnv.removeSkillFromLibrary(id, previewId);
       setSkillCleanupResult(result);
-      await refreshProfiles();
-      await refreshSkillSourceGroups();
-    } catch (unknownError) {
-      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
-      setSkillUpdateCheckStatus({
-        state: "error",
-        message: `Delete ${id} failed`
+      setLibrarySkills((current) => current.filter((skill) => skill.id !== id));
+      if (selectedProfileId && draftProfile?.resources.skills.some((skill) => skill.libraryId === id)) {
+        void loadSelectedProfile(selectedProfileId);
+      }
+      void Promise.all([refreshProfiles(), refreshSkillSourceGroups(), skillGroupController.load()]).catch((unknownError) => {
+        setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
       });
     } finally {
       setBusy(false);

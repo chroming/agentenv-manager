@@ -3,11 +3,32 @@ import type {
   SkillInventoryEntry,
   SkillUpdateImpact
 } from "../shared/types";
+import { readAdvisory } from "./advisoryRead";
 
 export interface SkillUpdateImpactIndex {
   profileNamesBySkillId: Map<string, string[]>;
   installsByLibraryId: Map<string, SkillInventoryEntry[]>;
+  incomplete?: boolean;
 }
+
+export const readSkillUpdateImpactIndex = async (
+  profiles: () => Promise<ProfileDetail[]>,
+  inventory: () => Promise<SkillInventoryEntry[]>
+): Promise<SkillUpdateImpactIndex> => {
+  const [profileRead, installRead] = await Promise.all([
+    readAdvisory(profiles, 5000), readAdvisory(inventory, 5000)
+  ]);
+  const index = createSkillUpdateImpactIndex(profileRead.available ? profileRead.value : [], installRead.available ? installRead.value : []);
+  if (!profileRead.available || !installRead.available) index.incomplete = true;
+  return index;
+};
+
+export const previewSkillUpdateImpact = async (read: Promise<SkillUpdateImpact>): Promise<SkillUpdateImpact> => {
+  const result = await readAdvisory(() => read, 150);
+  return result.available ? result.value : {
+    profileNames: [], linkedInstallCount: 0, linkedTargetIds: [], copiedInstallCount: 0, copiedTargetIds: [], status: "pending"
+  };
+};
 
 export const createSkillUpdateImpactIndex = (
   profiles: readonly ProfileDetail[],
@@ -49,6 +70,7 @@ export const skillUpdateImpactFromIndex = (
     )].sort((left, right) => left.localeCompare(right));
 
   return {
+    ...(index.incomplete ? { status: "partial" as const } : {}),
     profileNames: [...new Set(profileNames)].sort((left, right) => left.localeCompare(right)),
     linkedInstallCount: installs.filter((item) => item.installMethod === "linked").length,
     linkedTargetIds: targetIdsFor("linked"),

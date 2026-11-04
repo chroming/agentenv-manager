@@ -228,7 +228,8 @@ const api: AgentEnvApi = {
   previewSkillSourceMerge: (input) => ipcRenderer.invoke("skills:preview-source-merge", input),
   mergeSkillSources: (previewId) => ipcRenderer.invoke("skills:merge-sources", previewId),
   cancelRepositoryOperations: () => ipcRenderer.invoke("skills:cancel-repository"),
-  removeSkillFromLibrary: (id) => ipcRenderer.invoke("skills:remove-library", id),
+  previewRemoveLibrarySkill: (id) => ipcRenderer.invoke("skills:preview-remove-library", id),
+  removeSkillFromLibrary: (id, previewId) => ipcRenderer.invoke("skills:remove-library", id, previewId),
   manageTargetSkill: (input) => ipcRenderer.invoke("skills:manage-target", input),
   consolidateSkillGroup: (input) => ipcRenderer.invoke("skills:consolidate-group", input),
   setSharedSkillRetention: (input) => ipcRenderer.invoke("skills:set-shared-retention", input),
@@ -244,6 +245,7 @@ const api: AgentEnvApi = {
   setSkillTags: (input) => ipcRenderer.invoke("skills:set-tags", input),
   previewLibrarySkillUpdate: (id) => ipcRenderer.invoke("skills:preview-update", id),
   previewLibrarySkillUpdates: (ids) => ipcRenderer.invoke("skills:preview-updates", ids),
+  readLibrarySkillUpdateImpact: (previewId) => ipcRenderer.invoke("skills:read-update-impact", previewId),
   readLibrarySkillUpdateChange: (input) =>
     ipcRenderer.invoke("skills:read-update-change", input),
   updateLibrarySkill: (input) => ipcRenderer.invoke("skills:update-library", input),

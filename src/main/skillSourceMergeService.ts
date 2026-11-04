@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { SafeIdSchema } from "../shared/schemas";
 import { mkdir, readFile, readdir, realpath } from "node:fs/promises";
 import { join, relative, resolve } from "node:path";
 import type {
@@ -178,6 +179,15 @@ export const listPendingSkillSourceMerges = async (
     }
   }
   return pending.sort();
+};
+
+export const readSkillSourceMergeRecoveryPaths = async (appDataRoot: string, id: string, backupStore: BackupStore): Promise<string[]> => {
+  const manifest = await readSourceMergeManifest(join(sourceMergeBackupRoot(appDataRoot), SafeIdSchema.parse(id)));
+  if (manifest.kind !== "journal") return [];
+  const backup = await (backupStore.readBackupManifest?.(manifest.journal.transactionBackupId) ?? backupStore.readBackup(manifest.journal.transactionBackupId));
+  const paths = backup.entries.map((entry) => resolve(entry.sourcePath));
+  if ((manifest.journal.mutationHashes ?? []).some((receipt) => !paths.includes(resolve(receipt.path)))) throw new Error("Source merge receipt is outside its protected backup");
+  return paths;
 };
 
 export const recoverInterruptedSkillSourceMerges = async (

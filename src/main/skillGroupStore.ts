@@ -17,7 +17,7 @@ export interface SkillGroupStore {
   create(input: CreateSkillGroupInput): Promise<SkillGroup>;
   update(input: UpdateSkillGroupInput): Promise<SkillGroup>;
   remove(id: string): Promise<void>;
-  replace(groups: SkillGroup[]): Promise<void>;
+  replace(groups: SkillGroup[], options?: { expectedPathHash?: string }): Promise<void>;
 }
 
 export const createSkillGroupStore = (
@@ -41,14 +41,14 @@ export const createSkillGroupStore = (
     }
   };
 
-  const write = async (groups: SkillGroup[]) => {
+  const write = async (groups: SkillGroup[], options?: { expectedPathHash?: string }) => {
     const parsed = SkillGroupFileSchema.parse({
       formatVersion: 1,
       groups: [...groups].sort((left, right) =>
         left.name.localeCompare(right.name) || left.id.localeCompare(right.id)
       )
     });
-    await writeAtomic(path, `${JSON.stringify(parsed, null, 2)}\n`);
+    await writeAtomic(path, `${JSON.stringify(parsed, null, 2)}\n`, options ? { expectedTargetHash: options.expectedPathHash } : {});
   };
 
   const validateMembers = async (skillIds: string[]) => {
@@ -109,7 +109,7 @@ export const createSkillGroupStore = (
     await write(groups.filter((group) => group.id !== id));
   });
 
-  const replace = (groups: SkillGroup[]) => serialize(() => write(groups));
+  const replace: SkillGroupStore["replace"] = (groups, options) => serialize(() => write(groups, options));
 
   return { list, create, update, remove, replace };
 };

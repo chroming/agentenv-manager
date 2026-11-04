@@ -51,7 +51,7 @@ interface SkillCleanupBackupStoreOptions {
 
 class UnsupportedLegacyCleanupBackupError extends Error {}
 
-type CleanupPathClaimer = ((...sourcePaths: string[]) => Promise<void>) & {
+export type CleanupPathClaimer = ((...sourcePaths: string[]) => Promise<void>) & {
   readonly claimedPaths: ReadonlySet<string>;
   readonly mutationHashes: ReadonlyMap<string, string | undefined>;
   recordMutation(...sourcePaths: string[]): Promise<void>;
@@ -184,7 +184,7 @@ export const createSkillCleanupBackupStore = ({
       .filter((path, index, roots) => roots.indexOf(path) === index);
   };
 
-  const readCleanupBackup = async (backupId: string) => {
+  const readCleanupBackup = async (backupId: string, verifyPayload = true) => {
     const safeId = SafeIdSchema.parse(backupId);
     const backupDir = join(cleanupBackupRoot(), safeId);
     const backupStats = await lstat(backupDir);
@@ -219,10 +219,14 @@ export const createSkillCleanupBackupStore = ({
 
     const allowedRoots = await trustedSkillRoots();
     const allowedExactPaths = new Set([
-      canonicalPathKey(paths.sharedSkillAreaStatePath)
+      canonicalPathKey(paths.sharedSkillAreaStatePath),
+      ...(manifest.operation === "remove" ? [canonicalPathKey(paths.skillGroupsPath)] : [])
     ]);
     const sourcePathAllowed = (sourcePath: string) =>
       allowedExactPaths.has(canonicalPathKey(sourcePath)) ||
+      (manifest.operation === "remove" && basename(sourcePath) === "resources.json" &&
+        SafeIdSchema.safeParse(basename(dirname(sourcePath))).success &&
+        pathsEqual(dirname(dirname(sourcePath)), paths.profilesDir)) ||
       allowedRoots.some(
         (root) => pathsEqual(dirname(sourcePath), root) && isPathInside(root, sourcePath)
       );
@@ -323,7 +327,7 @@ export const createSkillCleanupBackupStore = ({
       ) {
         throw new Error(`Skill cleanup backup contains an unsafe path: ${safeId}`);
       }
-      if (await hashPathEntry(backupPath) !== entry.sha256) {
+      if (verifyPayload && await hashPathEntry(backupPath) !== entry.sha256) {
         throw new Error(`Skill cleanup backup failed its integrity check: ${safeId}`);
       }
       seenBackupPaths.add(backupPathKey);
@@ -344,7 +348,7 @@ export const createSkillCleanupBackupStore = ({
       }
       if (
         typeof manifest.libraryBackupHash !== "string" ||
-        await hashPathEntry(expected) !== manifest.libraryBackupHash ||
+        (verifyPayload && await hashPathEntry(expected) !== manifest.libraryBackupHash) ||
         expectedTarget?.sha256 !== manifest.libraryBackupHash
       ) {
         throw new Error(`Skill cleanup Library backup failed its integrity check: ${safeId}`);
@@ -353,10 +357,10 @@ export const createSkillCleanupBackupStore = ({
     return { backupDir, manifest };
   };
 
-  const listCleanupBackups = async (): Promise<SkillCleanupBackupSummary[]> => {
-    let entries: Dirent[];
+  const listCleanupBackups = async (id?: string, verifyPayload = true): Promise<SkillCleanupBackupSummary[]> => {
+    let entries: Pick<Dirent, "name" | "isDirectory">[];
     try {
-      entries = await readdir(cleanupBackupRoot(), { withFileTypes: true });
+      entries = id ? [{ name: SafeIdSchema.parse(id), isDirectory: () => true }] : await readdir(cleanupBackupRoot(), { withFileTypes: true });
     } catch (error) {
       if (error && typeof error === "object" && "code" in error && error.code === "ENOENT") {
         return [];
@@ -367,7 +371,7 @@ export const createSkillCleanupBackupStore = ({
       entries.filter((entry) => entry.isDirectory()).map(async (entry): Promise<SkillCleanupBackupSummary | undefined> => {
         if (!SafeIdSchema.safeParse(entry.name).success) return undefined;
         try {
-          const { manifest } = await readCleanupBackup(entry.name);
+          const { manifest } = await readCleanupBackup(entry.name, verifyPayload);
           const recoveryRequired =
             manifest.status === "prepared" ||
             manifest.status === "rollback-prepared" ||
@@ -667,6 +671,7 @@ export const createSkillCleanupBackupStore = ({
     setCleanupStatus,
     readCleanupBackup,
     listCleanupBackups,
+    listCleanupBackupMetadata: (id?: string) => listCleanupBackups(id, false),
     previewCleanupBackup,
     listPendingCleanupRecoveries,
     recoverInterruptedCleanupBackups,

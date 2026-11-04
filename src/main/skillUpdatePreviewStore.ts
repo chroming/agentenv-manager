@@ -1,5 +1,5 @@
 import { rm } from "node:fs/promises";
-import type { SkillUpdateInfo } from "../shared/types";
+import type { SkillUpdateInfo, SkillUpdateImpact } from "../shared/types";
 import type { SkillMetadataFile } from "./skillLibraryMetadata";
 
 export interface PendingSkillUpdate {
@@ -12,6 +12,7 @@ export interface PendingSkillUpdate {
   expectedMetadataHash: string;
   createdAt: number;
   nextMetadata: SkillMetadataFile;
+  impactRead?: Promise<SkillUpdateImpact>;
 }
 
 interface SkillUpdatePreviewStoreOptions {

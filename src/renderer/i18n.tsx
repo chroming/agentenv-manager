@@ -6033,3 +6033,27 @@ Object.assign(zhTW, {
   "Git registration is unavailable; the folder can still be cleaned up.": "Git 登記無法使用，仍可清理此目錄。",
   "Copy Trash location": "複製資源回收筒存放路徑"
 });
+Object.assign(zhCN, {
+  "Checking usage. Live links update immediately.": "正在检查使用情况。实时链接会立即生效。",
+  "Some usage information is unavailable. Live links update immediately.": "部分使用情况暂时不可用。实时链接会立即生效。",
+  "Only verified, unchanged Agent copies will be updated.": "只更新已验证且未被外部修改的 Agent 副本。",
+  "Remove {{name}}, its Profile and group references, and managed Agent installs. Unmanaged copies are kept. A recovery copy is saved.": "移除 {{name}}、Profile 和分组中的引用，以及受管 Agent 安装。保留未受管副本，并保存恢复副本。",
+  "Preparing preview…": "正在准备预览…",
+  "Managed Agent installs": "受管 Agent 安装",
+  "Deleted {{count}} backups": "已删除 {{count}} 个备份",
+  "Removing shared copies affects every Agent that reads this folder, including Agents not listed here.": "移除共享副本会影响读取此目录的所有 Agent，包括未在这里列出的 Agent。",
+  "Review again": "重新预览",
+  "Some additional history files could not be checked. Only the listed files will be deleted.": "部分附属历史文件暂时无法检查。只删除列表中列出的文件。"
+});
+Object.assign(zhTW, {
+  "Checking usage. Live links update immediately.": "正在檢查使用情況。即時連結會立即生效。",
+  "Some usage information is unavailable. Live links update immediately.": "部分使用情況暫時無法取得。即時連結會立即生效。",
+  "Only verified, unchanged Agent copies will be updated.": "僅更新已驗證且未被外部修改的 Agent 副本。",
+  "Remove {{name}}, its Profile and group references, and managed Agent installs. Unmanaged copies are kept. A recovery copy is saved.": "移除 {{name}}、Profile 和群組中的引用，以及受管 Agent 安裝。保留未受管副本，並儲存復原副本。",
+  "Preparing preview…": "正在準備預覽…",
+  "Managed Agent installs": "受管 Agent 安裝",
+  "Deleted {{count}} backups": "已刪除 {{count}} 個備份",
+  "Removing shared copies affects every Agent that reads this folder, including Agents not listed here.": "移除共用副本會影響讀取此目錄的所有 Agent，包括未在這裡列出的 Agent。",
+  "Review again": "重新預覽",
+  "Some additional history files could not be checked. Only the listed files will be deleted.": "部分附屬歷史檔案暫時無法檢查。僅刪除清單中列出的檔案。"
+});
