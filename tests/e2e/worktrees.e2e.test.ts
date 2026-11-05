@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { createServer, type Server } from "node:http";
 import { chmod, copyFile, lstat, mkdir, mkdtemp, readFile, realpath, rm, symlink, utimes, writeFile } from "node:fs/promises";
-import { delimiter, dirname, join } from "node:path";
+import { delimiter, dirname, join, relative } from "node:path";
 import { tmpdir } from "node:os";
 import { promisify } from "node:util";
 import electronPath from "electron";
@@ -33,7 +33,7 @@ afterEach(async () => {
 }, 30_000);
 
 describe("Worktrees desktop workflow", () => {
-  it("purges physical Electron archives from Trash and backups without ASAR virtual-directory retries", async () => {
+  it.each(["runtime", "packaged", "partial-retry"] as const)("purges physical Electron archives from %s Trash and backups without ASAR virtual-directory retries", async (fixture) => {
     root = await realpath(await mkdtemp(join(tmpdir(), "aem-trash-asar-ui-")));
     const home = join(root, "home"), data = join(root, "data"), repo = join(home, "repo"), tree = join(root, "trees", "archive-task");
     await mkdir(home); await mkdir(data);
@@ -46,8 +46,15 @@ describe("Worktrees desktop workflow", () => {
     const resources = process.platform === "darwin" ? join(dirname(electronPath as unknown as string), "..", "Resources") : join(dirname(electronPath as unknown as string), "resources");
     const archive = join(resources, "default_app.asar");
     const originalArchive = await readFile(archive);
-    const bundle = join(tree, "node_modules", "electron", "dist", "Electron.app", "Contents", "Resources");
-    await mkdir(bundle, { recursive: true }); await copyFile(archive, join(bundle, "default_app.asar"));
+    const bundle = fixture === "runtime"
+      ? join(tree, "node_modules", "electron", "dist", "Electron.app", "Contents", "Resources")
+      : join(tree, "apps", "example-app", "release", "mac-arm64", "Example \u5de5\u5177\uff08\u6d4b\u8bd5\uff09.app", "Contents", "Resources");
+    await mkdir(bundle, { recursive: true });
+    await copyFile(archive, join(bundle, fixture === "runtime" ? "default_app.asar" : "app.asar"));
+    if (fixture !== "runtime") {
+      await mkdir(join(bundle, "app.asar.unpacked", "native"), { recursive: true });
+      await writeFile(join(bundle, "app.asar.unpacked", "native", "fixture.node"), "Synthetic unpacked content\n");
+    }
     const outside = join(root, "outside"); await mkdir(outside); await writeFile(join(outside, "keep.txt"), "Do not follow this link\n");
     if (process.platform !== "win32") await symlink(outside, join(tree, "outside-link"), "dir");
     await writeFile(join(data, "agentenv-data.json"), '{"formatVersion":2}');
@@ -55,11 +62,12 @@ describe("Worktrees desktop workflow", () => {
       agentDiscoveryReviewedIds: ["opencode", "codex", "claude-code", "antigravity", "antigravity-app", "trae-cli", "pi", "workbuddy"],
       telemetryEnabled: false, telemetryConsentVersion: 1, skillAutoCheckEnabled: false, backupRetentionDays: null }));
     const backup = await createBackupStore(createPaths({ appDataRoot: data, homeDir: home })).createBackup([bundle]);
-    app = await electron.launch({ executablePath: electronPath as unknown as string,
+    const launchOptions = { executablePath: electronPath as unknown as string,
       args: ["--disable-gpu", `--user-data-dir=${join(root, "electron")}`, join(process.cwd(), "out", "main", "main.js")],
       env: { ...process.env, AGENTENV_AUTOMATION: "1", AGENTENV_DATA_ROOT: data, AGENTENV_HOME: home,
-        AGENTENV_FAKE_HOME: join(root, "fake"), AGENTENV_LOG_ROOT: join(root, "logs"), AGENTENV_CACHE_ROOT: join(root, "cache") } });
-    const page = await app.firstWindow();
+        AGENTENV_FAKE_HOME: join(root, "fake"), AGENTENV_LOG_ROOT: join(root, "logs"), AGENTENV_CACHE_ROOT: join(root, "cache") } };
+    app = await electron.launch(launchOptions);
+    let page = await app.firstWindow();
     await expect.poll(() => page.evaluate(() => window.agentEnv.readStartupStatus())).toEqual({ state: "ready" });
     const moved = await page.evaluate(async ({ repo, commonDir, tree }) => {
       await window.agentEnv.addWorktreeScanRoot(repo);
@@ -67,12 +75,27 @@ describe("Worktrees desktop workflow", () => {
       return window.agentEnv.removeWorktree(await window.agentEnv.previewWorktreeCleanup(commonDir, tree, true, "trash"));
     }, { repo, commonDir, tree });
     await mkdir(tree); await writeFile(join(tree, "new.txt"), "A new original folder must survive\n");
+    if (fixture === "partial-retry") {
+      await app.close(); app = undefined;
+      const journalPath = join(data, "worktree-trash", `${moved.id}.json`);
+      const journal = JSON.parse(await readFile(journalPath, "utf8"));
+      await rm(join(journal.storage, relative(tree, bundle), "app.asar.unpacked"), { recursive: true });
+      await writeFile(journalPath, JSON.stringify({ ...journal, phase: "deleting", mode: "permanent" }));
+      app = await electron.launch(launchOptions); page = await app.firstWindow();
+      await expect.poll(() => page.evaluate(() => window.agentEnv.readStartupStatus())).toEqual({ state: "ready" });
+      expect((await page.evaluate(() => window.agentEnv.listWorktreeRecovery("trash"))).records)
+        .toEqual([expect.objectContaining({ id: moved.id, disposalIncomplete: true })]);
+    }
     const preview = await page.evaluate((id) => window.agentEnv.previewWorktreeTrashDeletion(id), moved.id);
     let timeout: ReturnType<typeof setTimeout> | undefined;
     try {
       const removed = await Promise.race([page.evaluate((preview) => window.agentEnv.removeWorktree(preview), preview),
         new Promise<never>((_, reject) => { timeout = setTimeout(() => reject(new Error("Physical archive purge stalled in Electron")), 3000); })]);
       expect(removed).toMatchObject({ mode: "permanent", status: "removed" });
+      if (fixture === "partial-retry") {
+        expect(removed.sourceSizeBytes).toBeUndefined();
+        expect(removed.reclaimedSizeBytes).toBeUndefined();
+      }
     } finally { clearTimeout(timeout); }
     expect(await readFile(join(tree, "new.txt"), "utf8")).toBe("A new original folder must survive\n");
     expect(await readFile(join(outside, "keep.txt"), "utf8")).toBe("Do not follow this link\n");
