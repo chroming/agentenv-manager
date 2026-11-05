@@ -1,5 +1,5 @@
 import {
-  AlertTriangle, ArrowLeft, Check, CircleStop, Copy, FolderGit2, GitBranch,
+  AlertTriangle, ArrowLeft, Check, CircleStop, Clock3, Copy, FolderGit2, GitBranch,
   FolderSearch, History, LoaderCircle, LockKeyhole, Maximize2, Minimize2, Plus,
   RotateCcw, Trash2, X, Eye, EyeOff, Info
 } from "lucide-react";
@@ -7,7 +7,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import type {
   WorktreeEntry, WorktreeInventory, WorktreeRecoveryRecord, WorktreeOperationProgress, WorktreeDisposalMode
 } from "../../shared/worktrees";
-import { canEmptyWorktreeTrashRecord, canSelectWorktreeForCleanup, isAutomaticCleanupCandidate } from "../../shared/worktrees";
+import { canEmptyWorktreeTrashRecord, canSelectWorktreeForCleanup, isAutomaticCleanupCandidate, WORKTREE_REMOVAL_TIMEOUT_MS } from "../../shared/worktrees";
 import type { UiState, UiStateUpdate, WorktreeSort } from "../../shared/uiState";
 import { sortWorktreeGroups, worktreeGroupMetric, worktreeName } from "../worktreeSort";
 import { formatBytes } from "../formatBytes";
@@ -30,7 +30,7 @@ import { WorktreeCleanupReview } from "./WorktreeCleanupReview";
 const nameFromPath = worktreeName;
 const totalBytes = (values: Array<number | undefined>) =>
   values.some((value) => value === undefined) ? undefined : values.reduce<number>((sum, value) => sum + value!, 0);
-type CleanupResult = { path: string; sourcePath?: string; id?: string; cancelled?: boolean; pendingGitCleanup?: boolean; mode?: WorktreeDisposalMode; error?: string; skipped?: "stopped" | "repository"; verificationWarnings?: string[]; sizeBytes?: number; reclaimedSizeBytes?: number; recoveryNote?: string };
+type CleanupResult = { path: string; sourcePath?: string; id?: string; cancelled?: boolean; timedOut?: boolean; pendingGitCleanup?: boolean; mode?: WorktreeDisposalMode; error?: string; skipped?: "stopped" | "repository"; verificationWarnings?: string[]; sizeBytes?: number; reclaimedSizeBytes?: number; recoveryNote?: string };
 
 interface WorktreeSortPreference {
   uiState?: Pick<UiState, "worktreeSort" | "worktreeCollapsedRepositories">;
@@ -324,7 +324,7 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
         operationId.current = crypto.randomUUID();
         setOperationProgress(undefined);
         const record = await window.agentEnv.removeWorktree(preview, operationId.current);
-        completed.push({ path: record.mode ? record.path : preview.entry.path, sourcePath: preview.entry.path, id: record.id, cancelled: record.cancelled, pendingGitCleanup: record.pendingGitCleanup, mode: record.mode, sizeBytes: record.sourceSizeBytes, reclaimedSizeBytes: record.reclaimedSizeBytes,
+        completed.push({ path: record.mode ? record.path : preview.entry.path, sourcePath: preview.entry.path, id: record.id, cancelled: record.cancelled, timedOut: record.timedOut, pendingGitCleanup: record.pendingGitCleanup, mode: record.mode, sizeBytes: record.sourceSizeBytes, reclaimedSizeBytes: record.reclaimedSizeBytes,
           verificationWarnings: record.verificationWarnings, recoveryNote: worktreeRecoveryNote(record) });
         if (record.cancelled) stopCleanup.current = true;
         if (!preview.mode && record.verificationWarnings?.length) stoppedRepositories.add(preview.entry.commonDir);
@@ -388,13 +388,15 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
   const sizeLabel = (bytes: number | undefined) => bytes === undefined ? t("Unavailable") : formatBytes(bytes);
   const modifiedMetric = (entry: WorktreeEntry) => <CatalogSortMetric dateOnly kind="date" label={t("Last modified")} value={entry.modifiedAt}
     detail={t("Latest file modification time, excluding .git. Includes ignored files; not the last commit time.")} />;
-  const successful = results.filter((result) => result.error === undefined && !result.skipped && !result.cancelled);
-  const interrupted = results.some((result) => result.cancelled);
+  const successful = results.filter((result) => result.error === undefined && !result.skipped && !result.cancelled && !result.timedOut);
+  const interrupted = results.some((result) => result.cancelled || result.timedOut);
+  const timedOut = results.some((result) => result.timedOut);
+  const cancelled = results.some((result) => result.cancelled);
   const activePreview = previews[results.length];
   const activePath = reviewItems.find((item) => item.preview?.previewId === activePreview?.previewId)?.entry.path
     ?? activePreview?.entry.path ?? operationProgress?.path ?? "";
   const elapsedSeconds = Math.floor((operationProgress?.elapsedMs ?? 0) / 1000);
-  const elapsedLabel = elapsedSeconds > 0 ? `${Math.floor(elapsedSeconds / 60)}:${String(elapsedSeconds % 60).padStart(2, "0")}` : "";
+  const elapsedLabel = elapsedSeconds > 0 ? `${Math.floor(elapsedSeconds / 60)}:${String(elapsedSeconds % 60).padStart(2, "0")}${disposalMode === "permanent" ? ` / ${WORKTREE_REMOVAL_TIMEOUT_MS / 60_000}:00` : ""}` : "";
   const removalCount = previews.length || reviewItems.length;
   const removalLabel = disposalMode === "permanent" ? t("Permanently delete {{count}}", { count: removalCount }) : t("Move {{count}} to Trash", { count: removalCount });
   const fileProgress = operationProgress?.fileProgress;
@@ -569,7 +571,8 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
           <WorktreeCleanupReview items={reviewItems} mode={disposalMode} busy={Boolean(busy)} onRetry={(item) => item.trashId ? void prepareTrash([{ id: item.trashId, path: item.entry.path }], true) : void prepare([item.entry], "retry")} />
         </> : null}
         {view === "results" ? <>
-          {interrupted ? <Notice tone="info">{t("Deletion stopped. Deleted files cannot be restored; remaining contents stay in Worktree Trash.")}</Notice> : null}
+          {cancelled ? <Notice tone="info">{t("Deletion stopped. Deleted files cannot be restored; remaining contents stay in Worktree Trash.")}</Notice> : null}
+          {timedOut ? <Notice tone="warning" icon={<Clock3 size={15} />}>{t("Some Worktrees timed out. Their remaining contents stay in Trash and can be retried.")}</Notice> : null}
           {busy !== "remove" || successful.length > 0 ? <DetailList items={[
             { label: t("Removed size"), value: sizeLabel(interrupted ? undefined : totalBytes(successful.map((result) => result.sizeBytes))) },
             { label: t("Estimated space freed"), value: sizeLabel(interrupted ? undefined : totalBytes(successful.map((result) => result.reclaimedSizeBytes))) },
@@ -579,11 +582,11 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
             label={stopping && disposalMode === "permanent" ? t("Stopping...") : operationProgress?.phase === "backing-up" ? t("Backing up local files...") : operationProgress?.phase === "verifying" ? t("Verifying removal...") : operationProgress?.phase === "removing" ? disposalMode === "trash" ? t("Moving Worktrees to Trash...") : t("Deleting Worktrees...") : t("Checking selected Worktree...")}
             detail={[`${results.length}/${previews.length} · ${nameFromPath(activePath)}`, elapsedLabel, fileProgressDetail].filter(Boolean).join(" · ")} /> : null}
           <AlignedResourceList actionTrack="compact" className="worktree-dialog__entries worktree-dialog__results">
-            {results.map((result) => <ResourceRow key={result.id ?? result.path} density="compact" appearance="plain" icon={result.cancelled ? <CircleStop size={16} /> : result.error !== undefined || result.skipped || result.verificationWarnings?.length ? <AlertTriangle size={16} /> : <Check size={16} />}
+            {results.map((result) => <ResourceRow key={result.id ?? result.path} density="compact" appearance="plain" icon={result.timedOut ? <Clock3 size={16} /> : result.cancelled ? <CircleStop size={16} /> : result.error !== undefined || result.skipped || result.verificationWarnings?.length ? <AlertTriangle size={16} /> : <Check size={16} />}
               title={nameFromPath(result.path)} description={<span className="selectable">{result.path}</span>}
               metadata={<CatalogSortMetric kind="size" label={t("Size")} value={result.sizeBytes} />}
-              state={<InteractiveStatus size="metadata" statusKind={result.error !== undefined ? "error" : result.skipped || result.cancelled ? "neutral" : result.verificationWarnings?.length ? "warning" : "success"}
-                label={result.cancelled ? t("Stopped") : result.skipped ? t("Not run") : result.error !== undefined ? t("Failed") : result.mode === "trash" ? t("Moved to Trash") : result.mode === "permanent" ? t("Deleted") : result.pendingGitCleanup ? t("Registration cleanup pending") : result.verificationWarnings?.length ? t("Removed; needs review") : t("Removed")} />}
+              state={<InteractiveStatus size="metadata" statusKind={result.error !== undefined ? "error" : result.timedOut ? "warning" : result.skipped || result.cancelled ? "neutral" : result.verificationWarnings?.length ? "warning" : "success"}
+                label={result.cancelled ? t("Stopped") : result.timedOut ? t("Timed out") : result.skipped ? t("Not run") : result.error !== undefined ? t("Failed") : result.mode === "trash" ? t("Moved to Trash") : result.mode === "permanent" ? t("Deleted") : result.pendingGitCleanup ? t("Registration cleanup pending") : result.verificationWarnings?.length ? t("Removed; needs review") : t("Removed")} />}
               actions={result.pendingGitCleanup && result.id ? <IconButton label={t("Retry cleanup")} disabled={Boolean(busy)} onClick={() => void prepareTrash([{ id: result.id!, path: result.path }])}><RotateCcw size={15} /></IconButton> : undefined} />)}
           </AlignedResourceList>
           {successful.some((result) => result.mode === "trash") ? <p>{t("Items in Trash still use disk space until permanently deleted.")}</p> : null}
@@ -634,7 +637,7 @@ export const WorktreeDialog = ({ open, onClose, presentation = "dialog", uiState
         </> : <>
           {view === "recovery" && trashItems.length > 0 ? <Button variant="danger" icon={<Trash2 size={15} />} disabled={Boolean(busy)} onClick={() => void prepareTrash(trashItems)}>{t("Empty Trash...")}</Button> : null}
           {view === "results" && !busy && results.length ? <Button icon={<Trash2 size={15} />} onClick={() => void showRecovery("trash")}>{t("View Trash")}</Button> : null}
-          <Button variant={view === "results" && !busy && results.length > 0 && results.every((result) => result.error === undefined && !result.skipped && !result.cancelled && !result.verificationWarnings?.length) ? "primary" : "secondary"} disabled={Boolean(busy)} onClick={dismiss}>{t("Close")}</Button>
+          <Button variant={view === "results" && !busy && results.length > 0 && results.every((result) => result.error === undefined && !result.skipped && !result.cancelled && !result.timedOut && !result.verificationWarnings?.length) ? "primary" : "secondary"} disabled={Boolean(busy)} onClick={dismiss}>{t("Close")}</Button>
         </>}
       </DialogFooter>;
   const modal = (

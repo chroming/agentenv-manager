@@ -58,10 +58,35 @@ it("rejects changed directory identities before deleting contents", async () => 
   expect(await readFile(join(request.path, "first.txt"), "utf8")).toBe("first");
 });
 
+it("times out an unresponsive cleanup, waits for forced exit and retains its remainder", async () => {
+  const request = await fixture(), hook = join(root, "timeout-removal.cjs");
+  await writeFile(hook, `const fs = require("node:fs/promises");
+process.on("SIGTERM", () => {});
+fs.rm = async (path) => { await fs.unlink(require("node:path").join(path, "first.txt")); await new Promise(() => {}); };\n`);
+  const original = cp.fork;
+  vi.spyOn(cp, "fork").mockImplementation((modulePath, args, options) => {
+    const child = original(modulePath, args as string[], { ...options, execArgv: ["--require", hook] }); children.push(child); return child;
+  });
+  const controller = new AbortController();
+  const outcome = removeWorktreeContents(request, controller.signal, { timeoutMs: 500 }).catch((error: Error) => error);
+  try {
+    await vi.waitFor(() => expect(children[0].exitCode !== null || children[0].signalCode !== null).toBe(true), { timeout: 2000 });
+    expect(await outcome).toMatchObject({ name: "WorktreeRemovalTimeoutError" });
+    expect(await readFile(join(request.path, "remaining.txt"), "utf8")).toBe("remaining");
+  } finally { controller.abort(); await outcome; }
+});
+
 it("does not launch a cleanup process for an already cancelled request", async () => {
   const request = await fixture(), controller = new AbortController(); controller.abort();
   const fork = vi.spyOn(cp, "fork");
   await expect(removeWorktreeContents(request, controller.signal)).rejects.toBeInstanceOf(WorktreeRemovalCancelledError);
+  expect(fork).not.toHaveBeenCalled();
+  expect(await readFile(join(request.path, "first.txt"), "utf8")).toBe("first");
+});
+
+it("does not launch a cleanup process after the shared budget is exhausted", async () => {
+  const request = await fixture(), fork = vi.spyOn(cp, "fork");
+  await expect(removeWorktreeContents(request, undefined, { timeoutMs: 0 })).rejects.toMatchObject({ name: "WorktreeRemovalTimeoutError" });
   expect(fork).not.toHaveBeenCalled();
   expect(await readFile(join(request.path, "first.txt"), "utf8")).toBe("first");
 });

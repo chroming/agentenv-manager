@@ -9,6 +9,7 @@ import { _electron as electron, type ElectronApplication } from "playwright-core
 import { afterEach, describe, expect, it } from "vitest";
 import { requireCurrentElectronBuild } from "./currentBuild";
 import { translate } from "../../src/renderer/i18n";
+import { parseDiagnosticErrorMessage } from "../../src/renderer/diagnostics";
 import { expectCatalogToolbar } from "./catalogToolbarAssertions";
 import { createBackupStore } from "../../src/main/backupStore";
 import { createPaths } from "../../src/main/paths";
@@ -33,7 +34,7 @@ afterEach(async () => {
 }, 30_000);
 
 describe("Worktrees desktop workflow", () => {
-  it("stops a paused tenth deletion in a fourteen-item queue and retries only its retained remainder", async () => {
+  it.each(["manual", "timeout"] as const)("handles %s for a paused tenth deletion in a fourteen-item queue and retries only its retained remainder", async (mode) => {
     root = await realpath(await mkdtemp(join(tmpdir(), "aem-stop-worktree-ui-")));
     const home = join(root, "home"), data = join(root, "data"), repo = join(home, "repo"), trees = join(root, "trees");
     await mkdir(home); await mkdir(data);
@@ -70,10 +71,18 @@ process.parentPort.on("message", async ({ data }) => {
     const page = await app.firstWindow();
     await expect.poll(() => page.evaluate(() => window.agentEnv.readStartupStatus())).toEqual({ state: "ready" });
     await page.evaluate(async (repo) => { await window.agentEnv.addWorktreeScanRoot(repo); await window.agentEnv.inventoryWorktrees(); }, repo);
-    await app.evaluate((_electron, hook) => {
+    await app.evaluate((_electron, { hook, mode }) => {
       const utility = process.getBuiltinModule("module").createRequire(process.execPath)("electron").utilityProcess;
       const original = utility.fork.bind(utility);
       let started = 0;
+      let accelerated = false;
+      const originalTimeout = globalThis.setTimeout;
+      globalThis.setTimeout = ((...args: Parameters<typeof setTimeout>) => {
+        if (mode === "timeout" && started === 10 && !accelerated && typeof args[1] === "number" && args[1] > 100_000 && args[1] <= 120_000) {
+          args[1] = 2500; accelerated = true;
+        }
+        return originalTimeout(...args);
+      }) as typeof setTimeout;
       utility.fork = (path: string, args: string[], options: Electron.ForkOptions) => {
         if (options?.serviceName === "AgentEnv Worktree cleanup") {
           ++started;
@@ -82,7 +91,7 @@ process.parentPort.on("message", async ({ data }) => {
         }
         return original(path, args, options);
       };
-    }, hook);
+    }, { hook, mode });
     await page.setViewportSize({ width: 920, height: 620 });
     await page.getByRole("button", { name: "Worktrees", exact: true }).click();
     const workspace = page.locator(".worktree-workspace");
@@ -93,10 +102,10 @@ process.parentPort.on("message", async ({ data }) => {
     await page.getByRole("dialog", { name: "Permanently delete Worktrees?", exact: true })
       .getByRole("button", { name: "Permanently delete 14", exact: true }).click();
     const results = page.getByRole("dialog", { name: "Cleanup results", exact: true });
-    await expect.poll(() => results.textContent()).toContain("9/14 · task-10");
-    await expect.poll(async () => ({ text: await results.textContent() })).toMatchObject({ text: expect.stringMatching(/9\/14 · task-10 · 0:0[1-9]/) });
+    await expect.poll(() => results.textContent(), { timeout: 10_000 }).toContain("9/14 · task-10");
+    await expect.poll(async () => ({ text: await results.textContent() }), { timeout: 5000 }).toMatchObject({ text: expect.stringMatching(/9\/14 · task-10 · 0:0[1-9]/) });
     const stop = results.getByRole("button", { name: "Stop", exact: true });
-    for (const viewport of [{ width: 920, height: 620 }, { width: 1180, height: 728 }, { width: 1440, height: 900 }]) {
+    if (mode === "manual") for (const viewport of [{ width: 920, height: 620 }, { width: 1180, height: 728 }, { width: 1440, height: 900 }]) {
       await page.setViewportSize(viewport);
       expect(await stop.isVisible()).toBe(true);
       expect(await results.evaluate((element) => {
@@ -108,18 +117,26 @@ process.parentPort.on("message", async ({ data }) => {
         await page.screenshot({ path: join(process.env.AGENTENV_CAPTURE_WORKTREES_DIR, `worktree-stoppable-${packaged ? "packaged" : "source"}-${viewport.width}.png`) });
       }
     }
-    await stop.click();
-    await results.getByText("Stopped", { exact: true }).waitFor({ timeout: 5000 });
-    expect(await results.getByText("Deleted", { exact: true }).count()).toBe(9);
-    expect(await results.getByText("Not run", { exact: true }).count()).toBe(4);
+    if (mode === "manual") await stop.click();
+    await results.getByText(mode === "manual" ? "Stopped" : "Timed out", { exact: true }).waitFor({ timeout: 10_000 });
+    await expect.poll(() => results.getByText("Deleted", { exact: true }).count()).toBe(mode === "manual" ? 9 : 13);
+    expect(await results.getByText("Not run", { exact: true }).count()).toBe(mode === "manual" ? 4 : 0);
     expect(await results.getByRole("button", { name: "Close", exact: true }).last().isEnabled()).toBe(true);
+    if (mode === "timeout") {
+      expect(await results.getByRole("button", { name: "Copy details", exact: true }).count()).toBe(1);
+      const message = await results.locator(".ui-diagnostic-message .selectable").first().textContent() ?? "";
+      const { reference } = parseDiagnosticErrorMessage(message);
+      expect(reference).toBeDefined();
+      const issue = await page.evaluate((reference) => window.agentEnv.readDiagnosticIssue(reference!), reference);
+      expect(issue?.events.some((event) => event.phase === "cleanup-timed-out" && event.outcome === "partial")).toBe(true);
+    }
     if (process.env.AGENTENV_CAPTURE_WORKTREES_DIR) for (const width of [920, 1180, 1440]) {
       await page.setViewportSize({ width, height: width === 920 ? 620 : width === 1180 ? 728 : 900 });
-      expect(await results.getByText("Deletion stopped. Deleted files cannot be restored; remaining contents stay in Worktree Trash.", { exact: true }).evaluate((element) => {
+      expect(await results.getByText(mode === "manual" ? "Deletion stopped. Deleted files cannot be restored; remaining contents stay in Worktree Trash." : "Some Worktrees timed out. Their remaining contents stay in Trash and can be retried.", { exact: true }).evaluate((element) => {
         const bounds = element.getBoundingClientRect();
         return bounds.top >= 0 && bounds.bottom <= innerHeight;
       })).toBe(true);
-      await page.screenshot({ path: join(process.env.AGENTENV_CAPTURE_WORKTREES_DIR, `worktree-stopped-${packaged ? "packaged" : "source"}-${width}.png`) });
+      await page.screenshot({ path: join(process.env.AGENTENV_CAPTURE_WORKTREES_DIR, `worktree-${mode === "manual" ? "stopped" : "timed-out"}-${packaged ? "packaged" : "source"}-${width}.png`) });
     }
     await expect.poll(() => app!.evaluate(({ app }) => app.getAppMetrics().filter((item) => item.name === "AgentEnv Worktree cleanup").length)).toBe(0);
     const records = await page.evaluate(() => window.agentEnv.listWorktreeRecovery("trash"));
@@ -127,8 +144,8 @@ process.parentPort.on("message", async ({ data }) => {
     const retained = records.records[0].retainedPath!;
     await expect(lstat(join(retained, "partial.txt"))).rejects.toMatchObject({ code: "ENOENT" });
     expect(await readFile(join(retained, "keep.txt"), "utf8")).toBe("Preserve after stopping\n");
-    expect((await readdir(trees)).sort()).toEqual(["task-11", "task-12", "task-13", "task-14"]);
-    for (let i = 11; i <= 14; i++) expect(await readFile(join(trees, `task-${i}`, "partial.txt"), "utf8")).toBe("A synthetic first deletion\n");
+    expect((await readdir(trees)).sort()).toEqual(mode === "manual" ? ["task-11", "task-12", "task-13", "task-14"] : []);
+    if (mode === "manual") for (let i = 11; i <= 14; i++) expect(await readFile(join(trees, `task-${i}`, "partial.txt"), "utf8")).toBe("A synthetic first deletion\n");
     expect(await readFile(join(repo, "README.md"), "utf8")).toBe("Preserve the main repository\n");
     const retry = await page.evaluate((id) => window.agentEnv.previewWorktreeTrashDeletion(id), records.records[0].id);
     await page.evaluate((preview) => window.agentEnv.removeWorktree(preview), retry);

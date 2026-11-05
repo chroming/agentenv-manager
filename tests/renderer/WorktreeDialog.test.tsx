@@ -76,6 +76,27 @@ afterEach(() => {
 });
 
 describe("WorktreeDialog", () => {
+  it("marks a timed-out item honestly and continues independent selected Worktrees", async () => {
+    const api = installApi();
+    api.previewWorktreeCleanup.mockImplementation(async (_common, path) => ({ ...preparedPreview(path === clean.path ? clean : dirty), mode: "permanent" }));
+    api.removeWorktree.mockResolvedValueOnce({ id: "partial", mode: "permanent", path: clean.path, timedOut: true, disposalIncomplete: true,
+      verificationWarnings: ["Cleanup time limit reached. Remaining contents stay in Worktree Trash; retry this item there.\nDiagnostic reference: AEM-20261105-ABCDEF"] });
+    api.removeWorktree.mockResolvedValueOnce({ id: "done", mode: "permanent", path: dirty.path, sourceSizeBytes: 1024, reclaimedSizeBytes: 1024 });
+    render(<WorktreeWorkspace />); await screen.findByText(clean.path);
+    selectWorktrees("Select all removable Worktrees");
+    fireEvent.click(screen.getByRole("button", { name: "Delete permanently..." }));
+    const confirm = await screen.findByRole("dialog", { name: "Permanently delete Worktrees?" });
+    await waitFor(() => expect(within(confirm).getByRole("button", { name: "Permanently delete 2" })).toBeEnabled());
+    fireEvent.click(within(confirm).getByRole("button", { name: "Permanently delete 2" }));
+    const results = await screen.findByRole("dialog", { name: "Cleanup results" });
+    await within(results).findByText("Timed out", { exact: true });
+    expect(api.removeWorktree).toHaveBeenCalledTimes(2);
+    expect(within(results).getAllByText("Deleted", { exact: true })).toHaveLength(1);
+    expect(within(results).queryByText("Not run", { exact: true })).not.toBeInTheDocument();
+    expect(within(results).queryByText("0 B", { exact: true })).not.toBeInTheDocument();
+    fireEvent.click(within(results).getByRole("button", { name: "Copy details" }));
+    await waitFor(() => expect(api.copyText).toHaveBeenCalledWith(expect.stringContaining("AEM-20261105-ABCDEF")));
+  });
   it("stops the current permanent deletion, keeps partial contents retryable and leaves the next item unstarted", async () => {
     const api = installApi();
     api.previewWorktreeCleanup.mockImplementation(async (_common, path) => ({ ...preparedPreview(path === clean.path ? clean : dirty), mode: "permanent" }));

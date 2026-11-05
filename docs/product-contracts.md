@@ -479,6 +479,18 @@ recovery journals remain mandatory; optional Worktree diagnostic flushing is bou
 both inside the operation and at the outer IPC result/failure boundary. Permanent
 removal retries are whole-slot attempts after identity revalidation; per-directory
 recursive retry amplification is disabled.
+Every permanent deletion has a two-minute monotonic execution budget, including
+helper startup and whole-slot retries; retries receive only the remaining budget.
+Exhausted budgets do not start another helper. The helper deadline remains armed
+until exit, triggers graceful termination followed by the existing 750ms force-stop
+fallback, and never reports completion before the owned process has exited.
+Timeout is a partial per-item result, not successful deletion or user cancellation.
+It retains retryable residual contents, reports unknown partial sizes honestly,
+provides a copyable diagnostic reference, and lets independent selected Worktrees
+continue. A timed-out item is not retried automatically. Manual Stop still ends the
+queue. A deadline is not permission to skip mandatory atomic journal writes or to
+claim an OS process has exited when it has not; the budget is a termination trigger,
+not a promise to bypass those safety acknowledgements at exactly 120 seconds.
 The list and each repository offer Select integrated, unchanged Worktrees within
 the current search/filter scope, including collapsed groups. The command requires
 the existing strict automatic-candidate predicate, including no ignored local

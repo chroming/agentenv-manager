@@ -76,6 +76,7 @@ const resultKeys = new Set([
   "changed",
   "ok",
   "cancelled",
+  "timedOut",
   "profile",
   "skill",
   "warnings",
@@ -430,7 +431,9 @@ export const createRuntimeDiagnostics = (options: {
           eventFor(action, "completed", {
             reference,
             outcome: result !== null && typeof result === "object" &&
-              "cancelled" in result && result.cancelled === true ? "cancelled" : "completed",
+              "cancelled" in result && result.cancelled === true ? "cancelled" :
+              action === "worktrees:remove" && result !== null && typeof result === "object" &&
+              "timedOut" in result && result.timedOut === true ? "partial" : "completed",
             durationMs,
             context: context || resultSummary
               ? {

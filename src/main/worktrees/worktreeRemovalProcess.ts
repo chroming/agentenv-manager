@@ -2,9 +2,16 @@ import { fork } from "node:child_process";
 import type { EventEmitter } from "node:events";
 import { createRequire } from "node:module";
 import { fileURLToPath } from "node:url";
+import { WORKTREE_REMOVAL_TIMEOUT_MS } from "../../shared/worktrees";
 
 export class WorktreeRemovalCancelledError extends Error {
   constructor() { super("Worktree deletion stopped; remaining contents stay in Trash"); this.name = "WorktreeRemovalCancelledError"; }
+}
+export class WorktreeRemovalTimeoutError extends Error {
+  constructor() {
+    super("Cleanup time limit reached. Remaining contents stay in Worktree Trash; retry this item there.");
+    this.name = "WorktreeRemovalTimeoutError";
+  }
 }
 
 interface RemovalRequest { path: string; device: string; inode: string }
@@ -29,21 +36,28 @@ const startProcess = (): RemovalProcess => {
     terminate: (force) => { child.kill(force ? "SIGKILL" : "SIGTERM"); } };
 };
 
-export const removeWorktreeContents = (request: RemovalRequest, signal: AbortSignal): Promise<void> => {
+export const removeWorktreeContents = (request: RemovalRequest, signal: AbortSignal = new AbortController().signal,
+  options: { timeoutMs?: number } = {}): Promise<void> => {
   if (signal.aborted) return Promise.reject(new WorktreeRemovalCancelledError());
+  const timeoutMs = Math.min(options.timeoutMs ?? WORKTREE_REMOVAL_TIMEOUT_MS, WORKTREE_REMOVAL_TIMEOUT_MS);
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) return Promise.reject(new WorktreeRemovalTimeoutError());
+  const deadlineAt = performance.now() + timeoutMs;
   return new Promise((resolve, reject) => {
     const child = startProcess();
     let result: { ok: boolean; error?: { message?: string; code?: string } } | undefined;
     let processError: Error | undefined;
     let killTimer: ReturnType<typeof setTimeout> | undefined;
+    let timedOut = false;
     const terminate = () => {
       try { child.terminate(); } catch { /* Exit is authoritative, not a kill request. */ }
       killTimer ??= setTimeout(() => { try { child.terminate(true); } catch { /* Wait for the owned process to exit. */ } }, 750);
-      killTimer.unref?.();
     };
+    const timeout = () => { timedOut = true; terminate(); };
+    const deadlineTimer = setTimeout(timeout, Math.max(0, deadlineAt - performance.now()));
     signal.addEventListener("abort", terminate, { once: true });
     child.events.once("spawn", () => {
       if (signal.aborted) terminate();
+      else if (timedOut || performance.now() >= deadlineAt) timeout();
       else { try { child.send(request); } catch (error) { processError = error as Error; terminate(); } }
     });
     child.events.once("message", (message) => {
@@ -52,9 +66,10 @@ export const removeWorktreeContents = (request: RemovalRequest, signal: AbortSig
     });
     child.events.once("error", (error) => { processError = error instanceof Error ? error : new Error("Worktree cleanup process failed"); terminate(); });
     child.events.once(child.exitEvent, () => {
-      clearTimeout(killTimer); signal.removeEventListener("abort", terminate);
+      clearTimeout(killTimer); clearTimeout(deadlineTimer); signal.removeEventListener("abort", terminate);
       if (result?.ok) resolve();
       else if (signal.aborted) reject(new WorktreeRemovalCancelledError());
+      else if (timedOut) reject(new WorktreeRemovalTimeoutError());
       else reject(processError ?? Object.assign(new Error(result?.error?.message ?? "Worktree cleanup process exited before completion"), { code: result?.error?.code }));
     });
   });

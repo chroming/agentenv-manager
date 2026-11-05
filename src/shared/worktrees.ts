@@ -68,6 +68,7 @@ export interface WorktreeInventory {
 }
 
 export type WorktreeScanResult = WorktreeInventory | { cancelled: true };
+export const WORKTREE_REMOVAL_TIMEOUT_MS = 120_000;
 
 export type WorktreeDisposalMode = "trash" | "permanent";
 export interface WorktreeCleanupRequest { commonDir: string; path: string; allowDirty: boolean; mode?: WorktreeDisposalMode }
@@ -124,6 +125,7 @@ export interface WorktreeRestoreRegistration {
 
 export interface WorktreeRecoveryRecord {
   cancelled?: boolean;
+  timedOut?: boolean;
   mode?: WorktreeDisposalMode;
   pendingGitCleanup?: boolean;
   disposalIncomplete?: boolean;

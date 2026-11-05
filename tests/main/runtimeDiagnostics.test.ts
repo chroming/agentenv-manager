@@ -34,6 +34,12 @@ const createDiagnostics = async (options: { maxLogBytes?: number; now?: () => Da
 };
 
 describe("runtime diagnostics", () => {
+  it("reports a timed-out Worktree as partial rather than completed or cancelled", async () => {
+    const diagnostics = await createDiagnostics();
+    await diagnostics.runIpcOperation("worktrees:remove", [], async () => ({ timedOut: true }));
+    const events = await diagnostics.readRecentEvents();
+    expect(events[1]).toMatchObject({ phase: "completed", outcome: "partial", context: { result: { timedOut: true } } });
+  });
   it.each(["success", "failure"])("does not strand a finished Worktree %s behind an advisory log write", async (outcome) => {
     let tick = 0;
     const diagnostics = await createDiagnostics({ now: () => new Date(1_700_000_000_000 + tick++ * 1000) });

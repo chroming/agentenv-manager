@@ -4,11 +4,12 @@ import { removePhysicalPath as rm } from "../physicalFileRemoval";
 import { dirname, isAbsolute, join, resolve } from "node:path";
 import { z } from "zod";
 import type { WorktreeCleanupPreview, WorktreeDisposalMode, WorktreeEntry, WorktreeRecoveryRecord, WorktreeRestoreRegistration } from "../../shared/worktrees";
+import { WORKTREE_REMOVAL_TIMEOUT_MS } from "../../shared/worktrees";
 import { isMissingFileError, writeAtomic } from "../fileUtils";
 import { hashFileContent, hashPathEntry, hashRequiredPathEntry } from "../filesystemIntegrity";
 import { assertNoWorktreeWriter, findWorktreeWriterLock } from "./worktreeGitState";
 import { assertRestoreRegistration, readLinkedRegistrationIdentity } from "./worktreeOperationRecovery";
-import { removeWorktreeContents, WorktreeRemovalCancelledError } from "./worktreeRemovalProcess";
+import { removeWorktreeContents, WorktreeRemovalCancelledError, WorktreeRemovalTimeoutError } from "./worktreeRemovalProcess";
 
 const missing = async (path: string) => lstat(path).then(() => false, (error) => {
   if (isMissingFileError(error)) return true;
@@ -164,7 +165,8 @@ export const createWorktreeDisposal = ({ appDataRoot, lookup, branchAvailable, r
     await assertNoWorktreeWriter(admin);
     await rm(admin, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
   };
-  const purge = async (item: Journal, progress?: (phase: "preparing" | "removing" | "verifying") => void, signal?: AbortSignal) => {
+  const purge = async (item: Journal, progress?: (phase: "preparing" | "removing" | "verifying") => void, signal?: AbortSignal,
+    deadlineAt = performance.now() + WORKTREE_REMOVAL_TIMEOUT_MS) => {
     const hasContents = !await missing(item.storage);
     const remainingSize = hasContents ? item.phase === "deleting" ? undefined : item.entry.sizeBytes : 0;
     if (hasContents) {
@@ -176,11 +178,15 @@ export const createWorktreeDisposal = ({ appDataRoot, lookup, branchAvailable, r
           await validateStorage(item);
           try {
             const identity = item.directoryIdentity ?? item.identity!;
-            if (signal) await removeWorktreeContents({ path: item.storage, device: identity.worktreeDevice, inode: identity.worktreeInode }, signal);
-            else await rm(item.storage, { recursive: true, force: true, maxRetries: 0 });
+            await removeWorktreeContents({ path: item.storage, device: identity.worktreeDevice, inode: identity.worktreeInode }, signal,
+              { timeoutMs: Math.max(0, deadlineAt - performance.now()) });
             break;
           }
           catch (error) {
+            if (error instanceof WorktreeRemovalTimeoutError) return {
+              ...projection(item), timedOut: true, sourceSizeBytes: undefined, reclaimedSizeBytes: undefined,
+              verificationWarnings: [error.message]
+            };
             if (error instanceof WorktreeRemovalCancelledError) return {
               ...projection(item), cancelled: true, sourceSizeBytes: undefined, reclaimedSizeBytes: undefined
             };
@@ -216,13 +222,14 @@ export const createWorktreeDisposal = ({ appDataRoot, lookup, branchAvailable, r
       return { mode: "permanent" as const, previewId, entry, fingerprint: previewId, checkedAt: new Date().toISOString(), backupRequired: false, forceRequired: false, savedWorkspace: false, gitWriteInProgress };
     },
     remove: async (preview: WorktreeCleanupPreview, progress?: (phase: "preparing" | "removing" | "verifying") => void, signal?: AbortSignal) => {
+      const deadlineAt = performance.now() + WORKTREE_REMOVAL_TIMEOUT_MS;
       const request = issued.get(preview.previewId); issued.delete(preview.previewId);
       if (!request || request.mode !== preview.mode || Date.now() - request.at > 10 * 60_000) throw new Error("Cleanup review expired. Review this Worktree again.");
       progress?.("preparing");
       if (request.journalId) {
         const item = await read(request.journalId);
         assertTrashDeletionAllowed(item);
-        return purge(item, progress, signal);
+        return purge(item, progress, signal, deadlineAt);
       }
       const entry = request.entry;
       if (request.directoryIdentity && JSON.stringify(await captureDirectory(entry.path)) !== JSON.stringify(request.directoryIdentity)) throw new Error("Worktree directory identity changed; nothing was removed");
@@ -242,7 +249,7 @@ export const createWorktreeDisposal = ({ appDataRoot, lookup, branchAvailable, r
       try { await validateStorage(item); }
       catch (error) { if (await missing(entry.path)) await rename(storage, entry.path); throw error; }
       await resumeMove(item);
-      if (item.mode === "permanent") return purge(item, progress, signal);
+      if (item.mode === "permanent") return purge(item, progress, signal, deadlineAt);
       if (!item.identity) { progress?.("verifying"); return projection(item); }
       try {
         await assertNoWorktreeWriter(item.identity.gitDir);

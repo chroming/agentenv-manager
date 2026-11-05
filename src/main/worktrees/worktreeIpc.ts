@@ -113,9 +113,9 @@ export const registerWorktreeIpc = (
       }, controller.signal);
       const warnings = result.verificationWarnings;
       if (warnings?.length && diagnostics) {
-        const reference = await readAdvisory(() => diagnostics.record("worktrees:remove", "cleanup-completed-with-notes", {
+        const reference = await readAdvisory(() => diagnostics.record("worktrees:remove", result.timedOut ? "cleanup-timed-out" : "cleanup-completed-with-notes", {
           outcome: "partial", error: new Error(warnings.join("\n")),
-          context: { path: result.path, mode: result.mode, disposalId: result.id, pendingGitCleanup: result.pendingGitCleanup }
+          context: { path: result.path, mode: result.mode, disposalId: result.id, pendingGitCleanup: result.pendingGitCleanup, timedOut: result.timedOut }
         }), 150);
         if (reference.available) return { ...result, verificationWarnings: warnings.map((warning) => `${warning}\nDiagnostic reference: ${reference.value}`) };
       }

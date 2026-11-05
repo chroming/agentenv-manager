@@ -9,12 +9,21 @@ import { createGitCommandRunner } from "../../src/main/skillSources/gitCommandRu
 import { findExecutable } from "../../src/main/executableDiscovery";
 import type { ProjectStore } from "../../src/main/projects/projectStore";
 import * as snapshot from "../../src/main/worktrees/worktreeSnapshot";
+import * as removal from "../../src/main/worktrees/worktreeRemovalProcess";
 import { canSelectWorktreeForCleanup, isAutomaticCleanupCandidate } from "../../src/shared/worktrees";
 
 vi.mock("node:fs/promises", async (original) => ({ ...await original<typeof import("node:fs/promises")>() }));
+vi.mock("../../src/main/worktrees/worktreeRemovalProcess", async (original) => ({ ...await original<typeof import("../../src/main/worktrees/worktreeRemovalProcess")>() }));
 const exec = promisify(execFile), roots: string[] = [], services: WorktreeService[] = [];
 afterEach(async () => { for (const service of services.splice(0)) await service.dispose(); vi.restoreAllMocks(); for (const root of roots.splice(0)) await fs.rm(root, { recursive: true, force: true }); });
 const fixture = async () => {
+  // Preserve planner-level filesystem fault injection; the process runner and
+  // native Electron suites separately exercise the real isolated executor.
+  vi.spyOn(removal, "removeWorktreeContents").mockImplementation(async (request, signal, options) => {
+    if (signal?.aborted) throw new removal.WorktreeRemovalCancelledError();
+    if (options?.timeoutMs !== undefined && options.timeoutMs <= 0) throw new removal.WorktreeRemovalTimeoutError();
+    await fs.rm(request.path, { recursive: true, force: true, maxRetries: 0 });
+  });
   const root = await fs.realpath(await fs.mkdtemp(join(tmpdir(), "aem-worktree-disposal-"))); roots.push(root);
   const repo = join(root, "repo"), tree = join(root, "trees", "task"), data = join(root, "data");
   const git = async (cwd: string, ...args: string[]) => (await exec("git", ["-c", "core.fsmonitor=false", "-C", cwd, ...args])).stdout;
@@ -46,6 +55,33 @@ it("preserves an interrupted permanent deletion in Trash instead of ignoring can
   const completed = await service.remove(await service.previewTrashDeletion(result.id));
   expect(completed).toMatchObject({ mode: "permanent", status: "removed" });
   await expect(fs.lstat(result.retainedPath!)).rejects.toMatchObject({ code: "ENOENT" });
+});
+
+it("keeps a timeout retryable without calling it cancellation or retrying it automatically", async () => {
+  const { tree, service, common } = await fixture();
+  await fs.writeFile(join(tree, "keep.txt"), "remainder");
+  const remove = vi.mocked(removal.removeWorktreeContents).mockRejectedValueOnce(new removal.WorktreeRemovalTimeoutError());
+  const result = await service.remove(await service.preview(common, tree, true, "permanent"));
+  expect(result).toMatchObject({ timedOut: true, disposalIncomplete: true, mode: "permanent" });
+  expect(result.cancelled).toBeUndefined();
+  expect(result.reclaimedSizeBytes).toBeUndefined();
+  expect(remove).toHaveBeenCalledTimes(1);
+  expect(await fs.readFile(join(result.retainedPath!, "keep.txt"), "utf8")).toBe("remainder");
+  expect((await service.listRecovery("trash")).records).toContainEqual(expect.objectContaining({ id: result.id, disposalIncomplete: true }));
+  await service.remove(await service.previewTrashDeletion(result.id));
+  await expect(fs.lstat(result.retainedPath!)).rejects.toMatchObject({ code: "ENOENT" });
+});
+
+it("shares one monotonic timeout budget across whole-slot retries", async () => {
+  const { service, tree, common } = await fixture();
+  const preview = await service.preview(common, tree, true, "permanent");
+  let now = 0;
+  vi.spyOn(performance, "now").mockImplementation(() => now);
+  const remove = vi.mocked(removal.removeWorktreeContents).mockImplementationOnce(async () => {
+    now = 90_000; throw Object.assign(new Error("temporarily busy"), { code: "EPERM" });
+  });
+  expect((await service.remove(preview)).status).toBe("removed");
+  expect(remove.mock.calls.map((call) => call[2]?.timeoutMs)).toEqual([120_000, 30_000]);
 });
 
 it("permanently deletes dirty/ignored/stale-operation contents without backups, full hashes or history analysis", async () => {
