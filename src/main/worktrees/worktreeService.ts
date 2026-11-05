@@ -150,7 +150,7 @@ export interface WorktreeService {
   preview(commonDir: string, path: string, allowDirty?: boolean, mode?: WorktreeDisposalMode): Promise<WorktreeCleanupPreview>;
   previewTrashDeletion(id: string): Promise<WorktreeCleanupPreview>;
   previewBatch(items: WorktreeCleanupRequest[], progress?: (completed: number, path: string, result?: WorktreeCleanupPreparation) => void): Promise<WorktreeCleanupPreparation[]>;
-  remove(preview: WorktreeCleanupPreview, progress?: (phase: WorktreeOperationPhase, fileProgress?: WorktreeFileProgress) => void): Promise<WorktreeRecoveryRecord>;
+  remove(preview: WorktreeCleanupPreview, progress?: (phase: WorktreeOperationPhase, fileProgress?: WorktreeFileProgress) => void, signal?: AbortSignal): Promise<WorktreeRecoveryRecord>;
   listRecovery(scope?: "trash" | "all"): Promise<WorktreeRecoveryInventory>;
   restore(id: string): Promise<WorktreeRecoveryRecord>;
   cancelScan(): void;
@@ -760,12 +760,12 @@ export const createWorktreeService = ({
       }));
       return results;
     },
-    remove: async (preview, progress) => {
+    remove: async (preview, progress, signal) => {
       const report = (phase: WorktreeOperationPhase, fileProgress?: WorktreeFileProgress) => {
         try { Promise.resolve(progress?.(phase, fileProgress)).catch(() => undefined); }
         catch { /* Feedback is best effort. */ }
       };
-      if (preview.mode) return disposal.remove(preview, report);
+      if (preview.mode) return disposal.remove(preview, report, signal);
       report("preparing");
       const issued = issuedPreviews.get(preview.previewId);
       issuedPreviews.delete(preview.previewId);

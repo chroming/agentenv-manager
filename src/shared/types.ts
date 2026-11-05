@@ -160,6 +160,7 @@ export interface AgentEnvApi {
   onWorktreeProgress(callback: (value: import("./worktrees").WorktreeOperationProgress) => void): () => void;
   onWorktreeInventoryChanged(callback: (inventory: import("./worktrees").WorktreeInventory) => void): () => void;
   removeWorktree(preview: import("./worktrees").WorktreeCleanupPreview, requestId?: string): Promise<import("./worktrees").WorktreeRecoveryRecord>;
+  cancelWorktreeRemoval(requestId: string): Promise<boolean>;
   listWorktreeRecovery(scope?: "trash" | "all"): Promise<import("./worktrees").WorktreeRecoveryInventory>;
   restoreWorktree(id: string): Promise<import("./worktrees").WorktreeRecoveryRecord>;
   selectConversationWorkspace(): Promise<string | undefined>;

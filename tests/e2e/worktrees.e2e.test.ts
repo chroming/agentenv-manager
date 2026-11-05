@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { createServer, type Server } from "node:http";
-import { chmod, copyFile, lstat, mkdir, mkdtemp, readFile, realpath, rm, symlink, utimes, writeFile } from "node:fs/promises";
+import { chmod, copyFile, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import { delimiter, dirname, join, relative } from "node:path";
 import { tmpdir } from "node:os";
 import { promisify } from "node:util";
@@ -33,6 +33,108 @@ afterEach(async () => {
 }, 30_000);
 
 describe("Worktrees desktop workflow", () => {
+  it("stops a paused tenth deletion in a fourteen-item queue and retries only its retained remainder", async () => {
+    root = await realpath(await mkdtemp(join(tmpdir(), "aem-stop-worktree-ui-")));
+    const home = join(root, "home"), data = join(root, "data"), repo = join(home, "repo"), trees = join(root, "trees");
+    await mkdir(home); await mkdir(data);
+    await run("git", ["init", "-b", "main", repo]);
+    await writeFile(join(repo, "README.md"), "Preserve the main repository\n");
+    await run("git", ["-C", repo, "add", "."]);
+    await run("git", ["-C", repo, "-c", "user.name=Fixture", "-c", "user.email=fixture@example.com", "commit", "-m", "base"]);
+    for (let i = 1; i <= 14; i++) {
+      const name = `task-${String(i).padStart(2, "0")}`, path = join(trees, name);
+      await run("git", ["-C", repo, "worktree", "add", "-b", name, path]);
+      await writeFile(join(path, "partial.txt"), "A synthetic first deletion\n");
+      await writeFile(join(path, "keep.txt"), "Preserve after stopping\n");
+    }
+    await writeFile(join(data, "agentenv-data.json"), '{"formatVersion":2}');
+    await writeFile(join(data, "settings.json"), JSON.stringify({ locale: "en", enabledTargetIds: [], agentDiscoveryVersion: 1,
+      agentDiscoveryReviewedIds: ["opencode", "codex", "claude-code", "antigravity", "antigravity-app", "trae-cli", "pi", "workbuddy"],
+      telemetryEnabled: false, telemetryConsentVersion: 1, skillAutoCheckEnabled: false, backupRetentionDays: null }));
+    const hook = join(root, "hold-owned-cleanup.mjs");
+    await writeFile(hook, `import { createRequire } from "node:module";
+import { join } from "node:path";
+const fs = createRequire(import.meta.url)("original-fs").promises;
+process.on("SIGTERM", () => {});
+process.parentPort.on("message", async ({ data }) => {
+  const info = await fs.lstat(data.path, { bigint: true });
+  if (String(info.dev) !== data.device || String(info.ino) !== data.inode || info.isSymbolicLink()) process.exit(1);
+  await fs.unlink(join(data.path, "partial.txt"));
+  setInterval(() => {}, 1000);
+});\n`);
+    const packaged = process.env.AGENTENV_WORKTREE_PACKAGED_EXECUTABLE;
+    app = await electron.launch({ executablePath: packaged ?? electronPath as unknown as string,
+      args: ["--disable-gpu", `--user-data-dir=${join(root, "electron")}`, ...(packaged ? [] : [join(process.cwd(), "out", "main", "main.js")])],
+      env: { ...process.env, AGENTENV_AUTOMATION: "1", AGENTENV_DATA_ROOT: data, AGENTENV_HOME: home,
+        AGENTENV_FAKE_HOME: join(root, "fake"), AGENTENV_LOG_ROOT: join(root, "logs"), AGENTENV_CACHE_ROOT: join(root, "cache") } });
+    const page = await app.firstWindow();
+    await expect.poll(() => page.evaluate(() => window.agentEnv.readStartupStatus())).toEqual({ state: "ready" });
+    await page.evaluate(async (repo) => { await window.agentEnv.addWorktreeScanRoot(repo); await window.agentEnv.inventoryWorktrees(); }, repo);
+    await app.evaluate((_electron, hook) => {
+      const utility = process.getBuiltinModule("module").createRequire(process.execPath)("electron").utilityProcess;
+      const original = utility.fork.bind(utility);
+      let started = 0;
+      utility.fork = (path: string, args: string[], options: Electron.ForkOptions) => {
+        if (options?.serviceName === "AgentEnv Worktree cleanup") {
+          ++started;
+          Object.assign(globalThis, { aemCleanupStarts: started });
+          if (started === 10) return original(hook, args, options);
+        }
+        return original(path, args, options);
+      };
+    }, hook);
+    await page.setViewportSize({ width: 920, height: 620 });
+    await page.getByRole("button", { name: "Worktrees", exact: true }).click();
+    const workspace = page.locator(".worktree-workspace");
+    await workspace.getByText(join(trees, "task-14"), { exact: true }).waitFor();
+    await workspace.getByRole("button", { name: "Select Worktrees in this view", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Select all removable Worktrees", exact: true }).click();
+    await workspace.getByRole("button", { name: "Delete permanently...", exact: true }).click();
+    await page.getByRole("dialog", { name: "Permanently delete Worktrees?", exact: true })
+      .getByRole("button", { name: "Permanently delete 14", exact: true }).click();
+    const results = page.getByRole("dialog", { name: "Cleanup results", exact: true });
+    await expect.poll(() => results.textContent()).toContain("9/14 · task-10");
+    await expect.poll(async () => ({ text: await results.textContent() })).toMatchObject({ text: expect.stringMatching(/9\/14 · task-10 · 0:0[1-9]/) });
+    const stop = results.getByRole("button", { name: "Stop", exact: true });
+    for (const viewport of [{ width: 920, height: 620 }, { width: 1180, height: 728 }, { width: 1440, height: 900 }]) {
+      await page.setViewportSize(viewport);
+      expect(await stop.isVisible()).toBe(true);
+      expect(await results.evaluate((element) => {
+        const body = element.querySelector<HTMLElement>(".ui-dialog-body")!;
+        return body.scrollWidth <= body.clientWidth + 1 && element.querySelector(".ui-dialog-footer")!.getBoundingClientRect().bottom <= innerHeight;
+      })).toBe(true);
+      if (process.env.AGENTENV_CAPTURE_WORKTREES_DIR) {
+        await mkdir(process.env.AGENTENV_CAPTURE_WORKTREES_DIR, { recursive: true });
+        await page.screenshot({ path: join(process.env.AGENTENV_CAPTURE_WORKTREES_DIR, `worktree-stoppable-${packaged ? "packaged" : "source"}-${viewport.width}.png`) });
+      }
+    }
+    await stop.click();
+    await results.getByText("Stopped", { exact: true }).waitFor({ timeout: 5000 });
+    expect(await results.getByText("Deleted", { exact: true }).count()).toBe(9);
+    expect(await results.getByText("Not run", { exact: true }).count()).toBe(4);
+    expect(await results.getByRole("button", { name: "Close", exact: true }).last().isEnabled()).toBe(true);
+    if (process.env.AGENTENV_CAPTURE_WORKTREES_DIR) for (const width of [920, 1180, 1440]) {
+      await page.setViewportSize({ width, height: width === 920 ? 620 : width === 1180 ? 728 : 900 });
+      expect(await results.getByText("Deletion stopped. Deleted files cannot be restored; remaining contents stay in Worktree Trash.", { exact: true }).evaluate((element) => {
+        const bounds = element.getBoundingClientRect();
+        return bounds.top >= 0 && bounds.bottom <= innerHeight;
+      })).toBe(true);
+      await page.screenshot({ path: join(process.env.AGENTENV_CAPTURE_WORKTREES_DIR, `worktree-stopped-${packaged ? "packaged" : "source"}-${width}.png`) });
+    }
+    await expect.poll(() => app!.evaluate(({ app }) => app.getAppMetrics().filter((item) => item.name === "AgentEnv Worktree cleanup").length)).toBe(0);
+    const records = await page.evaluate(() => window.agentEnv.listWorktreeRecovery("trash"));
+    expect(records.records).toEqual([expect.objectContaining({ path: join(trees, "task-10"), disposalIncomplete: true })]);
+    const retained = records.records[0].retainedPath!;
+    await expect(lstat(join(retained, "partial.txt"))).rejects.toMatchObject({ code: "ENOENT" });
+    expect(await readFile(join(retained, "keep.txt"), "utf8")).toBe("Preserve after stopping\n");
+    expect((await readdir(trees)).sort()).toEqual(["task-11", "task-12", "task-13", "task-14"]);
+    for (let i = 11; i <= 14; i++) expect(await readFile(join(trees, `task-${i}`, "partial.txt"), "utf8")).toBe("A synthetic first deletion\n");
+    expect(await readFile(join(repo, "README.md"), "utf8")).toBe("Preserve the main repository\n");
+    const retry = await page.evaluate((id) => window.agentEnv.previewWorktreeTrashDeletion(id), records.records[0].id);
+    await page.evaluate((preview) => window.agentEnv.removeWorktree(preview), retry);
+    expect((await page.evaluate(() => window.agentEnv.listWorktreeRecovery("trash"))).records).toEqual([]);
+    await expect(lstat(retained)).rejects.toMatchObject({ code: "ENOENT" });
+  }, 60_000);
   it.each(["runtime", "packaged", "partial-retry"] as const)("purges physical Electron archives from %s Trash and backups without ASAR virtual-directory retries", async (fixture) => {
     root = await realpath(await mkdtemp(join(tmpdir(), "aem-trash-asar-ui-")));
     const home = join(root, "home"), data = join(root, "data"), repo = join(home, "repo"), tree = join(root, "trees", "archive-task");

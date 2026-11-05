@@ -463,8 +463,22 @@ byte completion. Before any item succeeds, results do not claim zero bytes remov
 Diagnostic stage start, periodic liveness and finish records make pending filesystem
 calls observable; optional stage-log flushing has a bounded wait and cannot hold an
 already completed deletion indefinitely. None of these signals authorizes a mutation.
-One item's ordinary failure does not block the rest of the selected queue. Navigation or
-Stop finishes the current operation, then marks the remaining items Not run.
+One item's ordinary failure does not block the rest of the selected queue. Navigation
+finishes the current operation, then marks the remaining items Not run. Move to Trash
+and legacy recoverable cleanup retain Stop after current because their atomic move or
+recovery transaction must finish consistently.
+Permanent deletion exposes Stop, not Stop after current. Its physical removal runs in
+an owned isolated process, with the same pinned directory identity and ASAR-safe
+filesystem. Cancellation bypasses the mutation queue, is bound to the initiating
+renderer/request, and waits for that process to exit before completing. It may terminate
+only AgentEnv's own cleanup helper, never Git, Agents or unrelated processes. A timeout
+that leaves a destructive call running in the background is forbidden. After stopping,
+already deleted files are not restored, residual contents remain retryable in Trash,
+unknown remaining/freed bytes stay unknown, and subsequent items are Not run. Durable
+recovery journals remain mandatory; optional Worktree diagnostic flushing is bounded
+both inside the operation and at the outer IPC result/failure boundary. Permanent
+removal retries are whole-slot attempts after identity revalidation; per-directory
+recursive retry amplification is disabled.
 The list and each repository offer Select integrated, unchanged Worktrees within
 the current search/filter scope, including collapsed groups. The command requires
 the existing strict automatic-candidate predicate, including no ignored local

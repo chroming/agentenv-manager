@@ -34,6 +34,20 @@ const fixture = async () => {
   return { root, repo, tree, data, git, runner, service, common, admin, projectStore };
 };
 
+it("preserves an interrupted permanent deletion in Trash instead of ignoring cancellation", async () => {
+  const { tree, service, common } = await fixture();
+  await fs.writeFile(join(tree, "keep-on-stop.txt"), "remaining contents\n");
+  const controller = new AbortController(); controller.abort();
+  const result = await service.remove(await service.preview(common, tree, true, "permanent"), undefined, controller.signal);
+  expect(result).toMatchObject({ mode: "permanent", cancelled: true, disposalIncomplete: true });
+  expect(result.reclaimedSizeBytes).toBeUndefined();
+  expect(await fs.readFile(join(result.retainedPath!, "keep-on-stop.txt"), "utf8")).toBe("remaining contents\n");
+  expect((await service.listRecovery("trash")).records).toContainEqual(expect.objectContaining({ id: result.id, disposalIncomplete: true }));
+  const completed = await service.remove(await service.previewTrashDeletion(result.id));
+  expect(completed).toMatchObject({ mode: "permanent", status: "removed" });
+  await expect(fs.lstat(result.retainedPath!)).rejects.toMatchObject({ code: "ENOENT" });
+});
+
 it("permanently deletes dirty/ignored/stale-operation contents without backups, full hashes or history analysis", async () => {
   const { root, tree, service, common, admin, runner } = await fixture();
   await fs.writeFile(join(tree, "file.txt"), "discard changed contents\n");

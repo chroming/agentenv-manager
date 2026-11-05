@@ -123,6 +123,7 @@ export interface WorktreeRestoreRegistration {
 }
 
 export interface WorktreeRecoveryRecord {
+  cancelled?: boolean;
   mode?: WorktreeDisposalMode;
   pendingGitCleanup?: boolean;
   disposalIncomplete?: boolean;

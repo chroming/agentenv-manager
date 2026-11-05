@@ -425,6 +425,7 @@ const installApi = (overrides: Partial<AgentEnvApi> = {}) => {
     setWorktreeIntegrationRef: vi.fn().mockResolvedValue(undefined),
     previewWorktreeCleanup: vi.fn(),
     removeWorktree: vi.fn(),
+    cancelWorktreeRemoval: vi.fn().mockResolvedValue(true),
     listWorktreeRecovery: vi.fn().mockResolvedValue({ records: [], issues: [] }),
     restoreWorktree: vi.fn(),
     selectConversationWorkspace: vi.fn().mockResolvedValue(undefined),

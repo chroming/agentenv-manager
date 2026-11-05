@@ -117,6 +117,7 @@ const api: AgentEnvApi = {
     return () => { ipcRenderer.removeListener("worktrees:progress", listener); };
   },
   removeWorktree: (preview, requestId) => ipcRenderer.invoke("worktrees:remove", preview, requestId),
+  cancelWorktreeRemoval: (requestId) => ipcRenderer.invoke("worktrees:cancel-remove", requestId),
   listWorktreeRecovery: (scope) => ipcRenderer.invoke("worktrees:list-recovery", scope),
   restoreWorktree: (id) => ipcRenderer.invoke("worktrees:restore", id),
   selectConversationWorkspace: () =>

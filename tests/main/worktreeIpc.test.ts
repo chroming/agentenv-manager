@@ -40,10 +40,33 @@ const fixture = async (gitAvailable = true) => {
   }, service, diagnostics);
   const sender = { isDestroyed: vi.fn(() => false), send: vi.fn() };
   const invoke = (channel: string, ...args: unknown[]) => handlers.get(channel)!({ sender } as unknown as Electron.IpcMainInvokeEvent, ...args);
-  return { diagnostics, invoke, service, sender };
+  return { diagnostics, invoke, service, sender, handlers };
 };
 
 describe("Worktree scan IPC lifecycle", () => {
+  it("cancels the current removal without entering the mutation queue again", async () => {
+    const { invoke, service, handlers } = await fixture();
+    const result = { id: "retained", mode: "permanent", cancelled: true } as WorktreeRecoveryRecord;
+    let finish!: () => void;
+    let signal: AbortSignal | undefined;
+    vi.spyOn(service, "remove").mockImplementation(async (_preview, progress, cancellation) => {
+      signal = cancellation;
+      progress?.("removing");
+      await new Promise<void>((done) => { finish = done; signal?.addEventListener("abort", () => done(), { once: true }); });
+      return result;
+    });
+    const requestId = "00000000-0000-4000-8000-000000000001";
+    const pending = invoke("worktrees:remove", { entry: { path: "/trash/fixture/files" } } as WorktreeCleanupPreview, requestId);
+    try {
+      expect(signal).toBeInstanceOf(AbortSignal);
+      expect(await handlers.get("worktrees:cancel-remove")!({ sender: {} } as Electron.IpcMainInvokeEvent, requestId)).toBe(false);
+      expect(signal?.aborted).toBe(false);
+      expect(await invoke("worktrees:cancel-remove", requestId)).toBe(true);
+      expect(signal?.aborted).toBe(true);
+      expect(await pending).toBe(result);
+      expect(await invoke("worktrees:cancel-remove", requestId)).toBe(false);
+    } finally { finish(); await pending; }
+  });
   it("keeps a pending removal observable without restarting work or claiming completed items", async () => {
     const { invoke, service, sender, diagnostics } = await fixture();
     const record = vi.spyOn(diagnostics, "record");

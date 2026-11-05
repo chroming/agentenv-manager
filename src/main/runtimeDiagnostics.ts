@@ -21,6 +21,7 @@ import {
   sanitizeDiagnosticValue
 } from "./diagnosticRedaction";
 import { isMissingFileError } from "./fileUtils";
+import { readAdvisory } from "./advisoryRead";
 
 const DEFAULT_MAX_LOG_BYTES = 5 * 1024 * 1024;
 const DEFAULT_LOG_GENERATIONS = 4;
@@ -398,6 +399,11 @@ export const createRuntimeDiagnostics = (options: {
     directory: options.directory,
     logPath,
     runIpcOperation: async (action, args, operation) => {
+      const flush = async (write: Promise<unknown>) => {
+        // Worktree recovery is owned by its durable journal, not runtime logs.
+        if (action.startsWith("worktrees:")) await readAdvisory(() => write, 150);
+        else await write;
+      };
       const startedAt = options.now?.() ?? new Date();
       const startedAtMs = startedAt.getTime();
       const reference = operationReference(startedAt);
@@ -434,11 +440,11 @@ export const createRuntimeDiagnostics = (options: {
               : undefined
           })
         ]).catch(() => undefined);
-        if (mutation || durationMs >= SLOW_READ_THRESHOLD_MS) await completedWrite;
+        if (mutation || durationMs >= SLOW_READ_THRESHOLD_MS) await flush(completedWrite);
         return result;
       } catch (error) {
         const durationMs = Math.max(0, (options.now?.() ?? new Date()).getTime() - startedAtMs);
-        await appendEvents([
+        await flush(appendEvents([
           eventFor(action, "failed", {
             reference,
             outcome: "failed",
@@ -446,7 +452,7 @@ export const createRuntimeDiagnostics = (options: {
             context,
             error
           })
-        ]).catch(() => undefined);
+        ]).catch(() => undefined));
         throw publicOperationError(error, reference, options.homeDir);
       }
     },

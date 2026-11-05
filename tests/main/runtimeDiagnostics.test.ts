@@ -1,20 +1,23 @@
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import * as fs from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createRuntimeDiagnostics,
   diagnosticReferenceFromMessage
 } from "../../src/main/runtimeDiagnostics";
 
 let root = "";
+vi.mock("node:fs/promises", async (original) => ({ ...await original<typeof import("node:fs/promises")>() }));
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   if (root) await rm(root, { recursive: true, force: true });
   root = "";
 });
 
-const createDiagnostics = async (options: { maxLogBytes?: number } = {}) => {
+const createDiagnostics = async (options: { maxLogBytes?: number; now?: () => Date } = {}) => {
   root = await mkdtemp(join(tmpdir(), "agentenv-runtime-diagnostics-"));
   return createRuntimeDiagnostics({
     directory: root,
@@ -31,6 +34,23 @@ const createDiagnostics = async (options: { maxLogBytes?: number } = {}) => {
 };
 
 describe("runtime diagnostics", () => {
+  it.each(["success", "failure"])("does not strand a finished Worktree %s behind an advisory log write", async (outcome) => {
+    let tick = 0;
+    const diagnostics = await createDiagnostics({ now: () => new Date(1_700_000_000_000 + tick++ * 1000) });
+    let release!: () => void;
+    const gate = new Promise<void>((done) => { release = done; });
+    const append = fs.appendFile;
+    vi.spyOn(fs, "appendFile").mockImplementation(async (...args) => { await gate; return append(...args); });
+    let returned = false;
+    const pending = diagnostics.runIpcOperation("worktrees:remove", [], async () => {
+      if (outcome === "failure") throw new Error("Synthetic cleanup failure");
+      return { cancelled: true };
+    }).then((value) => { returned = true; return value; }, (error) => { returned = true; return error; });
+    try {
+      await new Promise((done) => setTimeout(done, 400));
+      expect(returned).toBe(true);
+    } finally { release(); await pending; await diagnostics.readRecentEvents(); }
+  });
   it("records explicit cancellation as a normal terminal outcome", async () => {
     const diagnostics = await createDiagnostics();
     await expect(diagnostics.runIpcOperation("worktrees:inventory", [], async () => ({ cancelled: true })))

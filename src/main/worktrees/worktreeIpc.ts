@@ -11,6 +11,7 @@ export const registerWorktreeIpc = (
   service: WorktreeService,
   diagnostics?: Pick<RuntimeDiagnostics, "record">
 ) => {
+  const removals = new Map<string, { controller: AbortController; sender: Electron.WebContents }>();
   const sendProgress = (event: Electron.IpcMainInvokeEvent, value: WorktreeOperationProgress) => {
     try { if (!event.sender.isDestroyed()) event.sender.send("worktrees:progress", value); }
     catch { /* A closing renderer cannot fail a local operation. */ }
@@ -41,6 +42,12 @@ export const registerWorktreeIpc = (
     }
   });
   diagnosticHandle("worktrees:cancel-scan", () => service.cancelScan());
+  diagnosticHandle("worktrees:cancel-remove", (event, id: unknown) => {
+    const removal = removals.get(z.string().uuid().parse(id));
+    if (!removal || removal.sender !== event.sender) return false;
+    removal.controller.abort();
+    return true;
+  });
   diagnosticHandle("worktrees:preview", (_event, commonDir: unknown, path: unknown, allowDirty: unknown, mode: unknown) =>
     service.preview(String(commonDir), String(path), allowDirty === true, z.enum(["trash", "permanent"]).default("trash").parse(mode)));
   diagnosticHandle("worktrees:preview-trash-deletion", (_event, id: unknown) => service.previewTrashDeletion(z.string().uuid().parse(id)));
@@ -72,6 +79,8 @@ export const registerWorktreeIpc = (
     service.setIntegrationRef(String(commonDir), ref === undefined ? undefined : String(ref)));
   handleMutation("worktrees:remove", async (event, preview: WorktreeCleanupPreview, id) => {
     const requestId = id === undefined ? undefined : z.string().uuid().parse(id);
+    const controller = new AbortController();
+    if (requestId) removals.set(requestId, { controller, sender: event.sender });
     const operationStarted = performance.now();
     const logs = new Set<Promise<unknown>>();
     let previous: WorktreeOperationProgress["phase"] = "preparing", started = operationStarted, lastLogged = started;
@@ -101,7 +110,7 @@ export const registerWorktreeIpc = (
         latest = fileProgress;
         if (requestId) sendProgress(event, { requestId, phase, path: preview.entry.path, completed: 0, total: 1,
           ...(fileProgress ? { fileProgress } : {}) });
-      });
+      }, controller.signal);
       const warnings = result.verificationWarnings;
       if (warnings?.length && diagnostics) {
         const reference = await readAdvisory(() => diagnostics.record("worktrees:remove", "cleanup-completed-with-notes", {
@@ -112,6 +121,7 @@ export const registerWorktreeIpc = (
       }
       return result;
     } finally {
+      if (requestId) removals.delete(requestId);
       clearInterval(heartbeat); finishStage();
       await readAdvisory(() => Promise.allSettled([...logs]), 150);
     }

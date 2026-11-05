@@ -41,6 +41,7 @@ const installApi = () => {
     previewWorktreeTrashDeletion: vi.fn(),
     listWorktreeRecovery: vi.fn().mockResolvedValue({ records: [], issues: [] }),
     removeWorktree: vi.fn().mockResolvedValue({ status: "removed", sourceSizeBytes: 1024, reclaimedSizeBytes: 1024 }),
+    cancelWorktreeRemoval: vi.fn().mockResolvedValue(true),
     readDiagnosticIssue: vi.fn().mockResolvedValue(undefined),
     copyText: vi.fn().mockResolvedValue(undefined)
   };
@@ -75,6 +76,29 @@ afterEach(() => {
 });
 
 describe("WorktreeDialog", () => {
+  it("stops the current permanent deletion, keeps partial contents retryable and leaves the next item unstarted", async () => {
+    const api = installApi();
+    api.previewWorktreeCleanup.mockImplementation(async (_common, path) => ({ ...preparedPreview(path === clean.path ? clean : dirty), mode: "permanent" }));
+    let finish!: (value: unknown) => void;
+    api.removeWorktree.mockImplementation(() => new Promise((done) => { finish = done; }));
+    api.cancelWorktreeRemoval.mockImplementation(async () => { finish({ id: "partial", mode: "permanent", path: clean.path, cancelled: true, disposalIncomplete: true }); return true; });
+    render(<WorktreeWorkspace />); await screen.findByText(clean.path);
+    selectWorktrees("Select all removable Worktrees");
+    fireEvent.click(screen.getByRole("button", { name: "Delete permanently..." }));
+    const confirm = await screen.findByRole("dialog", { name: "Permanently delete Worktrees?" });
+    await waitFor(() => expect(within(confirm).getByRole("button", { name: "Permanently delete 2" })).toBeEnabled());
+    fireEvent.click(within(confirm).getByRole("button", { name: "Permanently delete 2" }));
+    const results = await screen.findByRole("dialog", { name: "Cleanup results" });
+    try {
+      fireEvent.click(within(results).getByRole("button", { name: "Stop" }));
+      await waitFor(() => expect(api.cancelWorktreeRemoval).toHaveBeenCalledWith(api.removeWorktree.mock.calls[0][1]));
+      await within(results).findByText("Stopped", { exact: true });
+      expect(api.removeWorktree).toHaveBeenCalledTimes(1);
+      expect(within(results).getByText("Not run", { exact: true })).toBeInTheDocument();
+      expect(within(results).queryByText("Deleted", { exact: true })).not.toBeInTheDocument();
+      expect(within(results).getAllByRole("button", { name: "Close" }).every((button) => !button.hasAttribute("disabled"))).toBe(true);
+    } finally { await act(async () => { finish({ id: "partial", mode: "permanent", path: clean.path, cancelled: true }); }); }
+  });
   it("does not show completed zero-byte totals or an internal files name while the first Trash deletion is pending", async () => {
     const api = installApi();
     let report!: (value: WorktreeOperationProgress) => void;

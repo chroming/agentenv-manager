@@ -36,7 +36,13 @@ export const createElectronViteConfig = (
       },
       build: {
         rollupOptions: {
-          input: resolve(rootDir, "src/main/main.ts")
+          input: {
+            main: resolve(rootDir, "src/main/main.ts"),
+            worktreeRemovalWorker: resolve(rootDir, "src/main/worktrees/worktreeRemovalWorker.mjs")
+          },
+          output: {
+            entryFileNames: (chunk: { name: string }) => chunk.name === "worktreeRemovalWorker" ? "[name].mjs" : "[name].js"
+          }
         }
       }
     },
