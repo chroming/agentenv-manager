@@ -110,12 +110,18 @@ export const registerWorktreeIpc = (
         latest = fileProgress;
         if (requestId) sendProgress(event, { requestId, phase, path: preview.entry.path, completed: 0, total: 1,
           ...(fileProgress ? { fileProgress } : {}) });
-      }, controller.signal);
+      }, controller.signal, (removal) => {
+        const pending = diagnostics?.record("worktrees:remove", removal.exitConfirmed ? "removal-process-exited" : `removal-process-${removal.stage}`, {
+          durationMs: removal.elapsedMs, context: { path: preview.entry.path, removal }
+        }).catch(() => undefined);
+        if (pending) { logs.add(pending); void pending.then(() => logs.delete(pending)); }
+      });
       const warnings = result.verificationWarnings;
       if (warnings?.length && diagnostics) {
         const reference = await readAdvisory(() => diagnostics.record("worktrees:remove", result.timedOut ? "cleanup-timed-out" : "cleanup-completed-with-notes", {
           outcome: "partial", error: new Error(warnings.join("\n")),
-          context: { path: result.path, mode: result.mode, disposalId: result.id, pendingGitCleanup: result.pendingGitCleanup, timedOut: result.timedOut }
+          durationMs: Math.round(performance.now() - operationStarted),
+          context: { path: result.path, mode: result.mode, disposalId: result.id, pendingGitCleanup: result.pendingGitCleanup, timedOut: result.timedOut, removal: result.removalDiagnostics }
         }), 150);
         if (reference.available) return { ...result, verificationWarnings: warnings.map((warning) => `${warning}\nDiagnostic reference: ${reference.value}`) };
       }

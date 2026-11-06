@@ -491,6 +491,15 @@ continue. A timed-out item is not retried automatically. Manual Stop still ends 
 queue. A deadline is not permission to skip mandatory atomic journal writes or to
 claim an OS process has exited when it has not; the budget is a termination trigger,
 not a promise to bypass those safety acknowledgements at exactly 120 seconds.
+Deletion diagnostics distinguish helper creation, spawn, readiness, directory identity
+validation, physical removal and confirmed exit. Live events include the owned PID;
+copyable timeout details retain the last observed stage, elapsed time, exit result,
+force-stop request and a bounded stderr tail. Diagnostic observers never control
+deletion or change the deadline. File contents and directory inventories are not
+collected by this instrumentation. A timeout alone is not evidence of its root cause.
+Opt-in macOS process sampling may inspect candidate AgentEnv Node utility children,
+but must recheck parentage, bound execution/output and exclude unrelated processes,
+environment variables and file contents; it never launches or retries deletion.
 The list and each repository offer Select integrated, unchanged Worktrees within
 the current search/filter scope, including collapsed groups. The command requires
 the existing strict automatic-candidate predicate, including no ignored local

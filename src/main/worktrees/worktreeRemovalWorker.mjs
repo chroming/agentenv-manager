@@ -10,6 +10,7 @@ const reply = (value) => process.parentPort
 
 const remove = async (request) => {
   try {
+    reply({ stage: "validating" });
     if (!request || typeof request.path !== "string" || !isAbsolute(request.path) || resolve(request.path) !== request.path) {
       throw new Error("Invalid Worktree removal path");
     }
@@ -19,6 +20,7 @@ const remove = async (request) => {
     }
     // The owner retries the whole verified slot. Per-directory retries multiply
     // recursively and can turn a persistent ENOTEMPTY into hours of waiting.
+    reply({ stage: "removing" });
     await fs.rm(request.path, { recursive: true, force: true, maxRetries: 0 });
     reply({ ok: true });
   } catch (error) {
@@ -33,3 +35,4 @@ else {
   process.on("message", receive);
   process.once("disconnect", () => process.exit(1));
 }
+reply({ stage: "ready" });

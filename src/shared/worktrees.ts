@@ -70,6 +70,17 @@ export interface WorktreeInventory {
 export type WorktreeScanResult = WorktreeInventory | { cancelled: true };
 export const WORKTREE_REMOVAL_TIMEOUT_MS = 120_000;
 
+export interface WorktreeRemovalDiagnostics {
+  stage: "starting" | "spawned" | "ready" | "validating" | "removing" | "completed" | "failed";
+  elapsedMs: number;
+  pid?: number;
+  exitConfirmed: boolean;
+  exitCode?: number;
+  exitSignal?: string;
+  forceKillRequested: boolean;
+  stderr?: string;
+}
+
 export type WorktreeDisposalMode = "trash" | "permanent";
 export interface WorktreeCleanupRequest { commonDir: string; path: string; allowDirty: boolean; mode?: WorktreeDisposalMode }
 export type WorktreeCleanupPreparation = { path: string; preview: WorktreeCleanupPreview; error?: never } | { path: string; error: string; preview?: never };
@@ -126,6 +137,7 @@ export interface WorktreeRestoreRegistration {
 export interface WorktreeRecoveryRecord {
   cancelled?: boolean;
   timedOut?: boolean;
+  removalDiagnostics?: WorktreeRemovalDiagnostics;
   mode?: WorktreeDisposalMode;
   pendingGitCleanup?: boolean;
   disposalIncomplete?: boolean;

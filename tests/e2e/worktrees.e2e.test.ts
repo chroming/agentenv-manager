@@ -60,6 +60,7 @@ process.on("SIGTERM", () => {});
 process.parentPort.on("message", async ({ data }) => {
   const info = await fs.lstat(data.path, { bigint: true });
   if (String(info.dev) !== data.device || String(info.ino) !== data.inode || info.isSymbolicLink()) process.exit(1);
+  process.parentPort.postMessage({ stage: "removing" });
   await fs.unlink(join(data.path, "partial.txt"));
   setInterval(() => {}, 1000);
 });\n`);
@@ -129,6 +130,7 @@ process.parentPort.on("message", async ({ data }) => {
       expect(reference).toBeDefined();
       const issue = await page.evaluate((reference) => window.agentEnv.readDiagnosticIssue(reference!), reference);
       expect(issue?.events.some((event) => event.phase === "cleanup-timed-out" && event.outcome === "partial")).toBe(true);
+      expect(issue?.context).toMatchObject({ removal: { stage: "removing", pid: expect.any(Number), exitConfirmed: true } });
     }
     if (process.env.AGENTENV_CAPTURE_WORKTREES_DIR) for (const width of [920, 1180, 1440]) {
       await page.setViewportSize({ width, height: width === 920 ? 620 : width === 1180 ? 728 : 900 });

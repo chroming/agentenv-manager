@@ -62,6 +62,7 @@ it("times out an unresponsive cleanup, waits for forced exit and retains its rem
   const request = await fixture(), hook = join(root, "timeout-removal.cjs");
   await writeFile(hook, `const fs = require("node:fs/promises");
 process.on("SIGTERM", () => {});
+console.error("fixture filesystem wait");
 fs.rm = async (path) => { await fs.unlink(require("node:path").join(path, "first.txt")); await new Promise(() => {}); };\n`);
   const original = cp.fork;
   vi.spyOn(cp, "fork").mockImplementation((modulePath, args, options) => {
@@ -72,8 +73,39 @@ fs.rm = async (path) => { await fs.unlink(require("node:path").join(path, "first
   try {
     await vi.waitFor(() => expect(children[0].exitCode !== null || children[0].signalCode !== null).toBe(true), { timeout: 2000 });
     expect(await outcome).toMatchObject({ name: "WorktreeRemovalTimeoutError" });
+    expect(await outcome).toMatchObject({ diagnostics: {
+      stage: "removing", exitConfirmed: true, forceKillRequested: true,
+      elapsedMs: expect.any(Number), pid: expect.any(Number), stderr: expect.stringContaining("fixture filesystem wait")
+    } });
     expect(await readFile(join(request.path, "remaining.txt"), "utf8")).toBe("remaining");
   } finally { controller.abort(); await outcome; }
+});
+
+it("reports the actual worker stages without treating progress messages as completion", async () => {
+  const request = await fixture(), snapshots: Array<{ stage: string; exitConfirmed?: boolean }> = [];
+  await removeWorktreeContents(request, undefined, { onDiagnostic: (value) => snapshots.push(value) });
+  expect(snapshots.map((value) => value.stage)).toEqual(["starting", "spawned", "ready", "validating", "removing", "completed", "completed"]);
+  expect(snapshots.at(-1)?.exitConfirmed).toBe(true);
+  await expect(lstat(request.path)).rejects.toMatchObject({ code: "ENOENT" });
+});
+
+it("distinguishes a worker that never reaches its request handler", async () => {
+  const request = await fixture(), hook = join(root, "unready-worker.mjs");
+  await writeFile(hook, 'process.on("message", () => {}); setInterval(() => {}, 1000);\n');
+  const original = cp.fork;
+  vi.spyOn(cp, "fork").mockImplementation((_modulePath, args, options) => {
+    const child = original(hook, args as string[], options); children.push(child); return child;
+  });
+  await expect(removeWorktreeContents(request, undefined, { timeoutMs: 500 })).rejects.toMatchObject({
+    diagnostics: { stage: "spawned", exitConfirmed: true, pid: expect.any(Number) }
+  });
+  expect(await readFile(join(request.path, "first.txt"), "utf8")).toBe("first");
+});
+
+it("does not let a failed diagnostic observer block physical deletion", async () => {
+  const request = await fixture();
+  await removeWorktreeContents(request, undefined, { onDiagnostic: () => { throw new Error("Observer unavailable"); } });
+  await expect(lstat(request.path)).rejects.toMatchObject({ code: "ENOENT" });
 });
 
 it("does not launch a cleanup process for an already cancelled request", async () => {

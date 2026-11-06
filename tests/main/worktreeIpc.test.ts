@@ -44,6 +44,27 @@ const fixture = async (gitAvailable = true) => {
 };
 
 describe("Worktree scan IPC lifecycle", () => {
+  it("keeps actual worker evidence in the copyable timeout issue and records live worker identity", async () => {
+    const { invoke, service, diagnostics } = await fixture();
+    const removal = { stage: "removing" as const, elapsedMs: 120_750, pid: 9010,
+      exitConfirmed: true, forceKillRequested: true, stderr: `fixture failure at ${root}/files` };
+    vi.spyOn(service, "remove").mockImplementation(async (_preview, _progress, _signal, observe) => {
+      observe?.({ ...removal, elapsedMs: 25, exitConfirmed: false, forceKillRequested: false, stderr: undefined });
+      observe?.(removal);
+      return { id: "retained", path: "/tree", mode: "permanent", timedOut: true,
+        removalDiagnostics: removal, verificationWarnings: ["Cleanup time limit reached"] } as WorktreeRecoveryRecord;
+    });
+    const result = await diagnostics.runIpcOperation("worktrees:remove", [], () =>
+      invoke("worktrees:remove", { entry: { path: "/tree" } } as WorktreeCleanupPreview)) as WorktreeRecoveryRecord;
+    const reference = result.verificationWarnings?.[0].match(/Diagnostic reference: (AEM-[A-Z0-9-]+)/)?.[1];
+    expect(reference).toBeDefined();
+    const issue = await diagnostics.readIssue(reference!);
+    expect(issue).toMatchObject({ durationMs: expect.any(Number), context: { timedOut: true,
+      removal: { ...removal, stderr: "fixture failure at ~/files" } } });
+    expect(issue?.events).toContainEqual(expect.objectContaining({ phase: "removal-process-removing",
+      context: expect.objectContaining({ removal: expect.objectContaining({ pid: 9010, exitConfirmed: false }) }) }));
+    expect(issue?.events).toContainEqual(expect.objectContaining({ phase: "removal-process-exited" }));
+  });
   it("cancels the current removal without entering the mutation queue again", async () => {
     const { invoke, service, handlers } = await fixture();
     const result = { id: "retained", mode: "permanent", cancelled: true } as WorktreeRecoveryRecord;
