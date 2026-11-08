@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { type RefObject, useEffect, useRef, useState } from "react";
 import { LoaderCircle, TriangleAlert } from "lucide-react";
 import type { SkillLibraryEntry, SkillRemovalPreview } from "../../shared/types";
 import { useI18n } from "../i18n";
@@ -6,8 +6,9 @@ import { useModalDialog } from "../hooks/useModalDialog";
 import { Button, DialogBody, DialogFooter, DialogHeader, ModalFrame, DiagnosticMessage, Notice } from "./ui";
 import { OverflowTooltip as PreviewText } from "./OverflowTooltip";
 
-export const SkillRemovalDialog = ({ skill, onClose, onRemove }: {
+export const SkillRemovalDialog = ({ skill, fallbackFocusRef, onClose, onRemove }: {
   skill: SkillLibraryEntry;
+  fallbackFocusRef?: RefObject<HTMLElement | null>;
   onClose(): void;
   onRemove(id: string, previewId: string): void | Promise<void>;
 }) => {
@@ -18,7 +19,7 @@ export const SkillRemovalDialog = ({ skill, onClose, onRemove }: {
   const [busy, setBusy] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const dialog = useRef<HTMLElement>(null), cancel = useRef<HTMLButtonElement>(null);
-  useModalDialog({ open: true, dialogRef: dialog, initialFocusRef: cancel, onDismiss: onClose, dismissDisabled: busy });
+  useModalDialog({ open: true, dialogRef: dialog, initialFocusRef: cancel, fallbackFocusRef, onDismiss: onClose, dismissDisabled: busy });
   useEffect(() => {
     let active = true;
     setLoading(true); setPreview(undefined); setError("");

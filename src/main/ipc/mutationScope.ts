@@ -23,7 +23,8 @@ export const localMutationScope = async (channel: string, args: any[], services:
     if (input && typeof input === "object" && !["skillStorageLocation", "targetConfigRoots"].some((key) => Object.hasOwn(input, key) && !isDeepStrictEqual(input[key], current[key as keyof typeof current]))) return [join(paths.appDataRoot, "settings.json")];
   }
   if (["skills:set-icon", "skills:set-tags", "skills:set-availability", "skills:set-update-settings"].includes(channel)) {
-    const id = SafeIdSchema.parse(args[0]?.id);
+    const input = args[0];
+    const id = SafeIdSchema.parse(channel === "skills:set-update-settings" ? input?.policy?.id : input?.id);
     return [join(resolveSkillsLibraryDir(paths, await services.settingsStore.readSettings()), id, ".agentenv-skill.json"), paths.skillSourcesPath];
   }
   if (["profiles:save", "profiles:update-metadata", "profiles:update-skills"].includes(channel)) {

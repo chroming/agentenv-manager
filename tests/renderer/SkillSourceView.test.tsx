@@ -168,9 +168,10 @@ describe("SkillSourceView", () => {
     await waitFor(() =>
       expect(within(candidates!).getByRole("button", { name: "Update review" })).toBeEnabled()
     );
-    fireEvent.click(within(candidates!).getByRole("button", { name: "More actions for docs" }));
+    const removeTrigger = within(candidates!).getByRole("button", { name: "More actions for docs" });
+    fireEvent.click(removeTrigger);
     fireEvent.click(screen.getByRole("menuitem", { name: "Delete" }));
-    expect(onDelete).toHaveBeenCalledWith("docs");
+    expect(onDelete).toHaveBeenCalledWith("docs", removeTrigger);
 
     expect(screen.queryByRole("button", { name: "Check" })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole("button", {

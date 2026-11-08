@@ -90,7 +90,7 @@ interface SkillSourceViewProps {
   onAdd(group: SkillSourceGroupView, candidate: SkillSourceGroupCandidate): Promise<boolean>;
   onUpdate(libraryId: string): Promise<void>;
   onReviewUpdates(libraryIds: string[]): Promise<void>;
-  onDelete(libraryId: string): void;
+  onDelete(libraryId: string, trigger: HTMLButtonElement): void;
   onOpenSource(url: string): void;
   onCopySource(source: string): void;
 }
@@ -1051,7 +1051,7 @@ export const SkillSourceView = ({
                                 icon: <EyeOff size={14} />,
                                 onSelect: () => void setCandidateIgnored(group, candidate, true)
                               }] : [{ id: "delete", label: t("Delete"), icon: <Trash2 size={14} />,
-                                onSelect: () => onDelete(candidate.libraryId!) }]} /> : null}
+                                onSelect: (trigger) => onDelete(candidate.libraryId!, trigger) }]} /> : null}
                         </div>
                       </div>
                     );

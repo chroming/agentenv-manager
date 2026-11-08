@@ -6,7 +6,7 @@ import { createPaths } from "../../src/main/paths";
 import { createBackupStore } from "../../src/main/backupStore";
 import { createSkillMutationRecoveryGate } from "../../src/main/skillMutationRecoveryGate";
 import { assertWorkspaceRecoveryScope, localMutationScope } from "../../src/main/ipc/mutationScope";
-import type { SettingsStore } from "../../src/main/settingsStore";
+import { createSettingsStore, type SettingsStore } from "../../src/main/settingsStore";
 import type { ProfileStore } from "../../src/main/profileStore";
 
 let root = "";
@@ -54,4 +54,16 @@ it("keeps ordinary preferences usable even when a Sync journal is unreadable", a
   });
   await expect(assertWorkspaceRecoveryScope(paths, store, "settings:update", scope)).resolves.toBeUndefined();
   await expect(assertWorkspaceRecoveryScope(paths, store, "profiles:save", [join(paths.profilesDir, "first")])).rejects.toThrow("recovery");
+});
+
+it.each([false, true])("guards the Skill update policy's Library ID with a source edit: %s", async (changeSource) => {
+  const { paths, store, first, backup } = await fixture();
+  await writeFile(paths.workspaceSyncJournalPath, JSON.stringify({ formatVersion: 2, backupId: backup.id }));
+  const services = { paths, settingsStore: createSettingsStore(paths), profileStore: {} as ProfileStore };
+  const scope = await localMutationScope("skills:set-update-settings", [{
+    policy: { id: "first", policy: "tracked" },
+    ...(changeSource ? { source: { id: "first", sourceType: "local", source: join(root, "source") } } : {}),
+  }], services);
+  expect(scope).toEqual([join(first, ".agentenv-skill.json"), paths.skillSourcesPath]);
+  await expect(assertWorkspaceRecoveryScope(paths, store, "skills:set-update-settings", scope)).rejects.toThrow("recovery");
 });

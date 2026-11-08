@@ -510,6 +510,7 @@ export const SkillLibraryPanel = ({ model, actions, onOpenLocalSkills, onRefresh
   const importFallbackFocusRef = useRef<HTMLElement>(null);
   const modalInitialFocusRef = useRef<HTMLButtonElement>(null);
   const modalFallbackFocusRef = useRef<HTMLElement>(null);
+  const removalFallbackFocusRef = useRef<HTMLElement>(null);
   const actionReturnFocusRef = useRef<HTMLElement>(null);
   const { updatesById, skillsById, skillNameCounts, updateableSkillIds } =
     buildSkillLibraryLookups(librarySkills, skillUpdates);
@@ -884,6 +885,7 @@ export const SkillLibraryPanel = ({ model, actions, onOpenLocalSkills, onRefresh
     } else if (action === "merge") {
       void openMergePreview(skill);
     } else {
+      removalFallbackFocusRef.current = fallback;
       setDeleteCandidate(skill);
     }
   };
@@ -2192,9 +2194,12 @@ export const SkillLibraryPanel = ({ model, actions, onOpenLocalSkills, onRefresh
         onAdd={addSourceCandidate}
         onUpdate={onPreviewLibrarySkillUpdate}
         onReviewUpdates={onPreviewAllLibrarySkillUpdates}
-        onDelete={(libraryId) => {
+        onDelete={(libraryId, trigger) => {
           const skill = skillsById.get(libraryId);
-          if (skill) setDeleteCandidate(skill);
+          if (skill) {
+            removalFallbackFocusRef.current = trigger;
+            setDeleteCandidate(skill);
+          }
         }}
         onOpenSource={onOpenSource}
         onCopySource={onCopySource}
@@ -2435,7 +2440,7 @@ export const SkillLibraryPanel = ({ model, actions, onOpenLocalSkills, onRefresh
         onSuggest={aiPreferences.enabled("tags") ? (skill) => { setTagCandidate(undefined); setTagAnalysisSkills([skill]); } : undefined}
       />
 
-      {deleteCandidate ? <SkillRemovalDialog skill={deleteCandidate} onClose={() => setDeleteCandidate(undefined)} onRemove={onRemoveLibrarySkill} /> : null}
+      {deleteCandidate ? <SkillRemovalDialog skill={deleteCandidate} fallbackFocusRef={removalFallbackFocusRef} onClose={() => setDeleteCandidate(undefined)} onRemove={onRemoveLibrarySkill} /> : null}
 
       {autoCleanupReviewOpen ? (
         <AutomaticSkillCleanupDialog

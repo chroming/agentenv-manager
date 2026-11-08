@@ -2853,6 +2853,7 @@ describe("Electron UI profile switching e2e", () => {
     await page.getByRole("menuitem", { name: /Remove from library/ }).click();
     const skillDelete = page.getByRole("dialog", { name: "Remove from library" });
     await expectFocusInside(skillDelete);
+    await expect.poll(() => skillDelete.getByRole("button", { name: /^Remove skill/ }).isEnabled()).toBe(true);
     await expectFocusTrapped(skillDelete);
     await page.keyboard.press("Meta+f");
     await expectFocusInside(skillDelete);
@@ -4258,7 +4259,8 @@ describe("Electron UI profile switching e2e", () => {
 
     const deleteDialog = page.getByRole("dialog", { name: "Remove from library" });
     await deleteDialog.waitFor({ state: "visible" });
-    await expect.poll(() => deleteDialog.textContent()).toContain("Remove Shared Reviewer from the shared library?");
+    await deleteDialog.getByText(/Remove Shared Reviewer, its Profile and group references/).waitFor();
+    await deleteDialog.getByText(/Unmanaged copies are kept\. A recovery copy is saved\./).waitFor();
     await deleteDialog.getByRole("button", { name: "Remove skill" }).click();
 
     await sharedRow.waitFor({ state: "hidden" });
