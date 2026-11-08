@@ -37,6 +37,7 @@
     "verify:mac-signature": "node scripts/verify-macos-signature.mjs",
     "dist:win": "npm run build && electron-builder --win nsis --publish never",
     "dist:linux": "npm run build && electron-builder --linux AppImage deb --publish never",
+    "with:release-downloads": "node scripts/with-release-downloads.mjs",
     "audit:styles": "node scripts/audit-renderer-css.mjs --check",
     "audit:styles:report": "node scripts/audit-renderer-css.mjs",
     "audit:modules": "node scripts/audit-module-budgets.mjs",

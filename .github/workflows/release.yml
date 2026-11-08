@@ -62,20 +62,20 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
-      - run: npm ci
+      - run: npm run with:release-downloads -- ci
       - name: Run full macOS release regression
         if: matrix.arch == 'arm64'
-        run: npm test
+        run: npm run with:release-downloads -- test
       - name: Verify Intel platform contracts
         if: matrix.arch == 'x64'
-        run: npm run test:platform
+        run: npm run with:release-downloads -- run test:platform
       - name: Prepare stable macOS Release signing identity
         env:
           MACOS_SIGNING_P12_BASE64: ${{ secrets.MACOS_SIGNING_P12_BASE64 }}
           MACOS_SIGNING_P12_PASSWORD: ${{ secrets.MACOS_SIGNING_P12_PASSWORD }}
         run: node scripts/prepare-macos-signing-keychain.mjs
       - name: Build direct and Homebrew macOS release assets
-        run: npm run dist:mac:release
+        run: npm run with:release-downloads -- run dist:mac:release
       - name: Verify direct-download stable signature
         run: >-
           node scripts/verify-macos-signature.mjs
@@ -121,9 +121,9 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
-      - run: npm ci
-      - run: npm run test:platform
-      - run: npm run dist:win
+      - run: npm run with:release-downloads -- ci
+      - run: npm run with:release-downloads -- run test:platform
+      - run: npm run with:release-downloads -- run dist:win
       - run: node scripts/test-packaged-app.mjs
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
@@ -146,9 +146,9 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: npm
-      - run: npm ci
-      - run: npm run test:platform
-      - run: npm run dist:linux
+      - run: npm run with:release-downloads -- ci
+      - run: npm run with:release-downloads -- run test:platform
+      - run: npm run with:release-downloads -- run dist:linux
       - run: xvfb-run -a node scripts/test-packaged-app.mjs
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:

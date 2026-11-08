@@ -37,19 +37,19 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      - run: npm run with:release-downloads -- ci
       - run: npm run audit:dependencies
       - run: npm run audit:targets
       - run: npm run audit:styles
       - run: npm run audit:modules
       - run: npm run audit:translations
       - run: npm run build
-      - run: npm run test:targets
+      - run: npm run with:release-downloads -- run test:targets
       - run: npm run test:compat:installed
-      - run: npm test
+      - run: npm run with:release-downloads -- test
       - run: |
           echo "evidence-root=${TMPDIR:-/tmp}/agentenv-ui-captures" >> "$GITHUB_OUTPUT"
-          npm run verify:visual
+          npm run with:release-downloads -- run verify:visual
         id: visual
         env:
           # Golden captures come from the release Mac; hosted macOS runners use
@@ -63,7 +63,7 @@ jobs:
           path: ${{ steps.visual.outputs.evidence-root }}
           if-no-files-found: warn
           retention-days: 7
-      - run: npm run test:e2e:packaged
+      - run: npm run with:release-downloads -- run test:e2e:packaged
 
   cross-platform:
     strategy:
@@ -80,16 +80,16 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      - run: npm run with:release-downloads -- ci
       - run: npm run audit:dependencies
       - run: npm run audit:targets
       - run: npm run audit:translations
-      - run: npm run test:platform
+      - run: npm run with:release-downloads -- run test:platform
       - if: runner.os == 'Linux'
-        run: npm run dist:linux
+        run: npm run with:release-downloads -- run dist:linux
       - if: runner.os == 'Linux'
         run: xvfb-run -a node scripts/test-packaged-app.mjs
       - if: runner.os == 'Windows'
-        run: npm run dist:win
+        run: npm run with:release-downloads -- run dist:win
       - if: runner.os == 'Windows'
         run: node scripts/test-packaged-app.mjs

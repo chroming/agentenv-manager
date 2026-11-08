@@ -295,7 +295,9 @@ describe("package metadata", () => {
     expect(workflow).toContain('AGENTENV_POSTHOG_HOST');
     expect(workflow).toContain('AGENTENV_POSTHOG_PROJECT_TOKEN');
     expect(workflow).not.toContain('AGENTENV_TELEMETRY_ENDPOINT');
-    expect(workflow).toContain('npm run dist:mac:release');
+    expect(workflow).toContain('npm run with:release-downloads -- run dist:mac:release');
+    expect(workflow).toContain('npm run with:release-downloads -- run dist:win');
+    expect(workflow).toContain('npm run with:release-downloads -- run dist:linux');
     expect(workflow).toContain('Verify direct-download stable signature');
     expect(workflow).toContain('AgentEnv-Manager-${version}-mac-arm64-homebrew.dmg');
     expect(workflow).toContain('AgentEnv-Manager-${version}-mac-x64-homebrew.dmg');
