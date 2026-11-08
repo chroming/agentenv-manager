@@ -67,7 +67,8 @@ export const registerSettingsIpc = (
       }
     }
     const nextSettings = await settingsStore.updateSettings(nextInput);
-    await onSettingsUpdated?.(nextSettings);
+    void Promise.resolve().then(() => onSettingsUpdated?.(nextSettings))
+      .catch((error) => console.warn("[AgentEnv] Settings saved; application menu refresh failed", error));
     return nextSettings;
   });
   diagnosticHandle("ui-state:read", () => uiStateStore.read());

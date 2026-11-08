@@ -27,6 +27,7 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { refreshInBackground } from "../backgroundRefresh";
 import type {
   ProjectSummary,
   RemoteDevice,
@@ -583,6 +584,13 @@ export const ProjectsWorkspace = ({
     setAddWorkspaceOpen(true);
   };
 
+  const acceptAddedProject = (added: ProjectSummary) => {
+    const next = [added, ...projects.filter((project) => project.id !== added.id)];
+    applyProjects(next);
+    setSelectedId(added.id);
+    onUpdateUiState({ workspaceOrder: next.map((project) => project.id), selectedWorkspaceId: added.id });
+    setAddWorkspaceOpen(false);
+  };
   const addLocalProject = async () => {
     setOperation("add");
     setModalError("");
@@ -590,15 +598,7 @@ export const ProjectsWorkspace = ({
       const path = await window.agentEnv.selectProjectFolder();
       if (!path) return;
       const added = await window.agentEnv.addProject(path);
-      const loaded = await window.agentEnv.listProjects();
-      const order = [
-        added.id,
-        ...loaded.map((project) => project.id).filter((id) => id !== added.id)
-      ];
-      applyProjects(orderByPreference(loaded, order, (project) => project.id));
-      setSelectedId(added.id);
-      onUpdateUiState({ workspaceOrder: order, selectedWorkspaceId: added.id });
-      setAddWorkspaceOpen(false);
+      acceptAddedProject(added);
     } catch (unknownError) {
       setModalError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     } finally {
@@ -650,15 +650,7 @@ export const ProjectsWorkspace = ({
         rootPath: remotePath.trim(),
         name: remoteName.trim() || undefined
       });
-      const loaded = await window.agentEnv.listProjects();
-      const order = [
-        added.id,
-        ...loaded.map((project) => project.id).filter((id) => id !== added.id)
-      ];
-      applyProjects(orderByPreference(loaded, order, (project) => project.id));
-      setSelectedId(added.id);
-      onUpdateUiState({ workspaceOrder: order, selectedWorkspaceId: added.id });
-      setAddWorkspaceOpen(false);
+      acceptAddedProject(added);
     } catch (unknownError) {
       setModalError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     } finally {
@@ -673,7 +665,7 @@ export const ProjectsWorkspace = ({
     try {
       await window.agentEnv.removeProject(removeCandidate.id);
       const removedIndex = projects.findIndex((project) => project.id === removeCandidate.id);
-      const loaded = await window.agentEnv.listProjects();
+      const loaded = projects.filter((project) => project.id !== removeCandidate.id);
       const order = completeOrder(
         uiState.workspaceOrder.filter((id) => id !== removeCandidate.id),
         loaded.map((project) => project.id)
@@ -687,6 +679,7 @@ export const ProjectsWorkspace = ({
       setRemoveCandidate(undefined);
     } catch (unknownError) {
       setModalError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+    } finally {
       setOperation(undefined);
     }
   };
@@ -696,12 +689,13 @@ export const ProjectsWorkspace = ({
     setOperation("rename");
     setModalError("");
     try {
-      await window.agentEnv.updateProject({ id: selected.id, name: renameValue.trim() });
+      const saved = await window.agentEnv.updateProject({ id: selected.id, name: renameValue.trim() });
+      applyProjects((current) => current.map((project) => project.id === saved.id ? saved : project));
       clearProjectSnapshotCache(selected.id);
       setRenameOpen(false);
-      await refresh();
     } catch (unknownError) {
       setModalError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+    } finally {
       setOperation(undefined);
     }
   };
@@ -788,7 +782,7 @@ export const ProjectsWorkspace = ({
       setSkillDialogOpen(false);
       setSelectedLibraryIds([]);
       setSelectedSkillGroupKeys([]);
-      await refreshSelectedProject();
+      refreshInBackground(() => refreshSelectedProject(false));
     } catch (unknownError) {
       setModalError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     } finally {
@@ -807,7 +801,7 @@ export const ProjectsWorkspace = ({
         expectedHash: removeSkillCandidate.contentHash
       });
       setRemoveSkillCandidate(undefined);
-      await refreshSelectedProject();
+      refreshInBackground(() => refreshSelectedProject(false));
     } catch (unknownError) {
       setModalError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     } finally {
@@ -928,18 +922,23 @@ export const ProjectsWorkspace = ({
     };
   });
 
-  const refreshSelectedProject = async () => {
+  const refreshSelectedProject = async (manual = true) => {
     if (!selected?.exists) return;
     const request = ++inspectionRequest.current;
-    setOperation("inspect");
-    setError("");
+    if (manual) {
+      setOperation("inspect");
+      setError("");
+    }
     try {
       const next = await readProjectSnapshot(selected.id, true);
       if (selectedIdRef.current === selected.id && request === inspectionRequest.current && projectSnapshotCache.get(selected.id) === next) setSnapshot(next);
     } catch (unknownError) {
-      if (selectedIdRef.current === selected.id && request === inspectionRequest.current) setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+      if (selectedIdRef.current === selected.id && request === inspectionRequest.current) {
+        const message = unknownError instanceof Error ? unknownError.message : String(unknownError);
+        setError(manual ? message : `${t("Changes saved; view refresh failed")}. ${message}`);
+      }
     } finally {
-      if (selectedIdRef.current === selected.id && request === inspectionRequest.current) setOperation((value) => value === "inspect" ? undefined : value);
+      if (manual && selectedIdRef.current === selected.id && request === inspectionRequest.current) setOperation((value) => value === "inspect" ? undefined : value);
     }
   };
 
@@ -1620,7 +1619,7 @@ export const ProjectsWorkspace = ({
           agentId={editorRequest.agentId}
           onClose={() => setEditorRequest(undefined)}
           onGuardChange={onEditorGuardChange}
-          onSaved={refreshSelectedProject}
+          onSaved={() => refreshInBackground(() => refreshSelectedProject(false))}
           suspended={editorGuardPromptOpen}
         />
       ) : null}
@@ -1630,7 +1629,7 @@ export const ProjectsWorkspace = ({
           open={Boolean(recoveryMode)}
           projectId={selected.id}
           onClose={() => setRecoveryMode(undefined)}
-          onRestored={refreshSelectedProject}
+          onRestored={() => refreshInBackground(() => refreshSelectedProject(false))}
         />
       ) : null}
       {addWorkspaceOpen ? (

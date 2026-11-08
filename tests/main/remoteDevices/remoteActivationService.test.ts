@@ -176,6 +176,22 @@ describe("remote Profile activation", () => {
     expect(saved.disabledAgentIds).toEqual(["opencode"]);
     expect((await fixture.service.listDevices())[0].disabledAgentIds).toEqual(["opencode"]);
   });
+  it("renames a managed offline device but verifies a changed connection before saving it", async () => {
+    let offline = false;
+    let offlineCalls = 0;
+    const fixture = await createFixture((home) => ({ execute: async (...args) => {
+      if (offline) { offlineCalls++; throw new Error("Fixture is offline"); }
+      return createLocalSshFixture(home).execute(...args);
+    } }));
+    const preview = await fixture.service.previewProfile(fixture.profile.id, fixture.endpoint.id);
+    expect(await fixture.service.applyProfile(fixture.profile.id, preview.id)).toMatchObject({ ok: true });
+    offline = true;
+    const renamed = await fixture.service.updateDevice({ ...fixture.device, name: "Renamed offline device" });
+    expect(renamed.name).toBe("Renamed offline device");
+    expect(offlineCalls).toBe(0);
+    await expect(fixture.service.updateDevice({ ...renamed, host: "different-host" })).rejects.toThrow("Connection settings were not changed");
+    expect((await fixture.service.listDevices())[0]).toMatchObject({ name: renamed.name, host: fixture.device.host });
+  });
   it("keeps manual-only policy in the SSH copy and reaches a no-op on the next preview", async () => {
     const fixture = await createFixture((home) => ({
       execute: async (device, command, options) => {
@@ -201,6 +217,7 @@ describe("remote Profile activation", () => {
     expect(again.targetStateChanges).toEqual([]);
   });
   it("keeps an unavailable SSH device saved so the user can reconnect later", async () => {
+    let probeCalls = 0;
     root = await mkdtemp(join(tmpdir(), "agentenv-remote-offline-"));
     const paths = createPaths({ appDataRoot: join(root, "data"), homeDir: join(root, "home") });
     const service = createRemoteActivationService({
@@ -210,6 +227,7 @@ describe("remote Profile activation", () => {
       targetRegistry: createTargetRegistry([createOpenCodeTargetAdapter()]),
       transport: {
         execute: async () => {
+          probeCalls++;
           throw new Error("device is offline");
         }
       }
@@ -218,6 +236,7 @@ describe("remote Profile activation", () => {
     const device = await service.addDevice({ name: "Offline Linux", host: "offline" });
 
     await expect(service.listDevices()).resolves.toContainEqual(device);
+    expect(probeCalls).toBe(0);
     await expect(service.probeDevice(device.id)).resolves.toMatchObject({
       status: "unavailable",
       error: "device is offline"

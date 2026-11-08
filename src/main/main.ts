@@ -89,6 +89,7 @@ import { createWorkspaceSyncService } from "./workspaceSync/workspaceSyncService
 import type { StartupStatus } from "../shared/types";
 import type { AppUpdateStatus } from "../shared/appUpdates";
 import { classifyStartupFailure, createStartupDiagnostics } from "./startupDiagnostics";
+import { readAdvisory } from "./advisoryRead";
 import {
   createRuntimeDiagnostics,
   type RuntimeDiagnosticReportContext,
@@ -428,25 +429,15 @@ const broadcastStartupStatus = () => {
 };
 
 async function collectDiagnosticReportContext(): Promise<RuntimeDiagnosticReportContext> {
-  const context = runtimeDiagnosticContextProvider
-    ? await runtimeDiagnosticContextProvider().catch((error) => ({
-        workspace: {
-          diagnosticContextError: error instanceof Error ? error.message : String(error)
-        }
-      }))
-    : {};
-  let startupLog: string | undefined;
-  if (startupDiagnostics) {
-    try {
-      startupLog = await readFile(startupDiagnostics.logPath, "utf8");
-    } catch {
-      startupLog = undefined;
-    }
-  }
+  const startupLogPath = startupDiagnostics?.logPath;
+  const [context, startupLog] = await Promise.all([
+    runtimeDiagnosticContextProvider && readAdvisory(runtimeDiagnosticContextProvider, 500),
+    startupLogPath ? readAdvisory(() => readFile(startupLogPath, "utf8"), 500) : undefined
+  ]);
   return {
-    ...context,
-    startup: startupLog
-      ? { recentLog: startupLog.split("\n").filter(Boolean).slice(-100) }
+    ...(context?.available ? context.value : context ? { workspace: { diagnosticContextError: "Additional environment details were unavailable" } } : {}),
+    startup: startupLog?.available
+      ? { recentLog: startupLog.value.split("\n").filter(Boolean).slice(-100) }
       : undefined
   };
 }

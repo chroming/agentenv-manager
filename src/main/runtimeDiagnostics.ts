@@ -26,6 +26,10 @@ import { readAdvisory } from "./advisoryRead";
 const DEFAULT_MAX_LOG_BYTES = 5 * 1024 * 1024;
 const DEFAULT_LOG_GENERATIONS = 4;
 const SLOW_READ_THRESHOLD_MS = 250;
+const LOG_WAIT_MS = 150;
+const MAX_PENDING_LOG_BATCHES = 64;
+const MAX_RECENT_EVENTS = 256;
+const flushLog = async (write: Promise<unknown>) => { await readAdvisory(() => write, LOG_WAIT_MS); };
 const DIAGNOSTIC_REFERENCE_PATTERN = /\n?Diagnostic reference:\s*(AEM-[A-Z0-9-]+)/i;
 
 const mutationChannelPattern =
@@ -265,6 +269,8 @@ export const createRuntimeDiagnostics = (options: {
   const maxLogBytes = options.maxLogBytes ?? DEFAULT_MAX_LOG_BYTES;
   const logGenerations = options.logGenerations ?? DEFAULT_LOG_GENERATIONS;
   let writeQueue = Promise.resolve();
+  let pendingWrites = 0;
+  const recentEvents: DiagnosticEvent[] = [];
   const operationContext = new AsyncLocalStorage<{
     operationId: string;
     parentOperationId?: string;
@@ -290,6 +296,10 @@ export const createRuntimeDiagnostics = (options: {
   };
 
   const appendEvents = (events: DiagnosticEvent[]) => {
+    recentEvents.push(...events);
+    if (recentEvents.length > MAX_RECENT_EVENTS) recentEvents.splice(0, recentEvents.length - MAX_RECENT_EVENTS);
+    if (pendingWrites >= MAX_PENDING_LOG_BATCHES) return Promise.resolve();
+    pendingWrites++;
     const task = async () => {
       await mkdir(options.directory, { recursive: true, mode: 0o700 });
       await rotate();
@@ -299,7 +309,7 @@ export const createRuntimeDiagnostics = (options: {
         { encoding: "utf8", mode: 0o600 }
       );
     };
-    writeQueue = writeQueue.catch(() => undefined).then(task);
+    writeQueue = writeQueue.then(task).catch(() => undefined).finally(() => { pendingWrites--; });
     return writeQueue;
   };
 
@@ -333,8 +343,7 @@ export const createRuntimeDiagnostics = (options: {
       : sanitizeDiagnosticError(detail.error, options.homeDir)
   });
 
-  const readEvents = async (): Promise<DiagnosticEvent[]> => {
-    await writeQueue.catch(() => undefined);
+  const readPersistedEvents = async (): Promise<DiagnosticEvent[]> => {
     const events: DiagnosticEvent[] = [];
     for (let index = logGenerations - 1; index >= 0; index -= 1) {
       const path = index === 0 ? logPath : `${logPath}.${index}`;
@@ -356,6 +365,15 @@ export const createRuntimeDiagnostics = (options: {
       }
     }
     return events;
+  };
+
+  const readEvents = async (): Promise<DiagnosticEvent[]> => {
+    await flushLog(writeQueue);
+    const persisted = await readAdvisory(readPersistedEvents, LOG_WAIT_MS);
+    if (!persisted.available) return [...recentEvents];
+    const known = new Set(persisted.value.map((event) => JSON.stringify(event)));
+    return [...persisted.value, ...recentEvents.filter((event) => !known.has(JSON.stringify(event)))]
+      .sort((left, right) => left.at.localeCompare(right.at));
   };
 
   const issueFromEvents = (
@@ -400,11 +418,6 @@ export const createRuntimeDiagnostics = (options: {
     directory: options.directory,
     logPath,
     runIpcOperation: async (action, args, operation) => {
-      const flush = async (write: Promise<unknown>) => {
-        // Worktree recovery is owned by its durable journal, not runtime logs.
-        if (action.startsWith("worktrees:")) await readAdvisory(() => write, 150);
-        else await write;
-      };
       const startedAt = options.now?.() ?? new Date();
       const startedAtMs = startedAt.getTime();
       const reference = operationReference(startedAt);
@@ -417,8 +430,8 @@ export const createRuntimeDiagnostics = (options: {
         at: startedAt,
         context
       });
-      const startedWrite = appendEvents([startedEvent]).catch(() => undefined);
-      if (mutation) await startedWrite;
+      // Recovery is owned by the mutation's durable journal, not diagnostic storage.
+      void appendEvents([startedEvent]);
       try {
         const parent = operationContext.getStore()?.operationId;
         const result = await operationContext.run(
@@ -442,12 +455,12 @@ export const createRuntimeDiagnostics = (options: {
                 }
               : undefined
           })
-        ]).catch(() => undefined);
-        if (mutation || durationMs >= SLOW_READ_THRESHOLD_MS) await flush(completedWrite);
+        ]);
+        if (mutation || durationMs >= SLOW_READ_THRESHOLD_MS) await flushLog(completedWrite);
         return result;
       } catch (error) {
         const durationMs = Math.max(0, (options.now?.() ?? new Date()).getTime() - startedAtMs);
-        await flush(appendEvents([
+        await flushLog(appendEvents([
           eventFor(action, "failed", {
             reference,
             outcome: "failed",
@@ -455,7 +468,7 @@ export const createRuntimeDiagnostics = (options: {
             context,
             error
           })
-        ]).catch(() => undefined));
+        ]));
         throw publicOperationError(error, reference, options.homeDir);
       }
     },
@@ -463,13 +476,13 @@ export const createRuntimeDiagnostics = (options: {
       const now = options.now?.() ?? new Date();
       const reference =
         detail.reference ?? operationContext.getStore()?.operationId ?? operationReference(now);
-      await appendEvents([
+      void appendEvents([
         eventFor(action, phase, {
           ...detail,
           reference,
           at: now
         })
-      ]).catch(() => undefined);
+      ]);
       return reference;
     },
     readRecentEvents: readEvents,

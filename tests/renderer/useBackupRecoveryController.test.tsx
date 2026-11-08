@@ -110,6 +110,16 @@ const renderController = (
 };
 
 describe("useBackupRecoveryController", () => {
+  it("reports the committed restore without waiting for Profile readback", async () => {
+    const { result, callbacks } = renderController();
+    callbacks.onRestoreApplied.mockReturnValueOnce(new Promise(() => {}));
+    await act(() => result.current.actions.selectDataRestore());
+    await act(() => result.current.actions.applyDataRestore());
+    expect(result.current.state.dataRestorePreview).toBeUndefined();
+    expect(result.current.state.dataBackupStatus).toContain("AgentEnv data restored");
+    expect(callbacks.onBusyChange).toHaveBeenLastCalledWith(false);
+    expect(callbacks.onError).toHaveBeenLastCalledWith(undefined);
+  });
   it("notifies only successful conversation deletions, including partial expiry cleanup", async () => {
     const { result, api } = renderController();
     const changed = vi.fn();

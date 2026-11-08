@@ -8,6 +8,18 @@ import type {
 } from "../shared/types";
 import { profileSkillEnabled } from "../shared/profileSkillGroups";
 
+export const profileSummaryFromDetail = (profile: ProfileDetail): ProfileSummary => ({
+  id: profile.id,
+  preferredTargetId: profile.manifest.preferredTargetId,
+  createdFromTargetId: profile.manifest.createdFromTargetId,
+  name: profile.manifest.name,
+  description: profile.manifest.description,
+  createdAt: profile.manifest.createdAt,
+  iconKey: profile.manifest.iconKey,
+  contentHash: profile.contentHash,
+  targetContentHashes: profile.targetContentHashes
+});
+
 export const reconcileProfileUsage = (
   current: Record<string, string[]>,
   previousReferencedIds: readonly string[],

@@ -19,6 +19,7 @@ import type { WorkspaceSyncState, WorkspaceSyncStateStore } from "./syncStateSto
 import { parseWorkspaceSyncConnection } from "./syncStateStore";
 import type { WorkspaceSyncTransaction } from "./workspaceSyncTransaction";
 import { pathEntryExists, replacePathAtomically } from "../fileUtils";
+import { discardPrivateScratchDirectory } from "../physicalFileRemoval";
 
 export interface WorkspaceSyncService {
   readStatus(): Promise<WorkspaceSyncStatus>;
@@ -153,6 +154,7 @@ export const createWorkspaceSyncService = (input: {
       .filter((change) => change.resourceKind === "skill" && change.section === "content" &&
         (change.direction === "remote" || change.direction === "conflict"))
       .map((change) => change.resourceId))];
+    if (!candidateIds.length) return { liveSkillIds: [], liveAgentIds: [] };
     const targetPaths = await input.targetPathsProvider();
     const live: string[] = [];
     const agents: string[] = [];
@@ -245,7 +247,7 @@ export const createWorkspaceSyncService = (input: {
       if (persist) lastStatus = status;
       return { ...partial, status };
     } catch (error) {
-      await rm(operationRoot, { recursive: true, force: true });
+      discardPrivateScratchDirectory(operationRoot);
       throw error;
     }
   };
@@ -271,7 +273,7 @@ export const createWorkspaceSyncService = (input: {
         message: error instanceof Error ? error.message : String(error)
       };
     } finally {
-      if (checked) await rm(checked.operationRoot, { recursive: true, force: true });
+      if (checked) discardPrivateScratchDirectory(checked.operationRoot);
     }
   };
 
@@ -283,7 +285,7 @@ export const createWorkspaceSyncService = (input: {
     try {
       return checked.plan.review;
     } finally {
-      await rm(checked.operationRoot, { recursive: true, force: true });
+      discardPrivateScratchDirectory(checked.operationRoot);
     }
   };
 
@@ -309,9 +311,9 @@ export const createWorkspaceSyncService = (input: {
         conflictChoices: updateInput.conflictChoices
       });
       await validatePortableWorkspace(merged.root);
-      const result = await input.transaction.apply(merged.root);
       const previousBaseRoot = join(checked.operationRoot, "previous-base");
       if (checked.base) await cp(checked.base.root, previousBaseRoot, { recursive: true });
+      const result = await input.transaction.apply(merged.root);
       const state = {
         ...checked.state,
         baseRevision: checked.remoteRevision,
@@ -367,7 +369,7 @@ export const createWorkspaceSyncService = (input: {
       lastStatus = { ...lastStatus, working: undefined };
       throw error;
     } finally {
-      if (checked) await rm(checked.operationRoot, { recursive: true, force: true });
+      if (checked) discardPrivateScratchDirectory(checked.operationRoot);
     }
   };
 
@@ -407,7 +409,7 @@ export const createWorkspaceSyncService = (input: {
       lastStatus = { ...lastStatus, working: undefined };
       throw error;
     } finally {
-      if (checked) await rm(checked.operationRoot, { recursive: true, force: true });
+      if (checked) discardPrivateScratchDirectory(checked.operationRoot);
     }
   };
 
@@ -486,7 +488,7 @@ export const createWorkspaceSyncService = (input: {
         }
         throw error;
       } finally {
-        await rm(checked.operationRoot, { recursive: true, force: true });
+        discardPrivateScratchDirectory(checked.operationRoot);
       }
     }),
     check: () => serialize(checkInternal),

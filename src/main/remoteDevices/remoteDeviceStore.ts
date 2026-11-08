@@ -32,7 +32,7 @@ export const parseRemoteDeviceData = (value: unknown): RemoteDevice[] =>
 const HOST_PATTERN = /^(?:[A-Za-z0-9](?:[A-Za-z0-9._-]{0,253}[A-Za-z0-9])?|\[[0-9A-Fa-f:]+\])$/;
 const USER_PATTERN = /^[A-Za-z0-9._-]+$/;
 
-const normalizeInput = (input: CreateRemoteDeviceInput): CreateRemoteDeviceInput => {
+export const normalizeRemoteDeviceInput = (input: CreateRemoteDeviceInput): CreateRemoteDeviceInput => {
   const name = input.name.trim();
   const host = input.host.trim();
   const user = input.user?.trim() || undefined;
@@ -46,7 +46,7 @@ const normalizeInput = (input: CreateRemoteDeviceInput): CreateRemoteDeviceInput
   if (input.port !== undefined && (!Number.isInteger(input.port) || input.port < 1 || input.port > 65_535)) {
     throw new Error("SSH port must be between 1 and 65535");
   }
-  return { name, host, ...(user ? { user } : {}), ...(input.port ? { port: input.port } : {}) };
+  return { name, host, user, port: input.port };
 };
 
 export interface RemoteDeviceStore {
@@ -85,7 +85,7 @@ export const createRemoteDeviceStore = (paths: AgentEnvPaths): RemoteDeviceStore
     list: read,
     get,
     add: async (input) => {
-      const normalized = normalizeInput(input);
+      const normalized = normalizeRemoteDeviceInput(input);
       const devices = await read();
       if (devices.some((device) => device.name.toLocaleLowerCase() === normalized.name.toLocaleLowerCase())) {
         throw new Error("A device with this name already exists");
@@ -101,7 +101,7 @@ export const createRemoteDeviceStore = (paths: AgentEnvPaths): RemoteDeviceStore
       return device;
     },
     update: async (input) => {
-      const normalized = normalizeInput(input);
+      const normalized = normalizeRemoteDeviceInput(input);
       const devices = await read();
       const index = devices.findIndex((device) => device.id === input.id);
       if (index < 0) throw new Error("SSH device was not found");

@@ -18,6 +18,7 @@ import { copyPathVerified, hashFileContent } from "../filesystemIntegrity";
 import { hashSkillContent } from "../skillContentHash";
 import { copySkillEntries } from "../skillDeployment";
 import { pathsEqual } from "../platformPaths";
+import { discardPrivateScratchDirectory } from "../physicalFileRemoval";
 import type { SkillLibraryStore } from "../skillLibraryStore";
 import type { ProjectEnvironmentService } from "./projectEnvironmentService";
 import type { ProjectRecoveryStore } from "./projectRecoveryStore";
@@ -417,7 +418,7 @@ export const createProjectMutationService = (
             throw error;
           }
         } finally {
-          await rm(staging, { recursive: true, force: true });
+          discardPrivateScratchDirectory(staging);
         }
       }
       let existingHash = "absent";

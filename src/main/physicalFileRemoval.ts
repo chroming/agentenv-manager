@@ -8,3 +8,10 @@ const physicalFs: typeof fs = process.versions.electron
   : fs;
 
 export const removePhysicalPath: typeof fs.rm = (path, options) => physicalFs.rm(path, options);
+
+// Only for uniquely owned scratch data that is no longer needed by a transaction.
+export const discardPrivateScratchDirectory = (path: string) => {
+  void removePhysicalPath(path, { recursive: true, force: true }).catch((error) => {
+    console.warn("[AgentEnv] Could not clean temporary operation data", error);
+  });
+};

@@ -7,6 +7,7 @@ import type {
   TargetManagementState
 } from "../../shared/types";
 import { activationPreviewHasWork } from "../activationPreview";
+import { refreshInBackground } from "../backgroundRefresh";
 
 interface PreviewProfileInput {
   profile?: ProfileDetail;
@@ -15,7 +16,6 @@ interface PreviewProfileInput {
   localValidationErrors: readonly string[];
   onSaveRequired(): void;
 }
-
 interface UseProfileActivationControllerOptions {
   onApplied(profile: ProfileDetail, preview: ActivationPreview): void;
   onBusyChange(busy: boolean): void;
@@ -110,11 +110,10 @@ export const useProfileActivationController = ({
         return;
       }
       if (!activationPreviewHasWork(nextPreview)) {
-        const refreshedStates = await window.agentEnv.listTargetStates();
-        if (requestId !== previewRequestRef.current) {
-          return;
-        }
-        onTargetStatesRefresh(refreshedStates);
+        refreshInBackground(async () => {
+          const states = await window.agentEnv.listTargetStates();
+          if (requestId === previewRequestRef.current) onTargetStatesRefresh(states);
+        });
       }
       const rendererBlockers: ApplyIssue[] = [
         ...(!currentTarget?.health.canWrite
@@ -193,12 +192,15 @@ export const useProfileActivationController = ({
         }
         if (result.kind === "no-op") {
           setPreview(undefined);
-          const [targetsResult, statesResult] = await Promise.allSettled([
-            window.agentEnv.listTargets(false),
-            window.agentEnv.listTargetStates()
-          ]);
-          if (targetsResult.status === "fulfilled") onTargetsRefresh(targetsResult.value);
-          if (statesResult.status === "fulfilled") onTargetStatesRefresh(statesResult.value);
+          const request = previewRequestRef.current;
+          refreshInBackground(async () => {
+            const targets = await window.agentEnv.listTargets(false);
+            if (request === previewRequestRef.current) onTargetsRefresh(targets);
+          });
+          refreshInBackground(async () => {
+            const states = await window.agentEnv.listTargetStates();
+            if (request === previewRequestRef.current) onTargetStatesRefresh(states);
+          });
           onStatus("This Agent already matches the Profile.");
           return;
         }

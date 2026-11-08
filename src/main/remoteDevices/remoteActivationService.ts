@@ -49,7 +49,7 @@ import { hashSkillContent } from "../skillContentHash";
 import { hashInvokedSkill, skillInvocationOverrides, writeSkillInvocationOverrides } from "../skillInvocation";
 import type { SkillLibraryStore } from "../skillLibraryStore";
 import type { TargetRegistry } from "../targets/registry";
-import { createRemoteDeviceStore, type RemoteDeviceStore } from "./remoteDeviceStore";
+import { createRemoteDeviceStore, normalizeRemoteDeviceInput, type RemoteDeviceStore } from "./remoteDeviceStore";
 import {
   createRemoteEndpointStateRepository,
   type RemoteEndpointState,
@@ -348,7 +348,7 @@ export const createRemoteActivationService = (options: {
     systemPathLookup: true,
     shellPathLookup: true
   });
-  const probes = new Map<string, { probe: RemoteDeviceProbe; at: number }>();
+  const probes = new Map<string, { probe: RemoteDeviceProbe; at: number; connection: string }>();
   const previews = new Map<string, PendingRemotePreview>();
   let previewCachePreparation: Promise<void> | undefined;
 
@@ -440,10 +440,8 @@ export const createRemoteActivationService = (options: {
     return state;
   };
 
-  const probeDevice = async (id: string, forceRefresh = false): Promise<RemoteDeviceProbe> => {
-    const cached = probes.get(id);
-    if (!forceRefresh && cached && Date.now() - cached.at < PROBE_TTL_MS) return cached.probe;
-    const device = await deviceStore.get(id);
+  const probeConnection = async (device: RemoteDevice): Promise<RemoteDeviceProbe> => {
+    const id = device.id;
     const commandNames = [...new Set(options.targetRegistry.list().flatMap((target) => target.executableCandidates))]
       .filter((name) => /^[A-Za-z0-9._+-]+$/.test(name));
     const script = [
@@ -500,7 +498,18 @@ export const createRemoteActivationService = (options: {
         error: error instanceof Error ? error.message : String(error)
       };
     }
-    probes.set(id, { probe, at: Date.now() });
+    return probe;
+  };
+  const probeDevice = async (id: string, forceRefresh = false): Promise<RemoteDeviceProbe> => {
+    const device = await deviceStore.get(id);
+    const connection = connectionIdentityFor(device);
+    const cached = probes.get(id);
+    if (!forceRefresh && cached?.connection === connection && Date.now() - cached.at < PROBE_TTL_MS) return cached.probe;
+    const probe = await probeConnection(device);
+    const latest = await deviceStore.get(id).catch(() => undefined);
+    if (latest && connectionIdentityFor(latest) === connection) {
+      probes.set(id, { probe, at: Date.now(), connection });
+    }
     return probe;
   };
 
@@ -1260,40 +1269,25 @@ export const createRemoteActivationService = (options: {
     listDevices: () => deviceStore.list(),
     listSshConfigHosts: () => sshConfigDiscovery.listHosts(),
     resolveSshConfigHost: (alias) => sshConfigDiscovery.resolveHost(alias),
-    addDevice: async (input) => {
-      const device = await deviceStore.add(input);
-      await probeDevice(device.id, true);
-      return device;
-    },
+    addDevice: (input) => deviceStore.add(input),
     updateDevice: async (input) => {
       const previous = await deviceStore.get(input.id);
-      const device = await deviceStore.update(input);
-      if (input.disabledAgentIds !== undefined && previous.name === device.name && previous.host === device.host && previous.user === device.user && previous.port === device.port) return device;
-      probes.delete(device.id);
-      const probe = await probeDevice(device.id, true);
-      const identityChanged = probe.status === "ready" && probe.deviceFingerprint
-        ? (await Promise.all(options.targetRegistry.list().map((descriptor) =>
-            stateRepository.read(endpointIdFor(device.id, descriptor.id))
-          ))).some((state) => state && state.deviceFingerprint !== probe.deviceFingerprint)
-        : false;
+      const candidate = { ...previous, ...normalizeRemoteDeviceInput(input) };
+      if (connectionIdentityFor(previous) === connectionIdentityFor(candidate)) return deviceStore.update(input);
       const managedStates = (await stateRepository.list()).filter((state) =>
-        state.endpointId.startsWith(`ssh:${device.id}:`)
+        state.endpointId.startsWith(`ssh:${previous.id}:`)
       );
-      if (identityChanged || (probe.status !== "ready" && managedStates.length > 0)) {
-        await deviceStore.update({
-          id: previous.id,
-          name: previous.name,
-          host: previous.host,
-          user: previous.user,
-          port: previous.port
-        });
-        probes.delete(device.id);
-        throw new Error(
-          identityChanged
-            ? "This connection points to a different Linux device. Remove it and add the new device separately."
-            : "Reconnect this managed SSH device before changing its connection details"
-        );
+      if (managedStates.length > 0) {
+        const probe = await probeConnection(candidate);
+        if (probe.status !== "ready" || !probe.deviceFingerprint) {
+          throw new Error(`Could not verify the new connection for this managed SSH device. Connection settings were not changed. ${probe.error ?? "Reconnect and try again."}`);
+        }
+        if (managedStates.some((state) => state.deviceFingerprint !== probe.deviceFingerprint)) {
+          throw new Error("This connection points to a different Linux device. Add it separately. Connection settings were not changed.");
+        }
       }
+      const device = await deviceStore.update(input);
+      probes.delete(device.id);
       return device;
     },
     removeDevice: async (id) => {

@@ -196,11 +196,13 @@ import { emptyProfileResources } from "./profileDraftState";
 import { useWindowChromeState } from "./hooks/useWindowChromeState";
 import { useDeviceUiState } from "./hooks/useDeviceUiState";
 import { loadProfileCoreData } from "./profileCoreLoader";
+import { refreshInBackground } from "./backgroundRefresh";
 import { deriveProfileEndpointContext } from "./profileEndpointContext";
 import { WindowTitlebar } from "./components/WindowTitlebar";
 import {
   preferredTargetForProfile,
   profileDeploymentStatusLabels,
+  profileSummaryFromDetail,
   summarizeProfileApplications,
   summarizeProfile
 } from "./profileSummary";
@@ -340,6 +342,8 @@ const AppContent = ({
   const [isLoading, setIsLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
+  const [refreshWarning, setRefreshWarning] = useState<string>();
+  const reportRefreshError = (cause: unknown) => setRefreshWarning(cause instanceof Error ? cause.message : String(cause));
   const skillGroupController = useSkillGroups(setError);
   const skillGroups = skillGroupController.groups;
   const [diagnosticIssue, setDiagnosticIssue] = useState<DiagnosticIssueDetail>();
@@ -452,6 +456,7 @@ const AppContent = ({
     onBackupRetentionChanged: () => backupRecovery.actions.refreshManagedBackups("mutation"),
     onBusyChange: setBusy,
     onError: setError,
+    onRefreshError: reportRefreshError,
     onLocaleChange: onLocalePreferenceChange,
     onTargetSettingsChanged: async (nextSettings) => {
       clearProfilePreview();
@@ -487,12 +492,13 @@ const AppContent = ({
   } = useFreshnessCoordinator();
   const activeLibraryView =
     activeWorkspace === "library" && skillLibraryMode === "skills" ? "skills" : undefined;
-  const refreshSkillSourceGroups = useCallback(async (): Promise<boolean> => {
+  const refreshSkillSourceGroups = useCallback(async (reportError?: (error: unknown) => void): Promise<boolean> => {
     try {
       setSkillSourceGroups(await window.agentEnv.listSkillSourceGroups());
       return true;
     } catch (unknownError) {
-      setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
+      if (reportError) reportError(unknownError);
+      else setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
       return false;
     }
   }, []);
@@ -577,6 +583,7 @@ const AppContent = ({
     shouldApply: () => boolean = () => true,
     forceTargetRefresh = false
   ) => {
+    const settingsRevision = settingsController.revision.current;
     loadForProfileCore(shouldApply);
     void loadSkillCleanupHistory(shouldApply);
     void loadTargetRecoveryHistory(shouldApply);
@@ -598,7 +605,7 @@ const AppContent = ({
       current, core.targetStateItems, core.profileItems
     ));
     setProfiles(core.profileItems);
-    settingsController.actions.accept(core.settings);
+    if (settingsRevision === settingsController.revision.current) settingsController.actions.accept(core.settings);
     markFresh("agents");
     markFresh("skill-library");
     setSelectedTargetId((current) => preserveSelectedTarget(current, core.targetItems));
@@ -611,150 +618,106 @@ const AppContent = ({
     shouldApply: () => boolean = () => true,
     forceSkillUpdateCheck = false
   ) => {
-    if (shouldApply()) {
-      setEnvironmentScanStatus("checking");
-      setEnvironmentScanError(undefined);
-    }
+    if (!shouldApply()) return;
+    setEnvironmentScanStatus("checking");
+    setEnvironmentScanError(undefined);
     const skillUpdateResultRevision = skillUpdateResultRevisionRef.current;
     const {
       supportedTargetItems,
-      targetItems,
       profileItems,
       skillItems,
       settings
     } = core;
-    const [sourceChecksResult, skillInventoryResult, githubStatusResult] =
-      await Promise.allSettled([
-        checkSkillUpdates
-          ? window.agentEnv.listSkillSourceGroups().then(async (groups) => {
-              const shouldCheck =
-                settings.skillAutoCheckEnabled &&
-                (
-                  forceSkillUpdateCheck ||
-                  monitoredSkillSourcesDue({
-                    groups,
-                    intervalMinutes: settings.skillAutoCheckIntervalMinutes,
-                    now: Date.now()
-                  })
-                );
-              return {
-                checked: shouldCheck
-                  ? (
-                      await runFreshness(
-                        "skill-upstreams",
-                        "startup",
-                        () => window.agentEnv.checkMonitoredSkillSourceGroups(),
-                        {
-                          force: true,
-                          partialError: (value) => {
-                            const result = value as SkillSourceCheckAllResult;
-                            return result.failed > 0
-                              ? `${result.failed} source checks failed`
-                              : undefined;
-                          }
-                        }
-                      )
-                    ).value
-                  : undefined,
-                groups
-              };
-            })
-          : Promise.resolve(undefined),
-        runFreshness(
-          "local-skills",
-          "startup",
-          () => window.agentEnv.scanSkillInventory(),
-          { force: true }
-        ).then((outcome) => outcome.value ?? { entries: [], issues: [] }),
-        window.agentEnv.readGitHubAuthStatus()
-      ]);
-    const sourceLoad = sourceChecksResult.status === "fulfilled"
-      ? sourceChecksResult.value
-      : undefined;
-    const checkedSources = sourceLoad?.checked;
-    const loadedSourceGroups = checkedSources?.groups ?? sourceLoad?.groups;
-    const skillUpdateItems = loadedSourceGroups
-      ? updatesFromSourceGroups(loadedSourceGroups, skillItems)
-      : skillUpdates;
-    const githubStatus =
-      githubStatusResult.status === "fulfilled"
-        ? githubStatusResult.value
-        : {
-            state: "configured" as const,
-            error: "GitHub is temporarily unavailable. Local resources are still available."
-          };
-    const profileDetails = await Promise.all(
+    const sourceRead = checkSkillUpdates
+      ? window.agentEnv.listSkillSourceGroups().then(async (groups) => {
+          const shouldCheck = settings.skillAutoCheckEnabled && (forceSkillUpdateCheck || monitoredSkillSourcesDue({
+            groups, intervalMinutes: settings.skillAutoCheckIntervalMinutes, now: Date.now()
+          }));
+          const checked = shouldCheck ? (await runFreshness(
+            "skill-upstreams", "startup", () => window.agentEnv.checkMonitoredSkillSourceGroups(),
+            {
+              force: true,
+              partialError: (value) => {
+                const { failed } = value as SkillSourceCheckAllResult;
+                return failed > 0 ? `${failed} source checks failed` : undefined;
+              }
+            }
+          )).value : undefined;
+          return { groups, checked };
+        })
+      : Promise.resolve(undefined);
+    const inventoryRead = runFreshness(
+      "local-skills",
+      "startup",
+      () => window.agentEnv.scanSkillInventory(),
+      { force: true }
+    ).then((outcome) => outcome.value);
+    const usageRead = Promise.all(
       profileItems
         .filter((profile) => !profile.loadError)
         .map((profile) => window.agentEnv.readProfile(profile.id))
-    );
-    const usage: Record<string, string[]> = {};
-    const nextProfileLibraryVersions: Record<string, LibraryResourceVersions> = {};
-    for (const profile of profileDetails) {
-      const profileTarget = supportedTargetItems.find(
-        (targetItem) => targetItem.id === profile.manifest.preferredTargetId
-      ) ?? supportedTargetItems[0];
-      nextProfileLibraryVersions[profile.id] = collectLibraryResourceVersions(
-        profile,
-        skillItems,
-        profileTarget?.id
-      );
-      for (const skillRef of profile.resources.skills) {
-        usage[skillRef.libraryId] = (usage[skillRef.libraryId] ?? []).concat(
-          profile.manifest.name
-        );
+    ).then((profileDetails) => {
+      if (!shouldApply()) return;
+      const usage: Record<string, string[]> = {};
+      const versions: Record<string, LibraryResourceVersions> = {};
+      for (const profile of profileDetails) {
+        const target = supportedTargetItems.find((item) => item.id === profile.manifest.preferredTargetId) ?? supportedTargetItems[0];
+        versions[profile.id] = collectLibraryResourceVersions(profile, skillItems, target?.id);
+        for (const ref of profile.resources.skills) (usage[ref.libraryId] ??= []).push(profile.manifest.name);
       }
-    }
-    if (!shouldApply()) {
-      return { skillUpdateItems };
-    }
-    if (skillUpdateResultRevision === skillUpdateResultRevisionRef.current) {
-      setSkillUpdates(skillUpdateItems);
-      if (loadedSourceGroups) setSkillSourceGroups(loadedSourceGroups);
-    }
-    if (skillInventoryResult.status === "fulfilled") {
-      setSkillInventory(skillInventoryResult.value.entries);
-      setSkillInventoryIssues(skillInventoryResult.value.issues);
+      setSkillUsage(usage);
+      setProfileLibraryVersions(versions);
+    });
+    const inventory = inventoryRead.then((value) => {
+      if (!shouldApply()) return;
+      if (value) {
+        setSkillInventory(value.entries);
+        setSkillInventoryIssues(value.issues);
+        markFresh("local-skills");
+      }
       setEnvironmentScanStatus("ready");
       setEnvironmentScanError(undefined);
-      markFresh("local-skills");
-    } else {
-      const message = skillInventoryResult.reason instanceof Error
-        ? skillInventoryResult.reason.message
-        : String(skillInventoryResult.reason);
+    }, (error) => {
+      if (!shouldApply()) return;
+      const message = error instanceof Error ? error.message : String(error);
       setEnvironmentScanStatus("error");
       setEnvironmentScanError(message);
       console.warn(`[AgentEnv] Local Skill inventory is unavailable: ${message}`);
-    }
-    githubConnection.actions.acceptAuthStatus(githubStatus);
-    if (checkedSources) {
-      markFresh("skill-upstreams", {
-        error: checkedSources.failed > 0
-          ? `${checkedSources.failed} source checks failed`
-          : undefined,
-        status: checkedSources.failed > 0 ? "partial" : "ready"
-      });
-    } else if (loadedSourceGroups) {
-      const checkedAt = oldestMonitoredSkillCheckAt(loadedSourceGroups);
-      if (checkedAt !== undefined) {
-        markFresh("skill-upstreams", { at: checkedAt });
+    });
+    const sources = sourceRead.then((result) => {
+      if (!shouldApply() || !result || skillUpdateResultRevision !== skillUpdateResultRevisionRef.current) return;
+      const groups = result.checked?.groups ?? result.groups;
+      setSkillUpdates(updatesFromSourceGroups(groups, skillItems));
+      setSkillSourceGroups(groups);
+      if (result.checked) {
+        const failed = result.checked.failed;
+        markFresh("skill-upstreams", { error: failed > 0 ? `${failed} source checks failed` : undefined, status: failed > 0 ? "partial" : "ready" });
+      } else {
+        const checkedAt = oldestMonitoredSkillCheckAt(groups);
+        if (checkedAt !== undefined) markFresh("skill-upstreams", { at: checkedAt });
       }
-    }
-    setSkillUsage(usage);
-    setProfileLibraryVersions(nextProfileLibraryVersions);
-    return { skillUpdateItems };
+    });
+    const github = window.agentEnv.readGitHubAuthStatus().then(
+      (status) => { if (shouldApply()) githubConnection.actions.acceptAuthStatus(status); },
+      () => { if (shouldApply()) githubConnection.actions.acceptAuthStatus({ state: "configured", error: "GitHub is temporarily unavailable. Local resources are still available." }); }
+    );
+    await Promise.all([sources, inventory, github, usageRead].map((task) => task.catch((error) => {
+      if (shouldApply()) console.warn("[AgentEnv] Optional environment details unavailable", error);
+    })));
   };
 
   const refreshProfiles = async ({
     checkSkillUpdates = false,
     forceSkillUpdateCheck = false,
     forceTargetRefresh = false,
-    settingsOverride
+    settingsOverride,
+    deferEnrichment = false
   }: {
     checkSkillUpdates?: boolean;
     forceSkillUpdateCheck?: boolean;
     forceTargetRefresh?: boolean;
     settingsOverride?: AgentEnvSettings;
+    deferEnrichment?: boolean;
   } = {}) => {
     const requestId = ++dataRefreshRequestRef.current;
     const shouldApply = () => dataRefreshRequestRef.current === requestId;
@@ -763,13 +726,23 @@ const AppContent = ({
       shouldApply,
       forceTargetRefresh
     );
-    const enrichment = await loadProfileEnrichment(
-      core,
-      checkSkillUpdates || forceSkillUpdateCheck,
-      shouldApply,
-      forceSkillUpdateCheck
-    );
-    return { ...core, ...enrichment };
+    const enrich = () => refreshInBackground(() => loadProfileEnrichment(
+      core, checkSkillUpdates || forceSkillUpdateCheck, shouldApply, forceSkillUpdateCheck
+    ));
+    if (!deferEnrichment) enrich();
+    return { ...core, enrich };
+  };
+  const refreshAfterMutation = (refresh: () => Promise<unknown> = refreshProfiles) => {
+    setRefreshWarning(undefined);
+    refreshInBackground(refresh, reportRefreshError);
+  };
+  const refreshLibraryAfterMutation = () =>
+    refreshAfterMutation(() => Promise.all([refreshProfiles(), refreshSkillSourceGroups(reportRefreshError)]));
+  const addSavedProfile = (saved: ProfileDetail) => {
+    const next = [profileSummaryFromDetail(saved), ...profiles.filter((profile) => profile.id !== saved.id)];
+    setProfiles(next);
+    persistUiState({ profileOrder: next.map((profile) => profile.id) });
+    refreshAfterMutation();
   };
 
   const profileRefresh = useProfileRefresh({
@@ -778,9 +751,9 @@ const AppContent = ({
     beginFlow: beginProfileFlow,
     isFlowCurrent: isProfileFlowCurrent,
     refresh: async () => {
-      const result = await refreshProfiles({ checkSkillUpdates: false, forceTargetRefresh: true });
+      const result = await refreshProfiles({ checkSkillUpdates: false, forceTargetRefresh: true, deferEnrichment: true });
       const endpoint = remote.endpoints.find((item) => item.id === selectedTargetId);
-      if (endpoint) await remote.refreshDevice(endpoint.deviceId);
+      if (endpoint) refreshInBackground(() => remote.refreshDevice(endpoint.deviceId));
       return result;
     },
     read: (id) => window.agentEnv.readProfile(id),
@@ -792,9 +765,11 @@ const AppContent = ({
 
   const refreshInstructionDependents = async () => {
     const profileId = selectedProfileId;
+    const request = !isProfileDirty && !profileLoadingId && profileId ? beginProfileFlow() : undefined;
     await refreshProfiles({ checkSkillUpdates: false });
-    if (profileId) {
-      await loadSelectedProfile(profileId);
+    if (profileId && request !== undefined && isProfileFlowCurrent(request)) {
+      const profile = await window.agentEnv.readProfile(profileId);
+      if (isProfileFlowCurrent(request)) acceptSelectedProfile(profile);
     }
   };
   const {
@@ -804,7 +779,7 @@ const AppContent = ({
     create: createInstructionBlock,
     update: updateInstructionBlock,
     remove: removeInstructionBlock
-  } = useInstructionLibrary(refreshInstructionDependents);
+  } = useInstructionLibrary(refreshInstructionDependents, reportRefreshError);
 
   const refreshWorkspaceStateAfterSync = () => {
     const profileId = selectedProfileId;
@@ -829,13 +804,17 @@ const AppContent = ({
     activeWorkspace,
     onBusyChange: setBusy,
     onError: setError,
+    onRefreshError: reportRefreshError,
     onRestoreApplied: async () => {
       clearSelectedProfile();
+      const request = beginProfileFlow();
       const refreshed = await refreshProfiles();
       const firstProfile = refreshed.profileItems.find((profile) => !profile.loadError);
-      if (firstProfile) {
+      if (firstProfile && isProfileFlowCurrent(request)) {
+        const profile = await window.agentEnv.readProfile(firstProfile.id);
+        if (!isProfileFlowCurrent(request)) return;
         setSelectedTargetId(firstProfile.preferredTargetId ?? targets[0]?.id);
-        acceptSelectedProfile(await window.agentEnv.readProfile(firstProfile.id));
+        acceptSelectedProfile(profile);
       }
     },
     runFreshness,
@@ -1464,13 +1443,7 @@ const AppContent = ({
               name,
               description
             });
-        const refreshed = await refreshProfiles();
-        const nextProfileOrder = [
-          saved.id,
-          ...refreshed.profileItems.map((profile) => profile.id).filter((id) => id !== saved.id)
-        ];
-        setProfiles(orderByPreference(refreshed.profileItems, nextProfileOrder, (profile) => profile.id));
-        persistUiState({ profileOrder: nextProfileOrder });
+        addSavedProfile(saved);
         const destination = creationEndpointRef.current ?? saved.manifest.preferredTargetId ?? profileForm.targetId;
         setSelectedTargetId(destination);
         setProfileTargetSelections((current) => ({
@@ -1533,13 +1506,7 @@ const AppContent = ({
     profileActionsButtonRef.current?.focus();
     try {
       const saved = await window.agentEnv.duplicateProfile(profileId);
-      const refreshed = await refreshProfiles();
-      const nextProfileOrder = [
-        saved.id,
-        ...refreshed.profileItems.map((profile) => profile.id).filter((id) => id !== saved.id)
-      ];
-      setProfiles(orderByPreference(refreshed.profileItems, nextProfileOrder, (profile) => profile.id));
-      persistUiState({ profileOrder: nextProfileOrder });
+      addSavedProfile(saved);
       setSelectedTargetId(saved.manifest.preferredTargetId ?? selectedTargetId);
       setProfileTargetSelections((current) => ({
         ...current,
@@ -1574,7 +1541,8 @@ const AppContent = ({
     setError(undefined);
     try {
       await window.agentEnv.deleteProfile(deletedProfileId);
-      const { profileItems } = await refreshProfiles();
+      const profileItems = profiles.filter((profile) => profile.id !== deletedProfileId);
+      setProfiles(profileItems);
       persistUiState({
         profileOrder: currentUiState().profileOrder.filter((id) => id !== deletedProfileId)
       });
@@ -1583,7 +1551,6 @@ const AppContent = ({
           (profile) => !profile.loadError && profile.preferredTargetId === deletedTargetId
         );
         if (nextProfile) {
-          const nextDetail = await window.agentEnv.readProfile(nextProfile.id);
           setSelectedTargetId(nextProfile.preferredTargetId ?? deletedTargetId);
           setProfileTargetSelections((current) => ({
             ...current,
@@ -1591,7 +1558,8 @@ const AppContent = ({
               ? { [nextProfile.id]: nextProfile.preferredTargetId }
               : {})
           }));
-          acceptSelectedProfile(nextDetail);
+          clearSelectedProfile();
+          refreshAfterMutation(() => loadSelectedProfile(nextProfile.id));
         } else {
           clearSelectedProfile();
         }
@@ -1600,6 +1568,7 @@ const AppContent = ({
       setIsProfileActionsOpen(false);
       clearProfilePreview();
       setRollbackPreview(undefined);
+      refreshAfterMutation();
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     } finally {
@@ -2097,7 +2066,7 @@ const AppContent = ({
               target: selectedTarget.name
             })
       );
-      await refreshProfiles();
+      refreshAfterMutation();
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     } finally {
@@ -2140,8 +2109,8 @@ const AppContent = ({
         setRollbackError(message);
         return;
       }
-      await refreshProfiles();
       restored = true;
+      refreshAfterMutation();
     } catch (unknownError) {
       const message = unknownError instanceof Error ? unknownError.message : String(unknownError);
       setError(message);
@@ -2178,7 +2147,7 @@ const AppContent = ({
         return;
       }
       setStopManagingPreview(undefined);
-      await refreshProfiles();
+      refreshAfterMutation();
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     } finally {
@@ -2269,7 +2238,8 @@ const AppContent = ({
       const result = await window.agentEnv.importSkillToLibrary(prepared.input);
       setPendingSkillImport(undefined);
       setSelectedSkillUpdatePlan(undefined);
-      await refreshProfiles();
+      replaceLibrarySkillLocally(result.skill);
+      refreshAfterMutation();
       setSkillUpdateCheckStatus({
         state: "success",
         message: result.sourceUpdated
@@ -2314,15 +2284,7 @@ const AppContent = ({
         setError(message);
         return { status: "failed", error: message };
       }
-      const refreshed = await refreshSkillSourceGroups();
-      if (!refreshed) {
-        const message = t(
-          "The Skill was updated, but the Library view could not be refreshed. Close and reopen Skills, then try Refresh."
-        );
-        setSkillUpdateCheckStatus({ state: "error", message });
-        setError(message);
-        return { status: "partial", error: message };
-      }
+      refreshAfterMutation(() => refreshSkillSourceGroups(reportRefreshError));
       if (result.updated.length > 0) {
         setSkillUpdateCheckStatus(
           summarizeSkillUpdateResult(
@@ -2354,9 +2316,7 @@ const AppContent = ({
       if (selectedProfileId && draftProfile?.resources.skills.some((skill) => skill.libraryId === id)) {
         void loadSelectedProfile(selectedProfileId);
       }
-      void Promise.all([refreshProfiles(), refreshSkillSourceGroups(), skillGroupController.load()]).catch((unknownError) => {
-        setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
-      });
+      refreshLibraryAfterMutation();
     } finally {
       setBusy(false);
     }
@@ -2386,7 +2346,7 @@ const AppContent = ({
         profilesUpdated: result.profilesUpdated,
         installsUpdated: result.installsUpdated
       });
-      await refreshProfiles({ checkSkillUpdates: false });
+      refreshAfterMutation();
       setSkillUpdateCheckStatus({
         state: "success",
         message: `Merged ${input.ids.length} skills into ${result.skill.id}`
@@ -2434,7 +2394,7 @@ const AppContent = ({
       );
       const updatedSkills = result.updated;
       applyLibraryContentUpdatesLocally(updatedSkills, syncCopiedInstalls);
-      await refreshSkillSourceGroups();
+      refreshAfterMutation(() => refreshSkillSourceGroups(reportRefreshError));
       const updatedIds = new Set(updatedSkills.map((skill) => skill.id));
       const remainingUpdates = skillUpdates.filter(
         (update) =>
@@ -2630,7 +2590,7 @@ const AppContent = ({
     setError,
     setResult: setSkillCleanupResult,
     setSuccess: (message) => setSkillUpdateCheckStatus({ state: "success", message }),
-    refresh: () => refreshProfiles({ checkSkillUpdates: false }).then(() => undefined),
+    refresh: async () => refreshAfterMutation(),
     saveDirtyProfile: async () => void await saveDraft()
   });
   const scanGitHubSkills = (url: string): Promise<GitHubSkillScanResult> =>
@@ -2813,7 +2773,7 @@ const AppContent = ({
     setSkillUpdateCheckStatus({ state: "checking", message: t("Merging sources...") });
     try {
       const result = await window.agentEnv.mergeSkillSources(previewId);
-      await refreshSkillSourceGroups();
+      refreshAfterMutation(() => refreshSkillSourceGroups(reportRefreshError));
       setSkillUpdateCheckStatus({
         state: "success",
         message: t("Merged {{sources}} sources · {{skills}} Skills", {
@@ -2858,15 +2818,9 @@ const AppContent = ({
       };
       const updatedSourceCount = queueResult.updatedSourceCount;
       setSelectedSkillUpdatePlan(undefined);
-      try {
-        await refreshProfiles({ checkSkillUpdates: false });
-        await refreshSkillSourceGroups();
-      } catch (refreshError) {
-        setError(refreshError instanceof Error ? refreshError.message : String(refreshError));
-      } finally {
-        commitSkillUpdates((current) =>
-          reconcileImportedSkillUpdates(current, result.imported));
-      }
+      for (const skill of result.imported) replaceLibrarySkillLocally(skill);
+      commitSkillUpdates((current) => reconcileImportedSkillUpdates(current, result.imported));
+      refreshLibraryAfterMutation();
       if (result.imported.length > 0) {
         setSkillUpdateCheckStatus({
           state: result.failed.length > 0 ? "info" : "success",
@@ -2916,15 +2870,9 @@ const AppContent = ({
       };
       const updatedSourceCount = queueResult.updatedSourceCount;
       setSelectedSkillUpdatePlan(undefined);
-      try {
-        await refreshProfiles({ checkSkillUpdates: false });
-        await refreshSkillSourceGroups();
-      } catch (refreshError) {
-        setError(refreshError instanceof Error ? refreshError.message : String(refreshError));
-      } finally {
-        commitSkillUpdates((current) =>
-          reconcileImportedSkillUpdates(current, result.imported));
-      }
+      for (const skill of result.imported) replaceLibrarySkillLocally(skill);
+      commitSkillUpdates((current) => reconcileImportedSkillUpdates(current, result.imported));
+      refreshLibraryAfterMutation();
       if (result.imported.length > 0) {
         setSkillUpdateCheckStatus({
           state: result.failed.length > 0 ? "info" : "success",
@@ -2949,7 +2897,7 @@ const AppContent = ({
     setError(undefined);
     try {
       await window.agentEnv.manageTargetSkill(input);
-      await refreshProfiles();
+      refreshAfterMutation();
     } catch (unknownError) {
       setError(unknownError instanceof Error ? unknownError.message : String(unknownError));
     } finally {
@@ -2964,21 +2912,13 @@ const AppContent = ({
     try {
       const result = await window.agentEnv.consolidateSkillGroup(input);
       setSkillCleanupResult(result);
-      await refreshProfiles();
+      refreshAfterMutation();
       setSkillUpdateCheckStatus(undefined);
       return true;
     } catch (unknownError) {
       const operationError = unknownError instanceof Error ? unknownError.message : String(unknownError);
-      try {
-        await refreshProfiles({ checkSkillUpdates: false });
-        setError(operationError);
-      } catch (refreshError) {
-        setError(
-          `${operationError}\nRefresh failed: ${
-            refreshError instanceof Error ? refreshError.message : String(refreshError)
-          }`
-        );
-      }
+      setError(operationError);
+      refreshInBackground(refreshProfiles);
       setSkillUpdateCheckStatus(undefined);
       return false;
     } finally {
@@ -3034,7 +2974,7 @@ const AppContent = ({
       }
     }
     try {
-      await refreshProfiles({ checkSkillUpdates: false });
+      refreshAfterMutation();
       if (Object.keys(failures).length === 0) {
         if (completed.length === 1) {
           setSkillCleanupResult(completed[0]);
@@ -3074,7 +3014,7 @@ const AppContent = ({
     try {
       await window.agentEnv.rollbackSkillCleanup(backupId);
       setSkillCleanupResult(undefined);
-      await refreshProfiles();
+      refreshAfterMutation();
       setSkillUpdateCheckStatus({
         state: "success",
         message: restoringRemoval
@@ -3115,9 +3055,10 @@ const AppContent = ({
   const setSkillAvailability = async (input: SkillAvailabilityInput) => {
     setError(undefined);
     try {
-      await window.agentEnv.setSkillAvailability(input);
+      const updated = await window.agentEnv.setSkillAvailability(input);
+      replaceLibrarySkillLocally(updated);
       setSelectedSkillUpdatePlan(undefined);
-      await refreshProfiles({ checkSkillUpdates: false });
+      refreshAfterMutation();
       setSkillUpdateCheckStatus({
         state: "success",
         message: input.enabled
@@ -3278,6 +3219,7 @@ const AppContent = ({
 
   const dismissAppFeedback = () => {
     setError(undefined);
+    setRefreshWarning(undefined);
     setSkillUpdateCheckStatus(undefined);
     setProfileSaveStatus("");
     clearProfileApplyRefreshDetail();
@@ -3359,6 +3301,11 @@ const AppContent = ({
           ? { label: "Connect GitHub", onClick: openGitHubConnectionSettings }
           : undefined
       }
+    : refreshWarning
+      ? { kind: "warning", title: "Changes saved; view refresh failed", message: parseDiagnosticErrorMessage(refreshWarning).message,
+          diagnosticReference: parseDiagnosticErrorMessage(refreshWarning).reference,
+          action: { label: "Refresh", onClick: () => activeWorkspace === "library" ? refreshLibraryAfterMutation()
+            : refreshAfterMutation(activeWorkspace === "instructions" ? refreshInstructionBlocks : refreshProfiles) } }
     : profileCaptureStatus && captureFeedbackVisible
       ? { kind: "success", title: profileCaptureStatus }
     : skillCleanupResult && activeWorkspace === "library"
@@ -4377,11 +4324,11 @@ const AppContent = ({
                   targetName={selectedTarget?.name}
                   appliedSnapshot={selectedAppliedProfileSnapshot}
                   onClose={() => setProfileRecoveryMode(undefined)}
-                  onRestored={async (restored) => {
-                    await refreshProfiles();
+                  onRestored={(restored) => {
                     replaceSavedProfile(restored, "Profile restored");
                     clearProfilePreview();
                     setRollbackPreview(undefined);
+                    refreshAfterMutation();
                   }}
                   onRestoreApplied={async () => {
                     if (!draftProfile || !selectedTarget) return;
@@ -4394,10 +4341,10 @@ const AppContent = ({
                       selectedTarget.id,
                       current.contentHash ?? ""
                     );
-                    await refreshProfiles();
                     replaceSavedProfile(restored, "Profile restored to last applied version");
                     clearProfilePreview();
                     setRollbackPreview(undefined);
+                    refreshAfterMutation();
                   }}
                 />
               ) : null}

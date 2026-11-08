@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { AgentEnvSettings, AppLocale } from "../../shared/types";
+import { refreshInBackground } from "../backgroundRefresh";
 
 const DEFAULT_SETTINGS: AgentEnvSettings = {
   locale: "system",
@@ -18,6 +19,7 @@ interface UseSettingsControllerOptions {
   onError(error: string | undefined): void;
   onLocaleChange(locale: AppLocale): void;
   onTargetSettingsChanged(settings: AgentEnvSettings): void | Promise<void>;
+  onRefreshError?(error: unknown): void;
 }
 
 const errorMessage = (error: unknown) =>
@@ -28,23 +30,27 @@ export const useSettingsController = ({
   onBusyChange,
   onError,
   onLocaleChange,
-  onTargetSettingsChanged
+  onTargetSettingsChanged,
+  onRefreshError
 }: UseSettingsControllerOptions) => {
   const [settings, setSettings] = useState<AgentEnvSettings>(DEFAULT_SETTINGS);
   const [status, setStatus] = useState("");
+  const revision = useRef(0);
   const callbacksRef = useRef({
     onBackupRetentionChanged,
     onBusyChange,
     onError,
     onLocaleChange,
-    onTargetSettingsChanged
+    onTargetSettingsChanged,
+    onRefreshError
   });
   callbacksRef.current = {
     onBackupRetentionChanged,
     onBusyChange,
     onError,
     onLocaleChange,
-    onTargetSettingsChanged
+    onTargetSettingsChanged,
+    onRefreshError
   };
 
   useEffect(() => {
@@ -54,6 +60,7 @@ export const useSettingsController = ({
   }, [status]);
 
   const accept = useCallback((nextSettings: AgentEnvSettings) => {
+    revision.current++;
     setSettings(nextSettings);
     callbacksRef.current.onLocaleChange(nextSettings.locale);
   }, []);
@@ -64,10 +71,9 @@ export const useSettingsController = ({
     setStatus("Saving settings");
     try {
       const nextSettings = await window.agentEnv.updateSettings(input);
-      setSettings(nextSettings);
-      callbacksRef.current.onLocaleChange(nextSettings.locale);
+      accept(nextSettings);
       if ("backupRetentionDays" in input) {
-        await callbacksRef.current.onBackupRetentionChanged();
+        refreshInBackground(callbacksRef.current.onBackupRetentionChanged, callbacksRef.current.onRefreshError);
       }
       if (
         "enabledTargetIds" in input ||
@@ -75,7 +81,7 @@ export const useSettingsController = ({
         "targetCommandOverrides" in input ||
         "skillSyncMethod" in input
       ) {
-        await callbacksRef.current.onTargetSettingsChanged(nextSettings);
+        refreshInBackground(() => callbacksRef.current.onTargetSettingsChanged(nextSettings), callbacksRef.current.onRefreshError);
       }
       setStatus("Settings saved");
       return nextSettings;
@@ -86,9 +92,10 @@ export const useSettingsController = ({
     } finally {
       callbacksRef.current.onBusyChange(false);
     }
-  }, []);
+  }, [accept]);
 
   return {
+    revision,
     state: { settings, status },
     actions: {
       accept,

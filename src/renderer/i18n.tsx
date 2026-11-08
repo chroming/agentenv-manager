@@ -1231,7 +1231,9 @@ const zhCN: Record<string, string> = {
   "Connect GitHub": "连接 GitHub",
   "GitHub request limited": "GitHub 请求受限",
   "Anonymous GitHub requests are limited. Connect your account and try again.": "GitHub 匿名请求已受限，请连接账户后重试。",
-  "Action failed": "操作失败"
+  "Action failed": "操作失败",
+  "Changes saved; view refresh failed": "改动已保存，界面刷新失败",
+  "Profile usage is unavailable. Deletion will verify references before changing anything.": "暂时无法查看引用此指令的配置方案。删除前会重新核对引用，不会直接修改。"
 };
 
 Object.assign(zhCN, {
@@ -3846,6 +3848,8 @@ const zhTW: Record<string, string> = {
   "GitHub request limited": "GitHub 請求受限",
   "Anonymous GitHub requests are limited. Connect your account and try again.": "GitHub 匿名請求已受限，請連接帳號後重試。",
   "Action failed": "操作失敗",
+  "Changes saved; view refresh failed": "變更已儲存，介面更新失敗",
+  "Profile usage is unavailable. Deletion will verify references before changing anything.": "暫時無法查看引用此指令的設定檔。刪除前會重新核對引用，不會直接修改。",
   "Adopt compatible changes": "採用相容變更",
   "Adopted {{resources}} from {{target}}": "已從 {{target}} 採用 {{resources}}",
   "Adopted {{resources}}; {{count}} items still need review": "已採用 {{resources}}；仍有 {{count}} 項需要檢查",

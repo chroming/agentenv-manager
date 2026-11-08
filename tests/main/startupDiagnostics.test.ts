@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
@@ -12,6 +12,13 @@ afterEach(async () => {
 });
 
 describe("startup diagnostics", () => {
+  it("does not fail startup when the optional log location is unwritable", async () => {
+    root = await mkdtemp(join(tmpdir(), "agentenv-diagnostics-"));
+    const directory = join(root, "blocked");
+    await writeFile(directory, "not a directory");
+    const diagnostics = createStartupDiagnostics({ directory, homeDir: "/Users/example" });
+    await expect(diagnostics.record("startup-ready")).resolves.toBeUndefined();
+  });
   it("classifies newer data separately from malformed data", () => {
     expect(classifyStartupFailure(new AppDataFormatError("newer", "future"))).toMatchObject({
       state: "failed",

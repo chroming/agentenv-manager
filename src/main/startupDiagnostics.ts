@@ -4,6 +4,7 @@ import type { StartupFailureKind, StartupStatus } from "../shared/types";
 import { AppDataFormatError } from "./appDataFormat";
 import { redactDiagnosticText } from "./diagnosticRedaction";
 import { isMissingFileError } from "./fileUtils";
+import { readAdvisory } from "./advisoryRead";
 
 const MAX_LOG_BYTES = 512 * 1024;
 const LOG_GENERATIONS = 3;
@@ -65,7 +66,7 @@ export const createStartupDiagnostics = (options: {
       }
     }
   };
-  const record = async (event: string, detail?: unknown) => {
+  const writeRecord = async (event: string, detail?: unknown) => {
     await mkdir(dirname(logPath), { recursive: true, mode: 0o700 });
     await rotate();
     const rawDetail = detail instanceof Error
@@ -80,7 +81,7 @@ export const createStartupDiagnostics = (options: {
   };
   return {
     logPath,
-    record,
+    record: async (event: string, detail?: unknown) => { await readAdvisory(() => writeRecord(event, detail), 150); },
     exportTo: async (destination: string) => {
       await mkdir(dirname(destination), { recursive: true });
       await copyFile(logPath, destination);

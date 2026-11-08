@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type Dispatch, type SetStateAction } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from "react";
 import type {
   CreateRemoteDeviceInput,
   RemoteAgentEndpoint,
@@ -12,6 +12,8 @@ import type {
   UpdateRemoteDeviceInput
 } from "../../shared/types";
 import { mergeRemoteTargetStates } from "../targetStateSlices";
+import { refreshInBackground } from "../backgroundRefresh";
+import { parseDiagnosticErrorMessage } from "../diagnostics";
 
 const endpointTargetInfo = (
   endpoint: RemoteAgentEndpoint,
@@ -113,6 +115,8 @@ export const useRemoteEndpoints = ({
   const [probes, setProbes] = useState<RemoteDeviceProbe[]>([]);
   const [busy, setBusy] = useState(false);
   const [busyDeviceIds, setBusyDeviceIds] = useState<string[]>([]);
+  const mutationRevision = useRef(0);
+  const loadRevision = useRef(0);
   const devicesById = useMemo(() => new Map(devices.map((device) => [device.id, device])), [devices]);
   const profileTargets = useMemo(() => [
     ...targets,
@@ -133,23 +137,23 @@ export const useRemoteEndpoints = ({
 
   const load = useCallback(async (forceRefresh = false) => {
     if (!window.agentEnv.listRemoteDevices || !window.agentEnv.listRemoteEndpoints) return;
-    setBusy(true);
-    try {
-      const nextDevices = await window.agentEnv.listRemoteDevices();
-      const nextEndpoints = await window.agentEnv.listRemoteEndpoints(forceRefresh);
-      const nextProbes = window.agentEnv.probeRemoteDevice
-        ? await Promise.all(nextDevices.map((device) =>
-            window.agentEnv.probeRemoteDevice!(device.id, false)
-          ))
-        : [];
-      const states = await (window.agentEnv.listRemoteTargetStates?.() ?? Promise.resolve([]));
-      setDevices(nextDevices);
-      setEndpoints((current) => mergeLastKnownEndpoints(current, nextEndpoints, nextProbes));
-      setProbes(nextProbes);
-      setTargetStates((current) => mergeRemoteTargetStates(current, states));
-    } finally {
-      setBusy(false);
-    }
+    const request = ++loadRevision.current, mutation = mutationRevision.current;
+    const current = () => request === loadRevision.current && mutation === mutationRevision.current;
+    const nextDevices = await window.agentEnv.listRemoteDevices();
+    if (!current()) return;
+    setDevices(nextDevices);
+    const nextEndpoints = await window.agentEnv.listRemoteEndpoints(forceRefresh);
+    if (!current()) return;
+    const nextProbes = window.agentEnv.probeRemoteDevice
+      ? (await Promise.allSettled(nextDevices.map((device) => window.agentEnv.probeRemoteDevice!(device.id, false))))
+          .flatMap((result) => result.status === "fulfilled" ? [result.value] : [])
+      : [];
+    if (!current()) return;
+    const ids = new Set(nextDevices.map((device) => device.id));
+    setEndpoints((existing) => mergeLastKnownEndpoints(existing.filter((endpoint) => ids.has(endpoint.deviceId)), nextEndpoints, nextProbes));
+    setProbes(nextProbes);
+    const states = await (window.agentEnv.listRemoteTargetStates?.() ?? Promise.resolve([]));
+    if (current()) setTargetStates((existing) => mergeRemoteTargetStates(existing, states));
   }, [setTargetStates]);
 
   const refresh = useCallback(async (forceRefresh = false) => {
@@ -165,38 +169,49 @@ export const useRemoteEndpoints = ({
     void refresh(false);
   }, [enabled, refresh]);
 
-  const runMutation = async <T,>(mutation: () => Promise<T>, forceRefresh: boolean): Promise<T> => {
+  const runMutation = async <T,>(mutation: () => Promise<T>, accept: (result: T) => void): Promise<T> => {
     setBusy(true);
     try {
       const result = await mutation();
-      await load(forceRefresh);
+      mutationRevision.current++;
+      accept(result);
       return result;
     } finally {
       setBusy(false);
     }
   };
 
-  const refreshDevice = useCallback(async (deviceId: string) => {
+  const refreshDevice = useCallback(async (deviceId: string, force = true) => {
     if (!window.agentEnv.probeRemoteDevice || !window.agentEnv.listRemoteEndpoints) return;
     setBusyDeviceIds((current) => current.includes(deviceId) ? current : [...current, deviceId]);
+    const mutation = mutationRevision.current;
     try {
-      const probe = await window.agentEnv.probeRemoteDevice(deviceId, true);
-      const [nextEndpoints, states] = await Promise.all([
-        window.agentEnv.listRemoteEndpoints(false),
-        window.agentEnv.listRemoteTargetStates?.() ?? Promise.resolve([])
-      ]);
+      const probe = await window.agentEnv.probeRemoteDevice(deviceId, force);
+      if (mutation !== mutationRevision.current) return;
       setProbes((current) => [
         ...current.filter((item) => item.deviceId !== deviceId),
         probe
       ]);
-      setEndpoints((current) => mergeLastKnownEndpoints(current, nextEndpoints, [probe]));
-      setTargetStates((current) => mergeRemoteTargetStates(current, states));
+      if (probe.status !== "ready") setEndpoints((current) => mergeLastKnownEndpoints(current, [], [probe]));
+      refreshInBackground(() => load(false));
     } catch (error) {
-      onError(error instanceof Error ? error.message : String(error));
+      if (mutation !== mutationRevision.current) return;
+      const message = parseDiagnosticErrorMessage(error instanceof Error ? error.message : String(error)).message;
+      const probe: RemoteDeviceProbe = { deviceId, status: "unavailable", checkedAt: new Date().toISOString(), agentExecutables: {}, error: message };
+      setProbes((current) => [...current.filter((item) => item.deviceId !== deviceId), probe]);
+      setEndpoints((current) => mergeLastKnownEndpoints(current, [], [probe]));
     } finally {
       setBusyDeviceIds((current) => current.filter((id) => id !== deviceId));
     }
-  }, [onError, setTargetStates]);
+  }, [load]);
+
+  const acceptSavedDevice = (device: RemoteDevice, checkConnection: boolean) => {
+    setDevices((current) => current.some((item) => item.id === device.id)
+      ? current.map((item) => item.id === device.id ? device : item) : [...current, device]);
+    setEndpoints((current) => current.map((endpoint) => endpoint.deviceId === device.id
+      ? { ...endpoint, deviceName: device.name, ...(checkConnection ? { availability: "unavailable" as const } : {}) } : endpoint));
+    if (checkConnection) refreshInBackground(() => refreshDevice(device.id, false));
+  };
 
   return {
     devices,
@@ -218,34 +233,23 @@ export const useRemoteEndpoints = ({
     },
     add: (input: CreateRemoteDeviceInput) => {
       if (!window.agentEnv.addRemoteDevice) return Promise.resolve();
-      return runMutation(async () => {
-        const device = await window.agentEnv.addRemoteDevice!(input);
-        const probe = await window.agentEnv.probeRemoteDevice?.(device.id, false);
-        return { device, probe };
-      }, false);
+      return runMutation(async () => ({ device: await window.agentEnv.addRemoteDevice!(input) }),
+        ({ device }) => acceptSavedDevice(device, true));
     },
     update: (input: UpdateRemoteDeviceInput) => {
       if (!window.agentEnv.updateRemoteDevice) return Promise.resolve();
       const previous = devicesById.get(input.id);
-      if (input.disabledAgentIds !== undefined && previous && previous.name === input.name && previous.host === input.host && previous.user === input.user && previous.port === input.port) {
-        return (async () => {
-          setBusy(true);
-          try {
-            const device = await window.agentEnv.updateRemoteDevice!(input);
-            setDevices((current) => current.map((item) => item.id === device.id ? device : item));
-            return { device };
-          } finally { setBusy(false); }
-        })();
-      }
-      return runMutation(async () => {
-        const device = await window.agentEnv.updateRemoteDevice!(input);
-        const probe = await window.agentEnv.probeRemoteDevice?.(device.id, false);
-        return { device, probe };
-      }, false);
+      return runMutation(async () => ({ device: await window.agentEnv.updateRemoteDevice!(input) }),
+        ({ device }) => acceptSavedDevice(device, !previous || previous.host !== device.host || previous.user !== device.user || previous.port !== device.port));
     },
     remove: (id: string) => {
       if (!window.agentEnv.removeRemoteDevice) return Promise.resolve();
-      return runMutation(() => window.agentEnv.removeRemoteDevice!(id), false);
+      return runMutation(() => window.agentEnv.removeRemoteDevice!(id), () => {
+        setDevices((current) => current.filter((device) => device.id !== id));
+        setEndpoints((current) => current.filter((endpoint) => endpoint.deviceId !== id));
+        setProbes((current) => current.filter((probe) => probe.deviceId !== id));
+        setTargetStates((current) => current.filter((state) => !state.targetId.startsWith(`ssh:${id}:`)));
+      });
     }
   };
 };

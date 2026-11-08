@@ -5,15 +5,18 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { WorktreeCleanupPreview, WorktreeRecoveryRecord } from "../../src/shared/worktrees";
 import type { IpcHandler } from "../../src/main/ipc/registration";
 import type { ProjectStore } from "../../src/main/projects/projectStore";
-import { createRuntimeDiagnostics } from "../../src/main/runtimeDiagnostics";
+import { createRuntimeDiagnostics, type RuntimeDiagnostics } from "../../src/main/runtimeDiagnostics";
 import type { GitCommandRunner } from "../../src/main/skillSources/gitCommandRunner";
 import { registerWorktreeIpc } from "../../src/main/worktrees/worktreeIpc";
 import { createWorktreeService } from "../../src/main/worktrees/worktreeService";
 
 let root = "";
+let diagnosticStore: RuntimeDiagnostics | undefined;
 afterEach(async () => {
   vi.restoreAllMocks();
-  if (root) await rm(root, { recursive: true, force: true });
+  await diagnosticStore?.readRecentEvents();
+  diagnosticStore = undefined;
+  if (root) await rm(root, { recursive: true, force: true, maxRetries: 3, retryDelay: 50 });
   root = "";
 });
 
@@ -25,6 +28,7 @@ const fixture = async (gitAvailable = true) => {
     directory: join(root, "logs"), homeDir: root, appVersion: "test", packaged: false,
     platform: process.platform, arch: process.arch, osVersion: "test", locale: "en"
   });
+  diagnosticStore = diagnostics;
   const service = createWorktreeService({
     appDataRoot: join(root, "data"), homeDir: join(root, "home"),
     projectStore: { listLocalRootPaths: async () => [scanRoot] } as unknown as ProjectStore,

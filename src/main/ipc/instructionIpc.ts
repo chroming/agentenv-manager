@@ -11,6 +11,7 @@ import type {
   UpdateInstructionBlockInput
 } from "../../shared/types";
 import type { IpcRegistrationHandles } from "./registration";
+import { readAdvisory } from "../advisoryRead";
 
 export const registerInstructionIpc = (
   handles: Pick<IpcRegistrationHandles, "diagnosticHandle" | "handleMutation">,
@@ -34,8 +35,8 @@ export const registerInstructionIpc = (
   };
 
   diagnosticHandle("instructions:list", async () => {
-    const [blocks, usedBy] = await Promise.all([instructionLibraryStore.list(), usage()]);
-    return blocks.map((block) => ({ ...block, usedByProfiles: usedBy.get(block.id) ?? [] }));
+    const [blocks, usedBy] = await Promise.all([instructionLibraryStore.list(), readAdvisory(usage, 250)]);
+    return usedBy.available ? blocks.map((block) => ({ ...block, usedByProfiles: usedBy.value.get(block.id) ?? [] })) : blocks;
   });
   handleMutation("instructions:create", (_event, input: CreateInstructionBlockInput) =>
     instructionLibraryStore.create(input)

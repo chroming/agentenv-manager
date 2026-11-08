@@ -2217,6 +2217,15 @@ Idle -> Pressed -> Working -> Success | Warning | Error | Partial failure
 - Errors persist until dismissed or resolved.
 - A newer warning or error replaces stale success feedback.
 - Completion updates visible persisted state, not only a message.
+- A verified mutation result is authoritative. Apply returned records to the affected
+  view before starting optional readback. A list, usage, discovery, native menu, or
+  history refresh cannot keep that command busy or turn a completed mutation into an
+  error. Failed readback identifies itself as a refresh failure and offers a refresh,
+  not another mutation. Preserve last-known values when ancillary data is unknown.
+- Background work may clean only private, unique scratch directories after their
+  transaction is done. Cleanup failure cannot replace the mutation's result.
+  User-selected removals, recovery copies and journals retain their owned completion
+  and verification rules.
 - No visible command may appear to do nothing.
 - A conditional prerequisite is completed inside its parent workflow whenever AgentEnv can do so without broadening the confirmed mutation. An unrelated pending lifecycle state is not a blocker. Hard blocking is reserved for conditions where continuing would risk data loss, overwrite unreviewed external content, use stale reviewed input, or violate recovery ownership; every such stop names the affected object and keeps the recovery action in the same surface when possible.
 - Profile edits update the in-memory draft without filesystem scans. Auto-save, Preview, and Apply each expose owned working state for their complete asynchronous lifetime.
@@ -2241,7 +2250,13 @@ Status: shared transient success, persistent error, background progress, GitHub 
 - The desktop window appears before service initialization completes. Initialization failure remains inside a recovery screen that classifies newer data, invalid data, permissions, interrupted recovery, and unknown failures. It offers Retry, Open data folder, Export redacted diagnostics, and Quit; it never resets or deletes local data automatically. Recovery labels follow `en`, `zh_CN`, and `zh_TW`; each support action owns visible progress and local failure feedback. A late initial status response MUST NOT overwrite a newer startup event, and Retry confirms the final status even if an event is missed.
 - Startup diagnostics are size-bounded and rotated. Home paths and credential-shaped values are redacted, and Skill contents, MCP payloads, and secrets MUST NOT be logged.
 - One structured device-local runtime event log is always available without requiring a reproduction mode. Every renderer-to-main operation records a stable operation ID, start, completion, elapsed time, and an allowlisted result summary; the channel name provides the baseline operation identity for discovery, scans, Save, Preview, Apply, Backup, refresh, authentication, Git, updates, and other user-visible work. Multi-step services append correlated domain phases where the top-level command is insufficient, beginning with startup and Capture inventory, decisions, imports, boundaries, and completion. `completed`, `no-op`, `decision-required`, `blocked`, `partial`, `cancelled`, `failed`, and `rolled-back` are the supported semantic outcomes; a service MUST emit a non-default outcome only when it can determine that state authoritatively.
-- Every IPC failure receives a stable diagnostic reference bound to its complete operation timeline and records the original redacted error name, message, stack, and cause chain. Decision-required and partial operations also remain copyable and exportable even though they are not exceptions. Informational writes are asynchronous and bounded; mutation start/final events and failures are flushed before returning when recovery evidence depends on them. Logging failure MUST NOT change the user operation, and logging MUST NOT delay clean shutdown indefinitely.
+- Every IPC failure receives a stable diagnostic reference and records the original
+  redacted error name, message, stack, and cause chain. Decision-required and partial
+  operations also remain copyable. Diagnostic persistence and context collection are
+  best effort and bounded. A stalled log must not prevent starting or finishing an
+  operation, including startup. Recent redacted events remain copyable from bounded
+  in-memory evidence when disk logs are unavailable. Recovery authority stays in
+  durable journals and verified backups, never in the diagnostic timeline.
 - Diagnostic context uses an explicit field allowlist. Clipboard text, Instructions, Skill contents, Conversation text, MCP definitions, environment values, credentials, authenticated URL components, and arbitrary IPC payloads MUST NOT enter logs, renderer diagnostics, or exported reports. Home paths are normalized to `~`, individual fields are size-bounded, and malformed log lines do not hide valid neighboring events.
 - AI update summaries, duplicate comparisons, Profile reviews and run interpretations share a single-column decision brief: one conclusion, at most three ordinary findings initially visible, and concrete risks retained visibly. Evidence links, metadata, coverage and additional ordinary findings belong in an explicit details disclosure. Never truncate cached findings or regenerate them automatically to meet a newer presentation preference. Regeneration belongs to the analysis heading, not between prose and evidence. Prompts prioritize behavior, consequences and specific actions rather than inventories or repeated generic advice.
 - An inline error containing a diagnostic reference MUST offer an adjacent icon-only Copy details action, including inside modals. It copies the redacted diagnostic record when available and falls back to the displayed error plus reference when lookup fails. Clipboard failure remains locally retryable; ordinary notices without a diagnostic reference do not gain a copy control.

@@ -34,6 +34,29 @@ const createDiagnostics = async (options: { maxLogBytes?: number; now?: () => Da
 };
 
 describe("runtime diagnostics", () => {
+  it.each(["profiles:save", "settings:update", "activation:apply", "instructions:update", "workspace-sync:publish"])(
+    "does not block %s or lose its copyable failure when the diagnostic writer stalls", async (channel) => {
+      const diagnostics = await createDiagnostics();
+      let release!: () => void;
+      const gate = new Promise<void>((done) => { release = done; });
+      const append = fs.appendFile;
+      vi.spyOn(fs, "appendFile").mockImplementation(async (...args) => { await gate; return append(...args); });
+      let started = false;
+      let issue: Awaited<ReturnType<typeof diagnostics.readIssue>>;
+      const pending = diagnostics.runIpcOperation(channel, [], async () => {
+        started = true;
+        await diagnostics.record(channel, "step");
+        throw new Error("Selected resource changed; review again");
+      }).catch(async (error: Error) => {
+        const reference = diagnosticReferenceFromMessage(error.message);
+        if (reference) issue = await diagnostics.readIssue(reference);
+      });
+      try {
+        await vi.waitFor(() => expect(started).toBe(true), { timeout: 300 });
+        await vi.waitFor(() => expect(issue).toMatchObject({ error: { message: "Selected resource changed; review again" } }), { timeout: 1200 });
+      } finally { release(); await pending; await diagnostics.readRecentEvents(); }
+    }
+  );
   it("reports a timed-out Worktree as partial rather than completed or cancelled", async () => {
     const diagnostics = await createDiagnostics();
     await diagnostics.runIpcOperation("worktrees:remove", [], async () => ({ timedOut: true }));

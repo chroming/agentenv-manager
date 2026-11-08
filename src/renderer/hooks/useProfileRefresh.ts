@@ -6,7 +6,7 @@ export const useProfileRefresh = (options: {
   selectedId?: string;
   beginFlow(): number;
   isFlowCurrent(id: number): boolean;
-  refresh(): Promise<{ profileItems: ProfileSummary[] }>;
+  refresh(): Promise<{ profileItems: ProfileSummary[]; enrich?(): void }>;
   read(id: string): Promise<ProfileDetail>;
   accept(profile: ProfileDetail): void;
   clear(): void;
@@ -21,8 +21,11 @@ export const useProfileRefresh = (options: {
     setRefreshing(true);
     options.onError(undefined);
     const flow = options.beginFlow();
+    let enrich: (() => void) | undefined;
     try {
-      const { profileItems } = await options.refresh();
+      const result = await options.refresh();
+      const { profileItems } = result;
+      enrich = result.enrich;
       if (!options.isFlowCurrent(flow)) return;
       const selected = profileItems.find((item) => item.id === options.selectedId)
         ?? profileItems.find((item) => !item.loadError);
@@ -44,6 +47,7 @@ export const useProfileRefresh = (options: {
     } finally {
       running.current = false;
       setRefreshing(false);
+      enrich?.();
     }
   };
   return { refreshing, refresh };

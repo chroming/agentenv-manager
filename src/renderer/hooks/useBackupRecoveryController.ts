@@ -8,6 +8,7 @@ import type {
 import type { TranslationValues } from "../i18n";
 import { backupCleanupNotice, refreshBackupInventory, withoutDeletedBackup } from "../backupInventory";
 import { notifyConversationRecoveryChange } from "../conversationRecoveryEvents";
+import { refreshInBackground } from "../backgroundRefresh";
 import type { BackupManagerNotice } from "../components/BackupManagerDialog";
 import type { useFreshnessCoordinator } from "./useFreshnessCoordinator";
 
@@ -20,6 +21,7 @@ interface BackupRecoveryControllerOptions {
   onBusyChange(busy: boolean): void;
   onError(error: string | undefined): void;
   onRestoreApplied(): Promise<void>;
+  onRefreshError?(error: unknown): void;
   runFreshness: FreshnessRunner;
   translate: Translate;
 }
@@ -32,6 +34,7 @@ export const useBackupRecoveryController = ({
   onBusyChange,
   onError,
   onRestoreApplied,
+  onRefreshError,
   runFreshness,
   translate: t
 }: BackupRecoveryControllerOptions) => {
@@ -220,16 +223,16 @@ export const useBackupRecoveryController = ({
     try {
       const result = await window.agentEnv.restoreDataBackup(dataRestorePreview.path);
       setDataRestorePreview(undefined);
-      await onRestoreApplied();
       setDataBackupStatus(
         `AgentEnv data restored; safety backup created at ${result.safetyBackupPath}`
       );
+      refreshInBackground(onRestoreApplied, onRefreshError);
     } catch (error) {
       onError(errorMessage(error));
     } finally {
       onBusyChange(false);
     }
-  }, [dataRestorePreview, onBusyChange, onError, onRestoreApplied]);
+  }, [dataRestorePreview, onBusyChange, onError, onRestoreApplied, onRefreshError]);
 
   return {
     state: {

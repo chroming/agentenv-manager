@@ -363,6 +363,9 @@ export const InstructionsWorkspace = ({
                 <p>{t("Agent files stay unchanged until those Profiles are applied again.")}</p>
               </div>
             ) : null}
+            {deleteCandidate.usedByProfiles === undefined ? (
+              <p>{t("Profile usage is unavailable. Deletion will verify references before changing anything.")}</p>
+            ) : null}
             {deleteError ? <p className="ui-field-error" role="alert"><DiagnosticMessage message={deleteError} /></p> : null}
           </DialogBody>
           <DialogFooter>

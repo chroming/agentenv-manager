@@ -1,4 +1,4 @@
-import { chmod, cp, lstat, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
+import { chmod, cp, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { delimiter, join } from "node:path";
 import electronPath from "electron";
@@ -100,5 +100,31 @@ describe.skipIf(process.platform === "win32")("Scoped resource operations", () =
     expect((await resources()).skills[0].libraryId).toBe("review");
     expect(await readFile(join(copy, "SKILL.md"), "utf8")).toContain("Review safely");
     expect((await page.evaluate(() => window.agentEnv.listSkillGroups()))[0].skillIds).toEqual(["review"]);
+
+    await page.evaluate(() => window.agentEnv.updateSettings({ locale: "en" }));
+    await page.reload();
+    await page.getByRole("complementary", { name: "Global navigation" }).getByRole("button", { name: "Profiles", exact: true }).click();
+    await page.getByRole("button", { name: "Choose Profile", exact: true }).click();
+    await page.getByRole("dialog", { name: "Choose Profile", exact: true }).getByRole("button", { name: "New Profile", exact: true }).click();
+    const create = page.getByRole("dialog", { name: "New Profile", exact: true });
+    await create.getByLabel("Profile name").fill("Saved without readback");
+    await app.evaluate(({ ipcMain }) => {
+      ipcMain.removeHandler("profiles:list");
+      ipcMain.handle("profiles:list", () => { throw new Error("Synthetic Profile list unavailable"); });
+    });
+    await create.getByRole("button", { name: "Create", exact: true }).click();
+    await create.waitFor({ state: "hidden" });
+    await page.getByRole("heading", { name: "Saved without readback", exact: true }).waitFor();
+    const notice = page.locator(".app-feedback--warning");
+    await notice.getByText("Changes saved; view refresh failed", { exact: true }).waitFor();
+    const manifests = await Promise.all((await readdir(paths.profilesDir)).map((id) =>
+      readFile(join(paths.profilesDir, id, "profile.json"), "utf8").then(JSON.parse)));
+    expect(manifests.filter((manifest) => manifest.name === "Saved without readback")).toHaveLength(1);
+    for (const width of [920, 1180, 1440]) {
+      await page.setViewportSize({ width, height: width === 920 ? 620 : 900 });
+      await expectInViewport(page, notice);
+      expect(await notice.getByRole("button", { name: "Refresh", exact: true }).isEnabled()).toBe(true);
+      if (captureDir) await page.screenshot({ path: join(captureDir, `readback-warning-en-${width}.png`), animations: "disabled" });
+    }
   }, 90_000);
 });

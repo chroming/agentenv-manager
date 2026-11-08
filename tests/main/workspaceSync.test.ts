@@ -1,4 +1,5 @@
 import { execFile } from "node:child_process";
+import * as fs from "node:fs/promises";
 import {
   chmod,
   lstat,
@@ -11,9 +12,9 @@ import {
   writeFile
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join, resolve, sep } from "node:path";
 import { promisify } from "node:util";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createBackupStore } from "../../src/main/backupStore";
 import { createPaths } from "../../src/main/paths";
 import { createGitCommandRunner } from "../../src/main/skillSources/gitCommandRunner";
@@ -34,9 +35,11 @@ import { toPortableOnlineLocator } from "../../src/main/workspaceSync/portableLo
 import { canonicalJson, hashJson, hashPortableTree, snapshotHashFor } from "../../src/main/workspaceSync/workspaceSnapshotHasher";
 
 const execFileAsync = promisify(execFile);
+vi.mock("node:fs/promises", async (original) => ({ ...await original<typeof import("node:fs/promises")>() }));
 let roots: string[] = [];
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   await Promise.all(roots.map((root) => rm(root, { recursive: true, force: true })));
   roots = [];
 });
@@ -46,6 +49,30 @@ const tempRoot = async (prefix: string) => {
   roots.push(root);
   return root;
 };
+
+it("publishes despite stalled private scratch cleanup and skips unrelated Agent inspection", async () => {
+  const root = await tempRoot("aem-sync-scratch-");
+  const paths = createPaths({ appDataRoot: join(root, "data"), homeDir: join(root, "home") });
+  const stateStore = createWorkspaceSyncStateStore(paths);
+  const targetPathsProvider = vi.fn(async () => { throw new Error("Agent inventory unavailable"); });
+  const originalRm = fs.rm;
+  const stalled = vi.fn(() => new Promise<void>(() => {}));
+  vi.spyOn(fs, "rm").mockImplementation((path, options) => String(path).startsWith(join(paths.workspaceSyncCacheDir, "operations") + sep)
+    ? stalled() : originalRm(path, options));
+  const service = createWorkspaceSyncService({
+    paths, stateStore, targetPathsProvider,
+    codec: { exportSnapshot: async (destination, workspaceId) => (await writeSnapshot(destination, { workspaceId })).manifest },
+    transaction: { recover: async () => undefined, isRecoveryRequired: async () => false, apply: async () => ({ backupId: "unused" }), restore: async () => undefined },
+    loadTransport: async () => ({ fetch: async () => ({}), publish: async () => "fixture-revision", cancel: () => undefined, dispose: () => undefined }),
+    findManagedInstallPaths: async () => []
+  });
+  await service.connect({ repository: "/tmp/fixture.git", branch: "main" });
+  await expect(service.publish()).resolves.toMatchObject({ revision: "fixture-revision", status: { kind: "up-to-date" } });
+  await expect(stateStore.read()).resolves.toMatchObject({ baseRevision: "fixture-revision" });
+  expect(targetPathsProvider).not.toHaveBeenCalled();
+  expect(stalled).toHaveBeenCalledTimes(2);
+  service.dispose();
+});
 
 it("uses portable resource names in sync review, including both names on conflicts", async () => {
   const local = await writeSnapshot(await tempRoot("sync-names-local-"), { profileName: "My environment", instructionContent: "local rules" });
